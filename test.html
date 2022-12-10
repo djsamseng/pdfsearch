@@ -1,0 +1,154 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/pdf-lib"></script>
+    <script src="./pdfjs-3/build/pdf.js"></script>
+    <script src="./pdfjs-3/build/pdf.worker.js"></script>
+  </head>
+
+  <body>
+    <h1>PDF.js 'Hello, base64!' example</h1>
+
+    <canvas id="the-canvas"></canvas>
+  </body>
+
+  <script>
+    createPdf();
+    async function createPdf() {
+      const pdfDoc = await PDFLib.PDFDocument.create();
+      const rgb = PDFLib.rgb;
+      const page = pdfDoc.addPage([350, 400]);
+      page.moveTo(110, 200);
+      page.drawText('Hello World!');
+
+      const svgPath =
+    'M 0,20 L 100,160 Q 130,200 150,120 C 190,-40 200,200 300,150 L 400,90'
+
+      page.moveTo(100, page.getHeight() - 5)
+
+      page.moveDown(25)
+      page.drawSvgPath(svgPath)
+
+      page.moveDown(200)
+      page.drawSvgPath(svgPath, { borderColor: rgb(0, 1, 0), borderWidth: 5 })
+
+      page.moveDown(200)
+      page.drawSvgPath(svgPath, { color: rgb(1, 0, 0) })
+
+      page.moveDown(200)
+      page.drawSvgPath(svgPath, { scale: 0.5 })
+
+      const pdfBytes = await pdfDoc.save()
+
+      const pdfDataUri = await pdfDoc.saveAsBase64({ dataUri: true });
+      //document.getElementById('pdf').src = pdfDataUri;
+
+      var pdfjsLib = window['pdfjs-dist/build/pdf'];
+      console.log(pdfjsLib, window);
+      console.log("HERE!", window)
+
+      // The workerSrc property shall be specified.
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '//mozilla.github.io/pdf.js/build/pdf.worker.js';
+
+      // Using DocumentInitParameters object to load binary data.
+      var loadingTask = pdfjsLib.getDocument({data: pdfBytes});
+      loadingTask.promise.then(function(pdf) {
+        console.log('PDF loaded');
+
+        // Fetch the first page
+        var pageNumber = 1;
+        pdf.getPage(pageNumber).then(function(page) {
+          console.log('Page loaded');
+
+          var scale = 1.5;
+          var viewport = page.getViewport({scale: scale});
+
+          // Prepare canvas using PDF page dimensions
+          var canvas = document.getElementById('the-canvas');
+          var context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          // Render PDF page into canvas context
+          var renderContext = {
+            canvasContext: context,
+            viewport: viewport
+          };
+          var renderTask = page.render(renderContext);
+          renderTask.promise.then(async function () {
+            console.log('Page rendered');
+            const ops = await page.getOperatorList();
+            console.log("ops:", ops);
+          });
+        });
+      }, function (reason) {
+        // PDF loading error
+        console.error(reason);
+      });
+    }
+  </script>
+</html>
+
+
+<!--
+10
+1 31 // beginText
+2 59
+3 1
+4 37
+5 36
+6 42
+7 44
+8 43
+9 32 // endText
+10 11
+11 10
+12 12
+13 12
+14 12
+15 58 // setStrokeRGBColor [0, 0, 0]
+16 6 // setDash [[], 0]
+// constructPath(args[0], args[1]);
+// https://github.com/mozilla/pdf.js/blob/a5a6b9f6418bbbed721e29a307dc608918d1eaf6/src/display/svg.js#L1265
+// data comes from https://github.com/mozilla/pdf.js/blob/f7449563ef8722df30c2988fe571236ab9eb89f9/src/core/evaluator.js#L1394
+// 13=moveTo, 14=lineTo, 16=curveTo2, 15=curveTo, 14=lineTo
+// how to reconstruct the original path
+// https://github.com/mozilla/pdf.js/blob/99cfef882f30c19d5a55db66fd1edc8268ba78b1/src/display/canvas.js#L1745
+17 91 // constructPath with args [ [13,14,16,15,14], [ 0
+20
+100
+160
+130
+200
+150
+120
+190
+-40
+ 200
+ 200
+ 300
+ 150
+ 400
+ 90],
+[ 0, 400, 20, 160 ] ]
+18 20 // stroke null
+19 11 // restore null
+20 10 // save null
+21 12 // transform
+22 12
+23 12
+24 58
+25 2 // setLineWidth
+26 6 // setDash
+27 91 // constructPath
+28 20
+29 11
+30 10
+31 12
+32 12
+33 12
+34 59
+35 6
+36 91
+
+-->
