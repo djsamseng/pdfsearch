@@ -10,6 +10,7 @@ Download pdflib [Prebuilt (older browsers)](https://mozilla.github.io/pdf.js/get
 - [pdfjs in react](https://pspdfkit.com/blog/2021/how-to-build-a-reactjs-viewer-with-pdfjs/)
 - [nextjs head to include scripts](https://nextjs.org/docs/api-reference/next/head)
 - [run python from react](https://python.plainenglish.io/python-in-react-with-pyodide-a9c45d4d38ff)
+- [nextjs user authentication with supabase](https://dev.to/mryechkin/user-authentication-in-nextjs-with-supabase-4l12)
 
 1. [Create Flask server](https://flask.palletsprojects.com/en/2.2.x/quickstart/)
 2. Use [test.html](test.html) to render the pdf. [Render without uploading](https://stackoverflow.com/questions/56916887/access-file-before-upload-using-pdf-js)
