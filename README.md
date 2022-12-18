@@ -6,6 +6,19 @@ npm install
 ```
 Download pdflib [Prebuilt (older browsers)](https://mozilla.github.io/pdf.js/getting_started/) for Safari support and save folder as `pdfjs-3`
 
+## TODO
+- [pdfjs in react](https://pspdfkit.com/blog/2021/how-to-build-a-reactjs-viewer-with-pdfjs/)
+- [nextjs head to include scripts](https://nextjs.org/docs/api-reference/next/head)
+- [run python from react](https://python.plainenglish.io/python-in-react-with-pyodide-a9c45d4d38ff)
+
+1. [Create Flask server](https://flask.palletsprojects.com/en/2.2.x/quickstart/)
+2. Use [test.html](test.html) to render the pdf. [Render without uploading](https://stackoverflow.com/questions/56916887/access-file-before-upload-using-pdf-js)
+3. Use [drawexample.html](drawexample.html) to highlight a region
+4. Send the region to the flask server
+5. Use [miner_test.py](https://github.com/djsamseng/floorplanreader/blob/main/miner_test.py) to find similar elements
+6. [Deploy flask application on vercel](https://dev.to/yash_makan/4-best-python-web-app-hosting-services-for-freewith-complete-process-57nb)
+
+
 ## Getting Started
 
 Open test.html to test pdfjs and pdflib working together
