@@ -2,17 +2,31 @@
 
 ## Installation
 ```bash
-npm install
+cd website && npm install
 ```
 Download pdflib [Prebuilt (older browsers)](https://mozilla.github.io/pdf.js/getting_started/) for Safari support and save folder as `pdfjs-3`
+
+```bash
+cd flaskapi && pip3 install -r requirements.txt
+```
+
+## Running
+```bash
+cd website && npm run dev
+```
+```bash
+cd flaskapi && flask --app main.py --debug run
+```
 
 ## TODO
 - [pdfjs in react](https://pspdfkit.com/blog/2021/how-to-build-a-reactjs-viewer-with-pdfjs/)
 - [nextjs head to include scripts](https://nextjs.org/docs/api-reference/next/head)
 - [run python from react](https://python.plainenglish.io/python-in-react-with-pyodide-a9c45d4d38ff)
 - [nextjs user authentication with supabase](https://dev.to/mryechkin/user-authentication-in-nextjs-with-supabase-4l12)
+- [Learning nextjs progress](https://nextjs.org/learn/basics/create-nextjs-app?utm_source=next-site&utm_medium=homepage-cta&utm_campaign=next-website)
+- [Learning effects in React](https://beta.reactjs.org/learn/synchronizing-with-effects#not-an-effect-initializing-the-application)
 
-1. [Create Flask server](https://flask.palletsprojects.com/en/2.2.x/quickstart/)
+1. [Create Flask server](https://flask.palletsprojects.com/en/2.2.x/quickstart/). [Replace Flask serving static files with the http server serving static files](https://stackoverflow.com/a/20648053)
 2. Use [test.html](test.html) to render the pdf. [Render without uploading](https://stackoverflow.com/questions/56916887/access-file-before-upload-using-pdf-js)
 3. Use [drawexample.html](drawexample.html) to highlight a region
 4. Send the region to the flask server
