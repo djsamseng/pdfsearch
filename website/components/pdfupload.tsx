@@ -1,5 +1,5 @@
 
-import { ChangeEvent, MouseEventHandler, MouseEvent, useRef, useState } from "react";
+import { ChangeEvent, MouseEventHandler, MouseEvent, useRef, useState, useEffect } from "react";
 import { usePdf } from "@mikecousins/react-pdf";
 
 enum CanvasMouseEvents {
@@ -18,13 +18,34 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
   const prevY = useRef(0);
   const currX = useRef(0);
   const currY = useRef(0);
+  const currPdfX = useRef(0);
+  const currPdfY = useRef(0);
+  const prevPdfX = useRef(0);
+  const prevPdfY = useRef(0);
   const flag = useRef(false);
+  const drawPaths = useRef<Array<{
+    currX: number;
+    currY: number;
+    prevX: number;
+    prevY: number;
+  }>>([]);
   const { pdfDocument, pdfPage } = usePdf({
     file: props.pdfDocumentUrl,
     page,
     canvasRef,
     scale: scale,
   });
+  function roll(canvasX: number, canvasY: number, pdfX: number, pdfY: number) {
+    prevX.current = currX.current;
+    prevY.current = currY.current;
+    currX.current = canvasX;
+    currY.current = canvasY;
+
+    prevPdfX.current = currPdfX.current;
+    prevPdfY.current = currPdfY.current;
+    currPdfX.current = pdfX;
+    currPdfY.current = pdfY;
+  }
 
   function increaseZoom() {
     setScale(scale * 1.1);
@@ -43,14 +64,13 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
     const parentRect = canvas.getBoundingClientRect();
     const canvasX = evt.clientX - parentRect.left;
     const canvasY = evt.clientY - parentRect.top;
+    const pdfX = (canvasX + canvas.scrollLeft) / scale;
+    const pdfY = (canvasY + canvas.scrollTop) / scale;
     if (name === CanvasMouseEvents.MOVE) {
       if (evt.buttons) {
         if (drawMode) {
           if (flag.current) {
-            prevX.current = currX.current;
-            prevY.current = currY.current;
-            currX.current = canvasX;
-            currY.current = canvasY;
+            roll(canvasX, canvasY, pdfX, pdfY);
             draw();
           }
         }
@@ -62,10 +82,7 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
     }
     else if (name === CanvasMouseEvents.DOWN) {
       if (drawMode) {
-        prevX.current = currX.current;
-        prevY.current = currY.current;
-        currX.current = canvasX;
-        currY.current = canvasY;
+        roll(canvasX, canvasY, pdfX, pdfY);
         flag.current = true;
       }
     }
@@ -86,6 +103,13 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
     if (!ctx) {
       return;
     }
+    drawPaths.current.push({
+      currX: currX.current,
+      currY: currY.current,
+      prevX: prevX.current,
+      prevY: prevY.current,
+    });
+    ctx.globalCompositeOperation = "source-over";
     ctx.beginPath();
     ctx.moveTo(prevX.current, prevY.current);
     ctx.lineTo(currX.current, currY.current);
@@ -93,7 +117,40 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.closePath();
+    console.log("Draw");
   }
+  function drawFromState(useMode=false) {
+    console.log("Draw from state");
+    const canvas = canvasRef.current as HTMLCanvasElement | null;
+    if (!canvas) {
+      console.log("No canvas")
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      console.log("No ctx");
+      return;
+    }
+    if (useMode) {
+      ctx.globalCompositeOperation = "destination-over";
+    }
+    else {
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    console.log("Num paths:", drawPaths.current.length);
+    for (const path of drawPaths.current) {
+      ctx.beginPath();
+      ctx.moveTo(path.prevX, path.prevY);
+      ctx.lineTo(path.currX, path.currY);
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.closePath();
+    }
+  }
+  drawFromState(true);
+
   const buttonStyle = "rounded px-2 py-1";
   const buttonStyleActive = "bg-blue-100 border-2 rounded px-2 py-1"
   return (
@@ -134,7 +191,7 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
           </ul>
         </nav>
       )}
-      <div className="h-[50vh] w-[50vw] overflow-x-scroll mx-auto p-5 border-black border-2">
+      <div className="h-[50vh] w-[50vw] overflow-scroll mx-auto p-5 border-black border-2">
         <canvas ref={canvasRef} className={drawMode ? "cursor-crosshair" : "cursor-grab" }
           onMouseMove={(evt) => onCanvasMouse(CanvasMouseEvents.MOVE, evt)}
           onMouseDown={(evt) => onCanvasMouse(CanvasMouseEvents.DOWN, evt)}
