@@ -1,6 +1,7 @@
 
-import { ChangeEvent, MouseEventHandler, MouseEvent, useRef, useState, useEffect } from "react";
+import { ChangeEvent, MouseEventHandler, MouseEvent, MutableRefObject, useRef, useState, useEffect } from "react";
 import { usePdf } from "@mikecousins/react-pdf";
+import { PDFDocumentProxy } from "pdfjs-dist";
 
 enum CanvasMouseEvents {
   MOVE = "MOVE",
@@ -9,11 +10,20 @@ enum CanvasMouseEvents {
   OUT = "OUT",
 }
 
+type DrawPath = {
+  currX: number;
+  currY: number;
+  prevX: number;
+  prevY: number;
+}
+
 function PdfMaker(props: { pdfDocumentUrl: string }) {
   const canvasRef = useRef(null);
   const [ page, setPage ] = useState(1);
   const [ scale, setScale ] = useState(0.4);
   const [ drawMode, setDrawMode ] = useState(false);
+  // Use refs from drawing so that we don't have to
+  // redraw / reparse the pdf the entire pdf every time
   const prevX = useRef(0);
   const prevY = useRef(0);
   const currX = useRef(0);
@@ -23,12 +33,7 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
   const prevPdfX = useRef(0);
   const prevPdfY = useRef(0);
   const flag = useRef(false);
-  const drawPaths = useRef<Array<{
-    currX: number;
-    currY: number;
-    prevX: number;
-    prevY: number;
-  }>>([]);
+  const drawPaths = useRef<Array<DrawPath>>([]);
   const { pdfDocument, pdfPage } = usePdf({
     file: props.pdfDocumentUrl,
     page,
@@ -47,6 +52,11 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
     currPdfY.current = pdfY;
   }
 
+  function clearDrawPaths() {
+    drawPaths.current = [];
+    // Force a rerender
+    setScale(scale * 1.00001);
+  }
   function increaseZoom() {
     setScale(scale * 1.1);
   }
@@ -71,7 +81,7 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
         if (drawMode) {
           if (flag.current) {
             roll(canvasX, canvasY, pdfX, pdfY);
-            draw();
+            drawCurrent();
           }
         }
         else {
@@ -94,7 +104,7 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
     }
 
   }
-  function draw() {
+  function drawCurrent() {
     const canvas = canvasRef.current as HTMLCanvasElement | null;
     if (!canvas) {
       return;
@@ -104,10 +114,10 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
       return;
     }
     drawPaths.current.push({
-      currX: currX.current,
-      currY: currY.current,
-      prevX: prevX.current,
-      prevY: prevY.current,
+      currX: currPdfX.current,
+      currY: currPdfY.current,
+      prevX: prevPdfX.current,
+      prevY: prevPdfY.current,
     });
     ctx.globalCompositeOperation = "source-over";
     ctx.beginPath();
@@ -117,13 +127,11 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.closePath();
-    console.log("Draw");
   }
-  function drawFromState(useMode=false) {
-    console.log("Draw from state");
+  function drawFromState() {
     const canvas = canvasRef.current as HTMLCanvasElement | null;
     if (!canvas) {
-      console.log("No canvas")
+      console.log("No canvas");
       return;
     }
     const ctx = canvas.getContext("2d");
@@ -131,25 +139,18 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
       console.log("No ctx");
       return;
     }
-    if (useMode) {
-      ctx.globalCompositeOperation = "destination-over";
-    }
-    else {
-      ctx.globalCompositeOperation = "source-over";
-    }
+    ctx.globalCompositeOperation = "destination-over";
 
-    console.log("Num paths:", drawPaths.current.length);
     for (const path of drawPaths.current) {
       ctx.beginPath();
-      ctx.moveTo(path.prevX, path.prevY);
-      ctx.lineTo(path.currX, path.currY);
+      ctx.moveTo(path.prevX * scale, path.prevY * scale);
+      ctx.lineTo(path.currX * scale, path.currY * scale);
       ctx.strokeStyle = "black";
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.closePath();
     }
   }
-  drawFromState(true);
 
   const buttonStyle = "rounded px-2 py-1";
   const buttonStyleActive = "bg-blue-100 border-2 rounded px-2 py-1"
@@ -158,14 +159,19 @@ function PdfMaker(props: { pdfDocumentUrl: string }) {
       {Boolean(pdfDocument && pdfDocument.numPages > 0) && (
         <nav>
           <ul className="flex justify-center">
-            <li className="previous">
+            <li>
               <button disabled={page === 1} onClick={() => setPage(page + 1)} className={buttonStyle}>
                 Previous
               </button>
             </li>
-            <li className="next">
+            <li>
               <button disabled={page === pdfDocument!.numPages} onClick={() => setPage(page + 1)} className={buttonStyle}>
                 Next
+              </button>
+            </li>
+            <li>
+              <button onClick={() => clearDrawPaths()} className={buttonStyle}>
+                Clear
               </button>
             </li>
             <li>
