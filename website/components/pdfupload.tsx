@@ -97,22 +97,177 @@ function DrawModeControl(props: { drawMode: boolean; setDrawMode: (val:boolean)=
   )
 }
 
-function PdfDrawer(props: { canvasRef: MutableRefObject<null> }) {
+function PdfDrawer(props: { canvasRef: MutableRefObject<null>, drawModeRef: MutableRefObject<boolean> }) {
+  const [ scale, setScale ] = useState(0.4);
+  const currPdfX = useRef(0);
+  const currPdfY = useRef(0);
+  const prevPdfX = useRef(0);
+  const prevPdfY = useRef(0);
+  const flag = useRef(false);
+  const drawPaths = useRef<Array<DrawPath>>([]);
 
+  function roll(pdfX: number, pdfY: number) {
+    prevPdfX.current = currPdfX.current;
+    prevPdfY.current = currPdfY.current;
+    currPdfX.current = pdfX;
+    currPdfY.current = pdfY;
+  }
+  function onCanvasMouse(name: CanvasMouseEvents, evt: MouseEvent) {
+    const canvas = props.canvasRef.current as HTMLCanvasElement | null;
+    if (!canvas) {
+      return;
+    }
+    if (!canvas.parentElement) {
+      return;
+    }
+    const parentRect = canvas.getBoundingClientRect();
+    const canvasX = evt.clientX - parentRect.left;
+    const canvasY = evt.clientY - parentRect.top;
+    const pdfX = (canvasX + canvas.scrollLeft) / scale;
+    const pdfY = (canvasY + canvas.scrollTop) / scale;
+    if (name === CanvasMouseEvents.MOVE) {
+      if (evt.buttons) {
+        if (props.drawModeRef.current) {
+          if (flag.current) {
+            roll(pdfX, pdfY);
+            drawCurrent();
+          }
+        }
+        else {
+          canvas.parentElement.scrollTop -= evt.movementY;
+          canvas.parentElement.scrollLeft -= evt.movementX;
+        }
+      }
+    }
+    else if (name === CanvasMouseEvents.DOWN) {
+      if (props.drawModeRef.current) {
+        roll(pdfX, pdfY);
+        flag.current = true;
+      }
+    }
+    else if (name === CanvasMouseEvents.UP) {
+      flag.current = false;
+    }
+    else if (name === CanvasMouseEvents.OUT) {
+      flag.current = false;
+    }
+
+  }
+  function drawCurrent() {
+    const canvas = props.canvasRef.current as HTMLCanvasElement | null;
+    if (!canvas) {
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+    drawPaths.current.push({
+      currX: currPdfX.current,
+      currY: currPdfY.current,
+      prevX: prevPdfX.current,
+      prevY: prevPdfY.current,
+    });
+    ctx.globalCompositeOperation = "source-over";
+    ctx.beginPath();
+    ctx.moveTo(prevPdfX.current * scale, prevPdfY.current * scale);
+    ctx.lineTo(currPdfX.current * scale, currPdfY.current * scale);
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.closePath();
+  }
+  function drawFromState() {
+    const canvas = props.canvasRef.current as HTMLCanvasElement | null;
+    if (!canvas) {
+      console.log("No canvas");
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      console.log("No ctx");
+      return;
+    }
+    ctx.globalCompositeOperation = "destination-over";
+
+    for (const path of drawPaths.current) {
+      ctx.beginPath();
+      ctx.moveTo(path.prevX * scale, path.prevY * scale);
+      ctx.lineTo(path.currX * scale, path.currY * scale);
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.closePath();
+    }
+  }
+  drawFromState();
+  return (
+    <div className="h-[50vh] w-[50vw] overflow-scroll mx-auto p-5 border-black border-2">
+      <canvas ref={props.canvasRef} className="cursor-grab"
+        onMouseMove={(evt) => onCanvasMouse(CanvasMouseEvents.MOVE, evt)}
+        onMouseDown={(evt) => onCanvasMouse(CanvasMouseEvents.DOWN, evt)}
+        onMouseUp={(evt) => onCanvasMouse(CanvasMouseEvents.UP, evt)}
+        onMouseOut={(evt) => onCanvasMouse(CanvasMouseEvents.OUT, evt)} />
+    </div>
+  );
 }
 
-function PdfMakerParent() {
+function PdfMakerParent(props: { pdfDocumentUrl: string }) {
   const canvasRef = useRef(null);
+  // page and scale cause a pdf redraw
+  const [ page, setPage ] = useState(1);
+  const [ scale, setScale ] = useState(0.4);
+  const { pdfDocument, pdfPage } = usePdf({
+    file: props.pdfDocumentUrl,
+    page,
+    canvasRef,
+    scale: scale,
+  });
+
   const [ drawMode, setDrawModeState ] = useState(false);
+  const drawModeRef = useRef(drawMode);
   function setDrawMode(val: boolean) {
+    setDrawModeState(val);
     const canvas = canvasRef.current as HTMLCanvasElement | null;
     if (!canvas) {
       return;
     }
     canvas.style.cursor = val ? "crosshair" : "grab";
   }
+  const buttonStyle = "rounded px-2 py-1";
+  const buttonStyleActive = "bg-blue-100 border-2 rounded px-2 py-1";
   return (
-    <div></div>
+    <div>
+      <ul className="flex justify-center">
+        <li>
+          <button disabled={page === 1} onClick={() => setPage(page + 1)} className={buttonStyle}>
+            Previous
+          </button>
+        </li>
+        <li>
+          <button disabled={page === pdfDocument!.numPages} onClick={() => setPage(page + 1)} className={buttonStyle}>
+            Next
+          </button>
+        </li>
+        <li>
+          <button onClick={() => clearDrawPaths()} className={buttonStyle}>
+            Clear
+          </button>
+        </li>
+        <li>
+          <button onClick={() => increaseZoom()} className={buttonStyle}>
+            Zoom +
+          </button>
+        </li>
+        <li>
+          <button onClick={() => decreaseZoom()} className={buttonStyle}>
+            Zoom -
+          </button>
+        </li>
+        <DrawModeControl drawMode={drawMode} setDrawMode={setDrawMode} />
+      </ul>
+      <PdfDrawer canvasRef={canvasRef} drawModeRef={drawModeRef} />
+    </div>
   );
 }
 
