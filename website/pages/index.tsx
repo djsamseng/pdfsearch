@@ -9,7 +9,7 @@ export default function Home() {
   const cardStyle = "m-4 p-6 text-left text-inherit border border-solid border-[#eaeaea] dark:border-[#222] rounded-lg transition-colors max-w-xs hover:text-[#0070f3] hover:border-[#0070f3]"
   return (
     <div className="px-8">
-      <Header />  
+      <Header />
 
       <main className="min-h-screen py-16 flex flex-col justify-center items-center">
         <h1 className="m-0 text-6xl text-center">
