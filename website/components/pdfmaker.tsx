@@ -1,6 +1,9 @@
 
 import { useRef, useState, MouseEvent } from "react";
 import { usePdf } from "@mikecousins/react-pdf";
+import * as PdfJS  from "pdfjs-dist/build/pdf";
+
+import PdfJSOps from "../utils/pdfjsops";
 
 enum CanvasMouseEvents {
   MOVE = "MOVE",
@@ -35,14 +38,43 @@ export function PdfMaker(props: { pdfDocumentUrl: string }) {
   const prevPdfY = useRef(0);
   const flag = useRef(false);
   const drawPaths = useRef<Array<DrawPath>>([]);
+  const pdfPaths = useRef<Array<DrawPath>>([]);
   // usePdf uses refs so only rerenders if arguments passed in change
   const { pdfDocument, pdfPage } = usePdf({
     file: props.pdfDocumentUrl,
     page,
     canvasRef,
     scale: scale,
-    onPageRenderSuccess: (page) => {
+    onPageRenderSuccess: async (page) => {
       drawFromState();
+      const opList = await page.getOperatorList()
+      const objs = page.objs;
+      const commonObjs = page.commonObjs;
+      const { fnArray, argsArray } = opList;
+      console.log("Ops:", { fnArray, argsArray });
+      // https://github.com/mozilla/pdf.js/blob/99cfef882f30c19d5a55db66fd1edc8268ba78b1/src/display/canvas.js#L1216
+      // fnId = fnArray[i]
+      // this[fnId].apply(this, argsArray[i])
+      console.log("SVG.outerHtml is actually correct. Ubuntu's renderer is incorrect. Also need to copy the characters correctly")
+
+      const canvas = canvasRef.current as HTMLCanvasElement | null;
+      if (!canvas) {
+        return;
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return;
+      }
+      // ctx.clearRect(0,0,canvas.width, canvas.height);
+      // const canvasGraphics = new PdfJS.CanvasGraphics(ctx, page.commonObjs, page.objs);//, imageLayer, optionalContentConfig, this.annotationCanvasMap, this.pageColors);
+      // console.log(canvasGraphics);
+      // const viewport = page.getViewport({ scale, })
+      // canvasGraphics.beginDrawing({ viewport, });
+      // canvasGraphics.executeOperatorList(opList);
+      // const svgGraphics = new PdfJS.SVGGraphics(page.commonObjs, page.objs);
+      // const svg = await svgGraphics.getSVG(opList, viewport);
+      // console.log(svg, typeof(svg));
+      // drawOps(fnArray, argsArray);
     },
   });
   function roll(canvasX: number, canvasY: number, pdfX: number, pdfY: number) {
@@ -106,6 +138,41 @@ export function PdfMaker(props: { pdfDocumentUrl: string }) {
     }
     else if (name === CanvasMouseEvents.OUT) {
       flag.current = false;
+    }
+  }
+  function drawOps(ops: Array<number>, args: Array<any>) {
+    const canvas = canvasRef.current as HTMLCanvasElement | null;
+    if (!canvas) {
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let x = 0;
+    let y = 0;
+    for (let i = 0; i < ops.length; i++) {
+      const op = ops[i] | 0;
+      const opArgs = args[i];
+      if (op === PdfJSOps.OPS.beginText) {
+        // console.log("Text:", args);
+      }
+      else if (op === PdfJSOps.OPS.constructPath) {
+        const pathOps = opArgs[0];
+        const pathArgs = opArgs[1];
+        //console.log("PATH:", pathOps, pathArgs);
+        PdfJSOps.constructPath(pathOps, pathArgs, [], ctx, x, y);
+      }
+      else if (op === PdfJSOps.OPS.stroke) {
+        ctx.stroke();
+      }
+      else if (op === PdfJSOps.OPS.closePath) {
+        ctx.closePath();
+      }
+      else if (op === PdfJSOps.OPS.transform) {
+        console.log("TRANSFORM:", opArgs);
+      }
     }
 
   }
