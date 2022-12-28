@@ -1,7 +1,7 @@
 
 import { useRef, useState, MouseEvent } from "react";
 import { usePdf } from "@mikecousins/react-pdf";
-import * as PdfJS  from "pdfjs-dist/build/pdf";
+import * as PdfJS  from "pdfjs-dist/build/pdf"
 
 import PdfJSOps from "../utils/pdfjsops";
 
@@ -17,6 +17,11 @@ type DrawPath = {
   currY: number;
   prevX: number;
   prevY: number;
+}
+
+type DrawPoint = {
+  x: number;
+  y: number;
 }
 
 export function PdfMaker(props: { pdfDocumentUrl: string }) {
@@ -65,6 +70,7 @@ export function PdfMaker(props: { pdfDocumentUrl: string }) {
       if (!ctx) {
         return;
       }
+      console.log(page.objs);
       // ctx.clearRect(0,0,canvas.width, canvas.height);
       // const canvasGraphics = new PdfJS.CanvasGraphics(ctx, page.commonObjs, page.objs);//, imageLayer, optionalContentConfig, this.annotationCanvasMap, this.pageColors);
       // console.log(canvasGraphics);
@@ -131,14 +137,35 @@ export function PdfMaker(props: { pdfDocumentUrl: string }) {
       if (drawMode) {
         roll(canvasX, canvasY, pdfX, pdfY);
         flag.current = true;
+        if (drawPaths.current.length > 0) {
+          clearDrawPaths();
+        }
       }
     }
     else if (name === CanvasMouseEvents.UP) {
       flag.current = false;
+      // Find selected area
+      // Send paths to python
+      // python returns paths of found elements
+      // draw paths of found elements on top
+      getContentFromDrawPaths();
     }
     else if (name === CanvasMouseEvents.OUT) {
       flag.current = false;
     }
+  }
+  async function getContentFromDrawPaths() {
+    const resp = await fetch("http://localhost:5000/searchpdf", {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        drawPaths: drawPaths.current,
+      }),
+    });
+    const json = await resp.json();
+    console.log("Got resp:", json);
   }
   function drawOps(ops: Array<number>, args: Array<any>) {
     const canvas = canvasRef.current as HTMLCanvasElement | null;
@@ -190,7 +217,7 @@ export function PdfMaker(props: { pdfDocumentUrl: string }) {
       currY: currPdfY.current,
       prevX: prevPdfX.current,
       prevY: prevPdfY.current,
-    })
+    });
     ctx.beginPath();
     ctx.moveTo(prevX.current, prevY.current);
     ctx.lineTo(currX.current, currY.current);
