@@ -22,24 +22,29 @@ ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout
 
 def find_shapes_in_drawpaths(pdfFile: werkzeug.datastructures.FileStorage, drawPaths: typing.List[DrawPath], pageNumber: int):
   pdfBytes = io.BytesIO(pdfFile.read())
-  print(pageNumber, type(pageNumber))
-  page_gen = pdfminer.high_level.extract_pages(pdf_file=pdfBytes, page_numbers=[pageNumber])
+  page_number = pageNumber - 1
+  page_gen = pdfminer.high_level.extract_pages(pdf_file=pdfBytes, page_numbers=[page_number])
   pages = list(page_gen)
   if len(pages) > 0:
     page = pages[0]
   else:
     print("Failed to load pages:", len(pages))
-    return []
+    return [], 0, 0
 
-  found_shapes = find_shapes_in_drawpaths_for_page(page=page, drawpaths=drawPaths)
-  return found_shapes
+  print("Looking on page:", page_number)
+  found_shapes, pathminx, pathminy = find_shapes_in_drawpaths_for_page(page=page, drawpaths=drawPaths)
+  return found_shapes, pathminx, pathminy
 
 def find_shapes_in_drawpaths_for_page(page: pdfminer.layout.LTPage, drawpaths: typing.List[DrawPath]):
   pathminx, pathmaxx, pathminy, pathmaxy = get_drawpaths_bounds(drawpaths=drawpaths)
   search_bbox = get_bbox(page=page, xleft=pathminx, xright=pathmaxx, ytop=pathminy, ybottom=pathmaxy)
+  print("Looking in bbox:", search_bbox)
   pdfelems = get_underlying(page=page)
   found_elems = filter_contains_bbox(elems=pdfelems, bbox=search_bbox)
-  return serialize_pdfminer_layout_types(found_elems)
+  # TODO: Flip y as in FitzDraw .draw_path and .show
+  elemminx, elemminy, _, _ = get_elems_bounds(elems=found_elems)
+  # TODO: Return unaltered found_elems for searching similar on next request
+  return serialize_pdfminer_layout_types(found_elems), elemminx, elemminy
 
 def serialize_pdfminer_elem(elem: typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]):
   if isinstance(elem, pdfminer.layout.LTCurve):
@@ -59,9 +64,28 @@ def serialize_pdfminer_elem(elem: typing.Union[pdfminer.layout.LTCurve, pdfminer
 def serialize_pdfminer_layout_types(elems: ElemListType):
   return [serialize_pdfminer_elem(elem) for elem in elems]
 
+def get_elems_bounds(elems: ElemListType):
+  if len(elems) == 0:
+    return 0, 0, 0, 0
+  minx = elems[0].bbox[0]
+  miny = elems[0].bbox[1]
+  maxx = elems[0].bbox[2]
+  maxy = elems[0].bbox[3]
+  for elem in elems:
+    x0, y0, x1, y1 = elem.bbox
+    minx = min(minx, x0)
+    maxx = max(maxx, x1)
+    miny = min(miny, y0)
+    maxy = max(maxy, y1)
+    assert x0 <= x1, "x0 {0} not < x1 {1}".format(x0, x1)
+    assert y0 <= y1, "y0 {0} not < y1 {1}".format(y0, y1)
+  return minx, miny, maxx, maxy
+
 def get_drawpaths_bounds(drawpaths: typing.List[DrawPath]):
   # x = [left=0, right=+]
   # y = [top=0, bottom=+]
+  if len(drawpaths) == 0:
+    return 0, 0, 0, 0
   minx = drawpaths[0].currX
   miny = drawpaths[0].currY
   maxx = drawpaths[0].currX
@@ -155,7 +179,7 @@ def test_extract():
   # 1. find min and max of drawpaths
   # 2. find elements in pdf where bbox is inside min and max
   # 3. hit test?
-  found_elems = find_shapes_in_drawpaths_for_page(page=page, drawpaths=drawpaths)
+  found_elems, pathminx, pathminy = find_shapes_in_drawpaths_for_page(page=page, drawpaths=drawpaths)
   print(found_elems)
 
 if __name__ == "__main__":

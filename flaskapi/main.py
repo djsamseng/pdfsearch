@@ -57,9 +57,11 @@ def searchpdf():
     if "pageNumber" in flask.request.form:
       pageNumber = int(flask.request.form["pageNumber"])
     if pdfFile is not None and drawPaths is not None and pageNumber is not None:
-      searchPaths = pdfsearch.find_shapes_in_drawpaths(pdfFile=pdfFile, drawPaths=drawPaths, pageNumber=pageNumber)
+      searchPaths, pathminx, pathminy = pdfsearch.find_shapes_in_drawpaths(pdfFile=pdfFile, drawPaths=drawPaths, pageNumber=pageNumber)
       response = flask.make_response({
-        "searchPaths": searchPaths
+        "searchPaths": searchPaths,
+        "pathMinX": pathminx,
+        "pathMinY": pathminy,
       })
     else:
       response = flask.make_response({

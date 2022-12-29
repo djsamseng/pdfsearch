@@ -12,20 +12,14 @@ enum CanvasMouseEvents {
   OUT = "OUT",
 }
 
-type DrawPath = {
+export type DrawPath = {
   currX: number;
   currY: number;
   prevX: number;
   prevY: number;
 }
 
-type DrawPoint = {
-  x: number;
-  y: number;
-}
-
-export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File }) {
-  console.log("FileObj:", props.pdfFileObj);
+export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File, getContentFromDrawPaths: (drawPaths: Array<DrawPath>, page: number) => void }) {
   const canvasRef = useRef(null);
   const [ page, setPage ] = useState(1);
   const [ scale, setScale ] = useState(0.4);
@@ -146,28 +140,12 @@ export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File }) {
     else if (name === CanvasMouseEvents.UP) {
       flag.current = false;
       if (drawMode) {
-        getContentFromDrawPaths();
+        props.getContentFromDrawPaths(drawPaths.current, page);
       }
     }
     else if (name === CanvasMouseEvents.OUT) {
       flag.current = false;
     }
-  }
-  async function getContentFromDrawPaths() {
-    const formData = new FormData();
-    if (!props.pdfFileObj) {
-      console.error("No pdf file to upload");
-      return;
-    }
-    formData.append("pdfFile", props.pdfFileObj)
-    formData.append("drawPaths", JSON.stringify(drawPaths.current));
-    formData.append("pageNumber", String(page))
-    const resp = await fetch("http://localhost:5000/searchpdf", {
-      method: "post",
-      body: formData,
-    });
-    const json = await resp.json();
-    console.log("Got resp:", json);
   }
   function drawOps(ops: Array<number>, args: Array<any>) {
     const canvas = canvasRef.current as HTMLCanvasElement | null;
