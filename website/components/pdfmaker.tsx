@@ -24,7 +24,8 @@ type DrawPoint = {
   y: number;
 }
 
-export function PdfMaker(props: { pdfDocumentUrl: string }) {
+export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File }) {
+  console.log("FileObj:", props.pdfFileObj);
   const canvasRef = useRef(null);
   const [ page, setPage ] = useState(1);
   const [ scale, setScale ] = useState(0.4);
@@ -144,25 +145,26 @@ export function PdfMaker(props: { pdfDocumentUrl: string }) {
     }
     else if (name === CanvasMouseEvents.UP) {
       flag.current = false;
-      // Find selected area
-      // Send paths to python
-      // python returns paths of found elements
-      // draw paths of found elements on top
-      getContentFromDrawPaths();
+      if (drawMode) {
+        getContentFromDrawPaths();
+      }
     }
     else if (name === CanvasMouseEvents.OUT) {
       flag.current = false;
     }
   }
   async function getContentFromDrawPaths() {
+    const formData = new FormData();
+    if (!props.pdfFileObj) {
+      console.error("No pdf file to upload");
+      return;
+    }
+    formData.append("pdfFile", props.pdfFileObj)
+    formData.append("drawPaths", JSON.stringify(drawPaths.current));
+    formData.append("pageNumber", String(page))
     const resp = await fetch("http://localhost:5000/searchpdf", {
       method: "post",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        drawPaths: drawPaths.current,
-      }),
+      body: formData,
     });
     const json = await resp.json();
     console.log("Got resp:", json);
@@ -258,7 +260,7 @@ export function PdfMaker(props: { pdfDocumentUrl: string }) {
         <nav>
           <ul className="flex justify-center">
             <li>
-              <button disabled={page === 1} onClick={() => setPage(page + 1)} className={buttonStyle}>
+              <button disabled={page === 1} onClick={() => setPage(page - 1)} className={buttonStyle}>
                 Previous
               </button>
             </li>

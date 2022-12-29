@@ -7,6 +7,7 @@ import { PdfMaker } from "./pdfmaker";
 
 export default function PdfUpload() {
   const [ pdfDocumentUrl, setPdfDocumentUrl ] = useState<string | undefined>(undefined);
+  const [ pdfFileObj, setPdfFileObj ] = useState<File | null>(null);
   const canvasRef = useRef(null);
   function onPdfFileChange(evt: ChangeEvent<HTMLInputElement>) {
     const fileObj = evt.target.files && evt.target.files[0];
@@ -15,14 +16,15 @@ export default function PdfUpload() {
       return;
     }
     const url = URL.createObjectURL(fileObj);
+    setPdfFileObj(fileObj);
     setPdfDocumentUrl(url);
   }
 
   return (
     <div className="w-full text-center">
       <input type="file" accept=".pdf" onChange={onPdfFileChange} />
-      { pdfDocumentUrl && (
-        <PdfMaker pdfDocumentUrl={pdfDocumentUrl} />
+      { pdfDocumentUrl && pdfFileObj && (
+        <PdfMaker pdfDocumentUrl={pdfDocumentUrl} pdfFileObj={pdfFileObj} />
       )}
     </div>
   )
