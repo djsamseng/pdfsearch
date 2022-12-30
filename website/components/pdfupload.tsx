@@ -33,15 +33,22 @@ export default function PdfUpload() {
     formData.append("pdfFile", pdfFileObj)
     formData.append("drawPaths", JSON.stringify(drawPaths));
     formData.append("pageNumber", String(page))
-    const resp = await fetch("http://localhost:5000/selectinpdf", {
-      method: "post",
-      body: formData,
-    });
-    const json = await resp.json() as SelectInPdfResponse;
-    console.log("Got resp:", json);
-    if ("selectedPaths" in json) {
-      setPdfSelectedObjects(json.selectedPaths);
+    // http://localhost:5000/selectinpdf
+    try {
+      const resp = await fetch("http://127.0.0.1:5000/selectinpdf", {
+        method: "post",
+        body: formData,
+      });
+      const json = await resp.json() as SelectInPdfResponse;
+      console.log("Got resp:", json);
+      if ("selectedPaths" in json) {
+        setPdfSelectedObjects(json.selectedPaths);
+      }
     }
+    catch (error) {
+      console.error(error);
+    }
+
   }
 
   return (

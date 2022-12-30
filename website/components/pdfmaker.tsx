@@ -3,7 +3,6 @@ import { useRef, useState, MouseEvent } from "react";
 import { usePdf } from "@mikecousins/react-pdf";
 import * as PdfJS  from "pdfjs-dist/build/pdf"
 
-import PdfJSOps from "../utils/pdfjsops";
 import { ClientDrawPath } from "../utils/sharedtypes";
 
 enum CanvasMouseEvents {
@@ -104,15 +103,18 @@ export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File, getC
       return;
     }
     const parentRect = canvas.getBoundingClientRect();
-    const canvasX = evt.clientX - parentRect.left;
-    const canvasY = evt.clientY - parentRect.top;
+    const canvasX = (evt.clientX - parentRect.left);
+    const canvasY = (evt.clientY - parentRect.top);
     const pdfX = (canvasX + canvas.scrollLeft) / scale;
     const pdfY = (canvasY + canvas.scrollTop) / scale;
     if (name === CanvasMouseEvents.MOVE) {
       if (evt.buttons) {
         if (drawMode) {
           if (flag.current) {
-            roll(canvasX, canvasY, pdfX, pdfY);
+            // if Safari
+            roll(canvasX * 2, canvasY * 2, pdfX, pdfY);
+            // else
+            // roll(canvasX, canvasY, pdfX, pdfY);
             drawCurrent();
           }
         }
@@ -124,7 +126,10 @@ export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File, getC
     }
     else if (name === CanvasMouseEvents.DOWN) {
       if (drawMode) {
-        roll(canvasX, canvasY, pdfX, pdfY);
+        // if Safari
+        roll(canvasX * 2, canvasY * 2, pdfX, pdfY);
+        // else
+        // roll(canvasX, canvasY, pdfX, pdfY);
         flag.current = true;
         if (drawPaths.current.length > 0) {
           clearDrawPaths();

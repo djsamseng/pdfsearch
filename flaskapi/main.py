@@ -58,6 +58,7 @@ def default():
 @app.route("/selectinpdf", methods=["POST", "OPTIONS"])
 def searchpdf():
   if flask.request.method == "OPTIONS":
+    print("Got options from:", flask.request.origin)
     response = build_cors_preflight_response()
     return response
   elif flask.request.method == "POST":
@@ -86,6 +87,7 @@ def searchpdf():
     print("Unhandled request type:", flask.request.method)
 
 # cd flaskapi && flask --app main.py --debug run
+# python3 -m flask --app main.py --debug run
 if __name__ == "__main__":
   # For production
   app.run()

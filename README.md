@@ -16,6 +16,7 @@ cd website && npm run dev
 ```
 ```bash
 cd flaskapi && flask --app main.py --debug run
+# or python3 -m flask --app main.py --debug run
 ```
 
 ## TODO
