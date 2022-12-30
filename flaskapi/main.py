@@ -14,6 +14,22 @@ ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin"
 ACCESS_CONTROL_ALLOW_HEADERS = "Access-Control-Allow-Headers"
 ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods"
 
+'''
+Do as much as we can on the client PC making the middlewear
+1. Request with circle. left=0, top=0 becomes left=0 top=page.height-0
+| x0,y0      |           |       x1, h-y0 |
+|     x1, y1 |   becomes | x0,h-y1        | this is done CLIENT SIDE
+but we only need to take each point and flip it, then server side taking mins and maxes automatically works for bbox
+2. Respond with contents inside circle. left=0, bottom=0
+subtract minx, miny because this is the search box on the SERVER SIDE
+|        x1, y1 |         | x0, h-y1        |
+| x0, y0        | becomes |        x1, h-y0 | this is done CLIENT SIDE only for rendering
+3. Send the search box response (untransformed) to the server to find similar
+4. Server responds with found elements
+|        x1, y1 |         | x0, h-y1        |
+| x0, y0        | becomes |        x1, h-y0 | this is done CLIENT SIDE only for rendering
+'''
+
 def build_cors_preflight_response():
   print("Build for origin:", flask.request.origin)
   response = flask.make_response()
@@ -39,11 +55,10 @@ def default():
   <div>Send a POST request to /searchpdf</div>
   """
 
-@app.route("/searchpdf", methods=["POST", "OPTIONS"])
+@app.route("/selectinpdf", methods=["POST", "OPTIONS"])
 def searchpdf():
   if flask.request.method == "OPTIONS":
     response = build_cors_preflight_response()
-    print("Got OPTIONS", response)
     return response
   elif flask.request.method == "POST":
     pdfFile = None
@@ -59,9 +74,8 @@ def searchpdf():
     if pdfFile is not None and drawPaths is not None and pageNumber is not None:
       searchPaths, pathminx, pathminy = pdfsearch.find_shapes_in_drawpaths(pdfFile=pdfFile, drawPaths=drawPaths, pageNumber=pageNumber)
       response = flask.make_response({
-        "searchPaths": searchPaths,
-        "pathMinX": pathminx,
-        "pathMinY": pathminy,
+        "selectedPaths": searchPaths, # TODO flipud
+        "searchRequestData": searchPaths, # TODO
       })
     else:
       response = flask.make_response({

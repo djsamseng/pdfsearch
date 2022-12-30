@@ -3,14 +3,16 @@ import { ChangeEvent, MouseEventHandler, MouseEvent, MutableRefObject, useRef, u
 import { usePdf } from "@mikecousins/react-pdf";
 import { PDFDocumentProxy } from "pdfjs-dist";
 
-import { PdfMaker, DrawPath } from "./pdfmaker";
-import { PdfSelectedObjects } from "./pdfelementsdrawer";
+import { PdfMaker } from "./pdfmaker";
+import { PdfElements, } from "../utils/sharedtypes";
 import PdfSelected from "./pdfselected";
+import { ClientDrawPath } from "../utils/sharedtypes";
+import { SelectInPdfResponse } from "../utils/requestresponsetypes";
 
 export default function PdfUpload() {
   const [ pdfDocumentUrl, setPdfDocumentUrl ] = useState<string | undefined>(undefined);
   const [ pdfFileObj, setPdfFileObj ] = useState<File | null>(null);
-  const [ pdfSelectedObjects, setPdfSelectedObjects ] = useState<PdfSelectedObjects | null>(null);
+  const [ pdfSelectedObjects, setPdfSelectedObjects ] = useState<PdfElements>([]);
   function onPdfFileChange(evt: ChangeEvent<HTMLInputElement>) {
     const fileObj = evt.target.files && evt.target.files[0];
     console.log(fileObj);
@@ -21,23 +23,24 @@ export default function PdfUpload() {
     setPdfFileObj(fileObj);
     setPdfDocumentUrl(url);
   }
-  async function getContentFromDrawPaths(drawPaths: Array<DrawPath>, page: number) {
+  async function getContentFromDrawPaths(drawPaths: Array<ClientDrawPath>, page: number) {
     const formData = new FormData();
     if (!pdfFileObj) {
       console.error("No pdf file to upload");
       return;
     }
+    // Matches requestresponsetypes.ts SelectInPdfRequest
     formData.append("pdfFile", pdfFileObj)
     formData.append("drawPaths", JSON.stringify(drawPaths));
     formData.append("pageNumber", String(page))
-    const resp = await fetch("http://localhost:5000/searchpdf", {
+    const resp = await fetch("http://localhost:5000/selectinpdf", {
       method: "post",
       body: formData,
     });
-    const json = await resp.json();
+    const json = await resp.json() as SelectInPdfResponse;
     console.log("Got resp:", json);
-    if ("searchPaths" in json) {
-      setPdfSelectedObjects(json);
+    if ("selectedPaths" in json) {
+      setPdfSelectedObjects(json.selectedPaths);
     }
   }
 
@@ -47,7 +50,7 @@ export default function PdfUpload() {
       { pdfDocumentUrl && pdfFileObj && (
         <PdfMaker pdfDocumentUrl={pdfDocumentUrl} pdfFileObj={pdfFileObj} getContentFromDrawPaths={getContentFromDrawPaths} />
       )}
-      { pdfSelectedObjects && (
+      { pdfSelectedObjects.length > 0 && (
         <PdfSelected elems={pdfSelectedObjects} />
       )}
     </div>

@@ -1,8 +1,9 @@
-import PdfElementsDrawer, { PdfSelectedObjects } from "./pdfelementsdrawer";
+import { PdfElements } from "../utils/sharedtypes";
+import PdfElementsDrawer from "./pdfelementsdrawer";
 
 
 export default function PdfSelected(props: {
-  elems: PdfSelectedObjects,
+  elems: PdfElements,
 }) {
   return (
     <div>

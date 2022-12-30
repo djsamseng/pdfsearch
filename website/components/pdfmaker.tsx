@@ -4,6 +4,7 @@ import { usePdf } from "@mikecousins/react-pdf";
 import * as PdfJS  from "pdfjs-dist/build/pdf"
 
 import PdfJSOps from "../utils/pdfjsops";
+import { ClientDrawPath } from "../utils/sharedtypes";
 
 enum CanvasMouseEvents {
   MOVE = "MOVE",
@@ -12,14 +13,7 @@ enum CanvasMouseEvents {
   OUT = "OUT",
 }
 
-export type DrawPath = {
-  currX: number;
-  currY: number;
-  prevX: number;
-  prevY: number;
-}
-
-export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File, getContentFromDrawPaths: (drawPaths: Array<DrawPath>, page: number) => void }) {
+export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File, getContentFromDrawPaths: (drawPaths: Array<ClientDrawPath>, page: number) => void }) {
   const canvasRef = useRef(null);
   const [ page, setPage ] = useState(1);
   const [ scale, setScale ] = useState(0.4);
@@ -37,8 +31,8 @@ export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File, getC
   const prevPdfX = useRef(0);
   const prevPdfY = useRef(0);
   const flag = useRef(false);
-  const drawPaths = useRef<Array<DrawPath>>([]);
-  const pdfPaths = useRef<Array<DrawPath>>([]);
+  const drawPaths = useRef<Array<ClientDrawPath>>([]);
+  const pdfPaths = useRef<Array<ClientDrawPath>>([]);
   // usePdf uses refs so only rerenders if arguments passed in change
   const { pdfDocument, pdfPage } = usePdf({
     file: props.pdfDocumentUrl,
