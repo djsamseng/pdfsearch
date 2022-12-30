@@ -7,6 +7,9 @@ import numpy as np
 import werkzeug.datastructures
 import pdfminer, pdfminer.high_level, pdfminer.layout # miner.six
 
+ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
+BboxType = typing.Tuple[float, float, float, float]
+
 class DrawPath:
   currX: float
   currY: float
@@ -18,7 +21,27 @@ class DrawPath:
     self.prevX = obj["prevX"]
     self.prevY = obj["prevY"]
 
-ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
+class SerializedLTCurve:
+  path: typing.Union[typing.List[pdfminer.layout.PathSegment], None]
+  bbox: BboxType
+  def __init__(self, path: typing.Union[typing.List[pdfminer.layout.PathSegment], None], bbox: BboxType) -> None:
+    self.path = path
+    self.bbox = bbox
+
+class SerializedLTChar:
+  x0: float
+  y0: float
+  x1: float
+  y1: float
+  char: str
+  bbox: BboxType
+  def __init__(self, x0: float, y0: float, x1: float, y1: float, char: str, bbox: BboxType) -> None:
+    self.x0 = x0
+    self.y0 = y0
+    self.x1 = x1
+    self.y1 = y1
+    self.char = char
+    self.bbox = bbox
 
 def find_shapes_in_drawpaths(pdfFile: werkzeug.datastructures.FileStorage, drawPaths: typing.List[DrawPath], pageNumber: int):
   pdfBytes = io.BytesIO(pdfFile.read())
@@ -32,8 +55,7 @@ def find_shapes_in_drawpaths(pdfFile: werkzeug.datastructures.FileStorage, drawP
     return [], 0, 0
 
   print("Looking on page:", page_number)
-  found_shapes, pathminx, pathminy = find_shapes_in_drawpaths_for_page(page=page, drawpaths=drawPaths)
-  return found_shapes, pathminx, pathminy
+  return find_shapes_in_drawpaths_for_page(page=page, drawpaths=drawPaths)
 
 def find_shapes_in_drawpaths_for_page(page: pdfminer.layout.LTPage, drawpaths: typing.List[DrawPath]):
   pathminx, pathmaxx, pathminy, pathmaxy = get_drawpaths_bounds(drawpaths=drawpaths)
@@ -41,27 +63,78 @@ def find_shapes_in_drawpaths_for_page(page: pdfminer.layout.LTPage, drawpaths: t
   print("Looking in bbox:", search_bbox)
   pdfelems = get_underlying(page=page)
   found_elems = filter_contains_bbox(elems=pdfelems, bbox=search_bbox)
-  # TODO: Flip y as in FitzDraw .draw_path and .show
-  elemminx, elemminy, _, _ = get_elems_bounds(elems=found_elems)
   # TODO: Return unaltered found_elems for searching similar on next request
-  return serialize_pdfminer_layout_types(found_elems), elemminx, elemminy
+  serialized = serialize_pdfminer_layout_types(found_elems)
+  flipped_serialized = flip_ud_elems(elems=serialized, pageWidth=page.width, pageHeight=page.height)
+  serialized = zero_align_elems(elems=serialized)
+  flipped_serialized = zero_align_elems(elems=flipped_serialized)
+  serialized = [ s.__dict__ for s in serialized ]
+  flipped_serialized = [s.__dict__ for s in flipped_serialized ]
+  return flipped_serialized, serialized
+
+def zero_align_elems(elems: typing.Union[SerializedLTChar, SerializedLTCurve]):
+  if len(elems) == 0:
+    return elems
+  x0, y0, x1, y1 = elems[0].bbox
+  minx = min(x0, x1)
+  miny = min(y0, y1)
+  for elem in elems:
+    x0, y0, x1, y1 = elem.bbox
+    minx = min(minx, min(x0, x1))
+    miny = min(miny, min(y0, y1))
+  for elem in elems:
+    if isinstance(elem, SerializedLTCurve):
+      new_path = []
+      for point in elem.path:
+        x = point[1][0]
+        y = point[1][1]
+        new_path.append([ point[0], [ x-minx, y-miny ] ])
+      elem.path = new_path
+      x0, y0, x1, y1 = elem.bbox
+      elem.bbox = (x0-minx, y0-miny, x1-minx, y1-miny)
+    elif isinstance(elem, SerializedLTChar):
+      elem.x0 -= minx
+      elem.x1 -= minx
+      elem.y0 -= miny
+      elem.y1 -= miny
+      x0, y0, x1, y1 = elem.bbox
+      elem.bbox = (x0-minx, y0-miny, x1-minx, y1-miny)
+    else:
+      assert False, "Unhandled elem" + str(elem)
+  return elems
+
+def flip_ud_elem(elem: typing.Union[SerializedLTChar, SerializedLTCurve], pageWidth: int, pageHeight: int):
+  if isinstance(elem, SerializedLTCurve):
+    new_path = []
+    for point in elem.path:
+      if point[0] == "m" or point[0] == "l":
+        x = point[1][0]
+        y = point[1][1]
+        new_path.append([ point[0], [ x, pageHeight - y ]])
+      else:
+        assert False, "Unhandled point in path:" + str(point)
+    x0, y0, x1, y1 = elem.bbox
+    bbox = (x0, pageHeight - y1, x1, pageHeight - y0)
+    return SerializedLTCurve(path=new_path, bbox=bbox)
+  elif isinstance(elem, SerializedLTChar):
+    x0, y0, x1, y1 = elem.bbox
+    bbox = (x0, pageHeight - y1, x1, pageHeight - y0)
+    return SerializedLTChar(x0=elem.x0, y0=pageHeight-elem.y1, x1=elem.x1, y1=pageHeight-elem.y0, char=elem.char, bbox=bbox)
+  else:
+    assert False, "Unhandled elem in flip_ud_elem" + str(elem)
+
+def flip_ud_elems(elems: typing.List[typing.Union[SerializedLTChar, SerializedLTCurve]], pageWidth: int, pageHeight: int):
+  return [flip_ud_elem(elem=elem, pageWidth=pageWidth, pageHeight=pageHeight) for elem in elems]
 
 def serialize_pdfminer_elem(elem: typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]):
   if isinstance(elem, pdfminer.layout.LTCurve):
-    return {
-      "path": elem.original_path,
-    }
+    return SerializedLTCurve(path=elem.original_path, bbox=elem.bbox)
   elif isinstance(elem, pdfminer.layout.LTChar):
-    return {
-      "x": elem.x0,
-      "y": elem.y0,
-      "char": elem.get_text()
-    }
+    return SerializedLTChar(x0=elem.x0, y0=elem.y0, x1=elem.x1, y1=elem.y1, char=elem.get_text(), bbox=elem.bbox)
   else:
-    print("Unhandled element in serialization:", elem)
-  return {}
+    assert False, "Unhandled element in serialization:" + str(elem)
 
-def serialize_pdfminer_layout_types(elems: ElemListType):
+def serialize_pdfminer_layout_types(elems: ElemListType) -> typing.List[typing.Union[SerializedLTChar, SerializedLTCurve]]:
   return [serialize_pdfminer_elem(elem) for elem in elems]
 
 def get_elems_bounds(elems: ElemListType):
@@ -148,7 +221,7 @@ def get_underlying(page: pdfminer.layout.LTPage) -> ElemListType:
     extend_out_if_element(out=out, elem=get_underlying_from_element(elem=elem))
   return out
 
-def box_contains(outer, inner):
+def box_contains(outer: BboxType, inner: BboxType):
   x0a, y0a, x1a, y1a = outer
   x0b, y0b, x1b, y1b = inner
   if x0a <= x0b and y0a <= y0b:
@@ -158,7 +231,7 @@ def box_contains(outer, inner):
       return True
   return False
 
-def filter_contains_bbox(elems: typing.List[pdfminer.layout.LTComponent], bbox) -> typing.List[pdfminer.layout.LTComponent]:
+def filter_contains_bbox(elems: ElemListType, bbox: BboxType) -> ElemListType:
   out = []
   for elem in elems:
     if box_contains(outer=bbox, inner=elem.bbox):

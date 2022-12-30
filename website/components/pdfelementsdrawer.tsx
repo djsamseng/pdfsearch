@@ -45,7 +45,7 @@ export default function PdfElementsDrawer(props: {
         drawPath(ctx, path);
       }
       if ("char" in elem) {
-        const { char, x: xOrig, y: yOrig } = elem;
+        const { char, x0: xOrig, y0: yOrig } = elem;
         const x = Math.max(xOrig, 10);
         const y = Math.max(yOrig, 10);
         ctx.font = "12px serif";
