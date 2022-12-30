@@ -26,13 +26,24 @@ cd flaskapi && flask --app main.py --debug run
 - [nextjs user authentication with supabase](https://dev.to/mryechkin/user-authentication-in-nextjs-with-supabase-4l12)
 - [Learning nextjs progress](https://nextjs.org/learn/basics/create-nextjs-app?utm_source=next-site&utm_medium=homepage-cta&utm_campaign=next-website)
 - [Learning effects in React](https://beta.reactjs.org/learn/synchronizing-with-effects#not-an-effect-initializing-the-application)
+- [Deploy flask application on vercel](https://dev.to/yash_makan/4-best-python-web-app-hosting-services-for-freewith-complete-process-57nb)
 
-1. [Create Flask server](https://flask.palletsprojects.com/en/2.2.x/quickstart/). [Replace Flask serving static files with the http server serving static files](https://stackoverflow.com/a/20648053)
-2. Use [test.html](test.html) to render the pdf. [Render without uploading](https://stackoverflow.com/questions/56916887/access-file-before-upload-using-pdf-js)
-3. Use [drawexample.html](drawexample.html) to highlight a region
-4. Send the region to the flask server
-5. Use [miner_test.py](https://github.com/djsamseng/floorplanreader/blob/main/miner_test.py) to find similar elements
-6. [Deploy flask application on vercel](https://dev.to/yash_makan/4-best-python-web-app-hosting-services-for-freewith-complete-process-57nb)
+## Coding work
+### Backend Python
+- Fast lookup of symbols by organzing pdf shapes to nearby shapes. Create a BTree keyed by x,y location
+- Store known symbols and searches in a database per architect
+### Fontend NextJS
+- Sticky notes interface. Drill in per page/higlight and show on PDF
+- PDF viewer interface. Click on A## and see all matches. Click on A21 and see all other windows
+- Square feet calculator per room
+
+## Data processing
+- Make a request to the server, opens a websocket with time to response [AWS websocket API Gateway](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-websocket-api.html)
+- Rest API to upload PDF and store in S3
+- AWS SQS to publish to queue
+- EC2 workers with gpu pop off SQS queue
+- [By using an API Gateway WebSocket API in front of Lambda, you don’t need a machine to stay always on, eating away your project budget. API Gateway handles connections and invokes Lambda whenever there’s a new event. Scaling is handled on the service side. To update our connected clients from the backend, we can use the API Gateway callback URL.](https://aws.amazon.com/blogs/compute/from-poll-to-push-transform-apis-using-amazon-api-gateway-rest-apis-and-websockets/)
+  - **Good example of what we want**
 
 
 ## Getting Started
