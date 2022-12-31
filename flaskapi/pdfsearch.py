@@ -7,8 +7,7 @@ import numpy as np
 import werkzeug.datastructures
 import pdfminer, pdfminer.high_level, pdfminer.layout # miner.six
 
-ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
-BboxType = typing.Tuple[float, float, float, float]
+from pdfextracter import ElemListType, BboxType, get_underlying
 
 class DrawPath:
   currX: float
@@ -174,52 +173,6 @@ def get_bbox(page: pdfminer.layout.LTPage, xleft:float, xright:float, ytop:float
   y0 = page.height - ytop
   y1 = page.height - ybottom
   return (xleft, y1, xright, y0)
-
-def extend_out_if_element(out: ElemListType, elem: typing.Union[None, list, pdfminer.layout.LTCurve, pdfminer.layout.LTChar]):
-  if elem == None:
-    return
-  elif isinstance(elem, list):
-    out.extend(elem)
-  elif isinstance(elem, pdfminer.layout.LTCurve):
-    out.append(elem)
-  elif isinstance(elem, pdfminer.layout.LTChar):
-    out.append(elem)
-  else:
-    print("Unhandled extend:", elem)
-
-def get_underlying_from_element(elem: pdfminer.layout.LTComponent) -> typing.Union[None, list, pdfminer.layout.LTCurve, pdfminer.layout.LTChar]:
-  if isinstance(elem, pdfminer.layout.LTTextLineHorizontal):
-    out = []
-    for sub_elem in elem:
-      extend_out_if_element(out=out, elem=get_underlying_from_element(sub_elem))
-    return out
-  elif isinstance(elem, pdfminer.layout.LTTextBoxHorizontal):
-    out = []
-    for sub_elem in elem:
-      extend_out_if_element(out=out, elem=get_underlying_from_element(sub_elem))
-    return out
-  elif isinstance(elem, pdfminer.layout.LTTextContainer):
-    print(elem)
-    assert False, "Unhandled LTTextContainer" + str(elem)
-  elif isinstance(elem, pdfminer.layout.LTChar):
-    return elem
-  elif isinstance(elem, pdfminer.layout.LTAnno):
-    return None
-  elif isinstance(elem, pdfminer.layout.LTCurve):
-    return elem
-  elif isinstance(elem, pdfminer.layout.LTLine):
-    # LTLine and LTRect is a LTCurve
-    print("Line:", elem.pts, elem.fill, elem.stroking_color, elem.stroke, elem.non_stroking_color, elem.evenodd, elem.linewidth)
-    assert False, "Unhandled line:" + str(elem)
-  else:
-    print("Unhandled:", elem)
-    assert False, "Unhandled elem:" + str(elem)
-
-def get_underlying(page: pdfminer.layout.LTPage) -> ElemListType:
-  out: ElemListType = []
-  for elem in page:
-    extend_out_if_element(out=out, elem=get_underlying_from_element(elem=elem))
-  return out
 
 def box_contains(outer: BboxType, inner: BboxType):
   x0a, y0a, x1a, y1a = outer
