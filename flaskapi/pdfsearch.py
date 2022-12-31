@@ -7,7 +7,7 @@ import numpy as np
 import werkzeug.datastructures
 import pdfminer, pdfminer.high_level, pdfminer.layout # miner.six
 
-from pdfextracter import ElemListType, BboxType, get_underlying
+from pdfextracter import ElemListType, BboxType, get_underlying, filter_contains_bbox
 
 class DrawPath:
   currX: float
@@ -153,6 +153,11 @@ def get_elems_bounds(elems: ElemListType):
     assert y0 <= y1, "y0 {0} not < y1 {1}".format(y0, y1)
   return minx, miny, maxx, maxy
 
+def get_bbox(page: pdfminer.layout.LTPage, xleft:float, xright:float, ytop:float, ybottom:float):
+  y0 = page.height - ytop
+  y1 = page.height - ybottom
+  return (xleft, y1, xright, y0)
+
 def get_drawpaths_bounds(drawpaths: typing.List[DrawPath]):
   # x = [left=0, right=+]
   # y = [top=0, bottom=+]
@@ -168,28 +173,6 @@ def get_drawpaths_bounds(drawpaths: typing.List[DrawPath]):
     miny = min(miny, min(path.currY, path.prevY))
     maxy = max(maxy, max(path.currY, path.prevY))
   return (minx, maxx, miny, maxy)
-
-def get_bbox(page: pdfminer.layout.LTPage, xleft:float, xright:float, ytop:float, ybottom:float):
-  y0 = page.height - ytop
-  y1 = page.height - ybottom
-  return (xleft, y1, xright, y0)
-
-def box_contains(outer: BboxType, inner: BboxType):
-  x0a, y0a, x1a, y1a = outer
-  x0b, y0b, x1b, y1b = inner
-  if x0a <= x0b and y0a <= y0b:
-    # outer starts before inner
-    if x1a >= x1b and y1a >= y1b:
-      # outer ends after inner
-      return True
-  return False
-
-def filter_contains_bbox(elems: ElemListType, bbox: BboxType) -> ElemListType:
-  out = []
-  for elem in elems:
-    if box_contains(outer=bbox, inner=elem.bbox):
-      out.append(elem)
-  return out
 
 ### Testing code
 

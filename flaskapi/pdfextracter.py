@@ -2,9 +2,8 @@
 
 import typing
 
+import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level
-
-import pdfdrawer
 
 ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
 BboxType = typing.Tuple[float, float, float, float]
@@ -38,6 +37,9 @@ def get_underlying_from_element(elem: pdfminer.layout.LTComponent) -> typing.Uni
   elif isinstance(elem, pdfminer.layout.LTChar):
     return elem
   elif isinstance(elem, pdfminer.layout.LTAnno):
+    text = elem.get_text()
+    if text != "\n" and text != " ":
+      print("Unhandled LTAnno", elem)
     return None
   elif isinstance(elem, pdfminer.layout.LTCurve):
     return elem
@@ -45,33 +47,54 @@ def get_underlying_from_element(elem: pdfminer.layout.LTComponent) -> typing.Uni
     # LTLine and LTRect is a LTCurve
     print("Line:", elem.pts, elem.fill, elem.stroking_color, elem.stroke, elem.non_stroking_color, elem.evenodd, elem.linewidth)
     assert False, "Unhandled line:" + str(elem)
+  elif isinstance(elem, pdfminer.layout.LTFigure):
+    print("Unhandled LTFigure:", elem)
   else:
     print("Unhandled:", elem)
     assert False, "Unhandled elem:" + str(elem)
 
-def get_underlying(page: pdfminer.layout.LTPage) -> ElemListType:
+def get_underlying(page: typing.Iterable[pdfminer.layout.LTComponent]) -> ElemListType:
   out: ElemListType = []
   for elem in page:
     extend_out_if_element(out=out, elem=get_underlying_from_element(elem=elem))
   return out
 
-def extract_window_schedule_test():
-  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[3-1])
-  page = next(iter(page_gen))
+def box_contains(outer: BboxType, inner: BboxType):
+  x0a, y0a, x1a, y1a = outer
+  x0b, y0b, x1b, y1b = inner
+  if x0a <= x0b and y0a <= y0b:
+    # outer starts before inner
+    if x1a >= x1b and y1a >= y1b:
+      # outer ends after inner
+      return True
+  return False
 
-  drawer = pdfdrawer.FitzDraw(width=page.width, height=page.height)
-  elems = get_underlying(page=page)
-  pdfdrawer.draw_elems(elems=elems, drawer=drawer)
-  drawer.show("Window Schedule")
+def filter_contains_bbox(elems: ElemListType, bbox: BboxType) -> ElemListType:
+  out = []
+  for elem in elems:
+    if box_contains(outer=bbox, inner=elem.bbox):
+      out.append(elem)
+  return out
 
-  y0, x0 = 968, 958
-  y1, x1 = 2100, 1865
-  bbox = (x0, page.height-y1, x1, page.height-y0)
+def filter_contains_bbox_hierarchical(elems: typing.Iterable[pdfminer.layout.LTComponent], bbox: BboxType) -> typing.List[pdfminer.layout.LTComponent]:
+  out = []
+  to_process: typing.List[pdfminer.layout.LTContainer] = []
+  for elem in elems:
+    if isinstance(elem, pdfminer.layout.LTAnno):
+      continue
+    if box_contains(outer=bbox, inner=elem.bbox):
+      out.append(elem)
+    elif isinstance(elem, pdfminer.layout.LTContainer):
+      to_process.append(elem)
 
-  pdfdrawer.waitKey(0)
+  while len(to_process) > 0:
+    container = to_process.pop()
+    for elem in container:
+      if isinstance(elem, pdfminer.layout.LTAnno):
+        continue
+      if box_contains(outer=bbox, inner=elem.bbox):
+        out.append(elem)
+      elif isinstance(elem, pdfminer.layout.LTContainer):
+        to_process.append(elem)
 
-def main():
-  extract_window_schedule_test()
-
-if __name__ == "__main__":
-  main()
+  return out
