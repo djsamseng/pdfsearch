@@ -62,7 +62,7 @@ def get_awindows_key(window_schedule_elems: typing.Iterable[pdfminer.layout.LTCo
 
 def print_elem_tree(elems, depth=0):
   for elem in elems:
-    print("".ljust(depth), elem)
+    print("".ljust(depth, "-"), elem)
     if isinstance(elem, pdfminer.layout.LTContainer):
       print_elem_tree(elems=elem, depth=depth+1)
 
@@ -73,10 +73,12 @@ def extract_window_schedule_test():
     width = int(width)
     height = int(height)
 
-  drawer = pdfdrawer.FitzDraw(width=width, height=height)
+  drawer = pdfdrawer.PygletDraw(width=width, height=height) #pdfdrawer.FitzDraw(width=width, height=height)
   awindows_key = get_awindows_key(window_schedule_elems=window_schedule_elems, page_width=width, page_height=height)
+  #print_elem_tree(elems=window_schedule_elems)
+  print("========")
   print_elem_tree(elems=awindows_key)
-  underlying = pdfextracter.get_underlying(awindows_key)
+  underlying = pdfextracter.get_underlying(window_schedule_elems)
   pdfdrawer.draw_elems(elems=underlying, drawer=drawer)
   drawer.show("A Windows Key")
   pdfdrawer.waitKey(0)
