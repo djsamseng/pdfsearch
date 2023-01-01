@@ -53,9 +53,9 @@ def get_underlying_from_element(elem: pdfminer.layout.LTComponent) -> typing.Uni
     print("Unhandled:", elem)
     assert False, "Unhandled elem:" + str(elem)
 
-def get_underlying(page: typing.Iterable[pdfminer.layout.LTComponent]) -> ElemListType:
+def get_underlying(elems: typing.Iterable[pdfminer.layout.LTComponent]) -> ElemListType:
   out: ElemListType = []
-  for elem in page:
+  for elem in elems:
     extend_out_if_element(out=out, elem=get_underlying_from_element(elem=elem))
   return out
 

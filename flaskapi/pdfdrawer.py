@@ -3,8 +3,7 @@
 import cv2
 import numpy as np
 import fitz
-import pdfminer
-import pygame
+import pdfminer, pdfminer.layout
 import pyglet # pip install pyglet==1.5.27
 
 from pdfextracter import ElemListType
@@ -93,78 +92,6 @@ def compute_bezier_points(vertices, numPoints=30):
       result.append((int(pointX), int(pointY)))
 
   return result
-
-class PygameDraw():
-  def __init__(self, width, height) -> None:
-    pygame.init()
-    self.draw_width = width
-    self.draw_height = height
-    self.screen = pygame.display.set_mode((width*0.6, height/2))
-    self.surface = pygame.Surface(size=(width, height))
-    self.camera_rect = self.screen.get_rect().copy()
-    self.scale = 1.0
-    self.surface.fill(color=(255,255,255))
-    self.paths = []
-    self.texts = []
-
-  def rot_point(self, x, y):
-    x = self.screen.get_width() - x
-    return x, y
-
-  def draw_path(self, path, color=(255, 0, 0)):
-    self.paths.append((path, color))
-    self.draw_path_impl(path=path, color=color, scale=self.scale)
-
-  def draw_path_impl(self, path, color, scale):
-    color = (255, 0, 0)
-    x, y = 0, 0
-    x_start, y_start = x, y
-    for pt in path:
-      if pt[0] == "m":
-        x, y = pt[1]
-        x, y = self.rot_point(x, y)
-        x_start, y_start = x, y
-      elif pt[0] == "l":
-        x2, y2 = pt[1]
-        x2, y2 = self.rot_point(x2, y2)
-        pygame.draw.line(surface=self.surface, color=color, start_pos=(x*scale, y*scale), end_pos=(x2*scale, y2*scale))
-        x, y = x2, y2
-      elif pt[0] == "c":
-        (x2, y2), (x3, y3), (x4, y4) = pt[1:]
-        x2, y2 = self.rot_point(x2, y2)
-        x3, y3 = self.rot_point(x3, y3)
-        x4, y4 = self.rot_point(x4, y4)
-        self.draw_bezier(pts=[(x*scale,y*scale), (x2*scale,y2*scale), (x3*scale,y3*scale), (x4*scale,y4*scale)], color=color)
-      elif pt[0] == "h":
-        pygame.draw.line(surface=self.surface, color=color, start_pos=(x*scale, y*scale), end_pos=(x_start*scale, y_start*scale))
-
-  def insert_text(self, pt, text):
-    pass
-
-  def draw_bezier(self, pts=[(0,0), (0,0), (0,0), (0,0)], color=(255, 0, 0)):
-    bezier_points = compute_bezier_points(pts)
-    pygame.draw.lines(surface=self.surface, color=color, closed=False, points=bezier_points)
-
-  def show(self, name, callback=None):
-    clock = pygame.time.Clock()
-    running = True
-    while running:
-      for evt in pygame.event.get():
-        if evt.type == pygame.QUIT:
-          running = False
-        elif evt.type == pygame.KEYDOWN:
-          if evt.key == pygame.K_ESCAPE:
-            running = False
-        elif evt.type == pygame.MOUSEMOTION:
-          if pygame.mouse.get_pressed()[0]:
-            percent_x = evt.pos[0] / self.screen.get_rect().width
-            self.camera_rect.x = percent_x * (self.surface.get_rect().width - self.screen.get_rect().width)
-            percent_y = evt.pos[1] / self.screen.get_rect().height
-            self.camera_rect.y = percent_y * (self.surface.get_rect().height - self.screen.get_rect().height)
-      self.screen.fill((255, 255, 255))
-      self.screen.blit(self.surface, (self.camera_rect.x, self.camera_rect.y))
-      pygame.display.flip()
-      clock.tick(100)
 
 ZOOM_IN_FACTOR = 1.2
 ZOOM_OUT_FACTOR = 1/ZOOM_IN_FACTOR
@@ -261,8 +188,8 @@ class PygletDraw():
     self.page_width = width
     self.page_height = height
     self.app = PygletDrawApp(window_width=800, window_height=600, page_width=width, page_height=height)
-    label = pyglet.text.Label("Hello!", font_size=36, color=(0,0,0,255), batch=self.app.draw_batch)
     self.draw_color = (0, 0, 0)
+    self.draw_refs = []
 
   def draw_path(self, path, color):
     color = self.draw_color
@@ -271,31 +198,30 @@ class PygletDraw():
     for pt in path:
       if pt[0] == 'm':
         x, y = pt[1]
-        x, y = self.rot_point(x, y)
         x_start, y_start = x, y
       elif pt[0] == 'l':
         x2, y2 = pt[1]
-        x2, y2 = self.rot_point(x2, y2)
         line = pyglet.shapes.Line(x=x, y=y, x2=x2, y2=y2, color=color, batch=self.app.draw_batch)
+        self.draw_refs.append(line)
         x, y = x2, y2
       elif pt[0] == 'c':
         (x2, y2), (x3, y3), (x4, y4) = pt[1:]
-        x2, y2 = self.rot_point(x2, y2)
-        x3, y3 = self.rot_point(x3, y3)
-        x4, y4 = self.rot_point(x4, y4)
-        #shape.draw_bezier(p1=(x, y), p2=(x2, y2), p3=(x3, y3), p4=(x4, y4))
+        bezier_points = compute_bezier_points(vertices=[(x, y), (x2, y2), (x3, y3), (x4, y4)])
+        for idx in range(1, len(bezier_points)):
+          xstart, ystart = bezier_points[idx-1]
+          xend, yend = bezier_points[idx]
+          line = pyglet.shapes.Line(x=xstart, y=ystart, x2=xend, y2=yend, color=color, batch=self.app.draw_batch)
+          self.draw_refs.append(line)
         x, y = x4, y4
       elif pt[0] == 'h':
         line = pyglet.shapes.Line(x=x, y=y, x2=x_start, y2=y_start, color=color, batch=self.app.draw_batch)
+        self.draw_refs.append(line)
 
-  def insert_text(self, pt, text):
+  def insert_text(self, pt, text, font_size=12):
     x, y = pt
-    label = pyglet.text.Label(text=text, font_size=12, x=x, y=y, color=(0, 0, 0, 255), batch=self.app.draw_batch)
+    label = pyglet.text.Label(text=text, font_size=font_size, x=x, y=y, color=(0, 0, 0, 255), batch=self.app.draw_batch)
+    self.draw_refs.append(label)
 
-  def rot_point(self, x, y):
-    x = self.page_width - x
-    #y = self.page.rect.height - y
-    return x, y
   def show(self, name):
     pyglet.app.run()
 
@@ -359,7 +285,8 @@ def draw_elems(elems: ElemListType, drawer: FitzDraw):
     if isinstance(elem, pdfminer.layout.LTChar):
       x0, y0, x1, y1 = elem.bbox
       text = elem.get_text()
-      drawer.insert_text(pt=(x0, y0), text=text)
+      # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
+      drawer.insert_text(pt=(x0, y0), text=text, font_size=int(elem.size))
     elif isinstance(elem, pdfminer.layout.LTCurve):
       if elem.linewidth > 0:
         drawer.draw_path(path=elem.original_path, color=elem.stroking_color)

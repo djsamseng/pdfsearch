@@ -60,7 +60,7 @@ def find_shapes_in_drawpaths_for_page(page: pdfminer.layout.LTPage, drawpaths: t
   pathminx, pathmaxx, pathminy, pathmaxy = get_drawpaths_bounds(drawpaths=drawpaths)
   search_bbox = get_bbox(page=page, xleft=pathminx, xright=pathmaxx, ytop=pathminy, ybottom=pathmaxy)
   print("Looking in bbox:", search_bbox)
-  pdfelems = get_underlying(page=page)
+  pdfelems = get_underlying(elems=page)
   found_elems = filter_contains_bbox(elems=pdfelems, bbox=search_bbox)
   # TODO: Return unaltered found_elems for searching similar on next request
   serialized = serialize_pdfminer_layout_types(found_elems)
