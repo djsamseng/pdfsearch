@@ -7,6 +7,7 @@ import pdfminer, pdfminer.layout, pdfminer.high_level
 
 import pdfextracter
 import pdfdrawer
+import pdftkdrawer
 
 def extract_window_schedule_and_save():
   page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[3-1])
@@ -80,9 +81,9 @@ def extract_window_schedule_test():
     all_pages_elems = f["elems"]
   page_elems = all_pages_elems[2]
 
-  drawer = pdfdrawer.PygletDraw(width=width, height=height) #pdfdrawer.FitzDraw(width=width, height=height)
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height) #pdfdrawer.FitzDraw(width=width, height=height)
   awindows_key = get_awindows_key(window_schedule_elems=window_schedule_elems, page_width=width, page_height=height)
-  #print_elem_tree(elems=window_schedule_elems)
+  print_elem_tree(elems=window_schedule_elems)
   print("========")
   print_elem_tree(elems=awindows_key)
   underlying = pdfextracter.get_underlying(window_schedule_elems)

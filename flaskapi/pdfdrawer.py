@@ -180,6 +180,7 @@ class PygletDrawApp(pyglet.window.Window):
 
     # Set viewport
     pyglet.gl.glViewport( 0, 0, width, height )
+
 class PygletDraw():
   def __init__(self, width, height) -> None:
     self.page_width = width
@@ -305,6 +306,9 @@ def draw_elems(elems: ElemListType, drawer: FitzDraw):
       text = elem.get_text()
       # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
       drawer.insert_text(pt=(x0, y0), text=text, font_size=int(elem.size))
+    elif isinstance(elem, pdfminer.layout.LTRect):
+      if elem.linewidth > 0:
+        drawer.draw_path(path=elem.original_path, color=elem.stroking_color)
     elif isinstance(elem, pdfminer.layout.LTCurve):
       if elem.linewidth > 0:
         drawer.draw_path(path=elem.original_path, color=elem.stroking_color)
