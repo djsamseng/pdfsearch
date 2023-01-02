@@ -85,7 +85,7 @@ def extract_window_schedule_test():
   #print_elem_tree(elems=window_schedule_elems)
   print("========")
   print_elem_tree(elems=awindows_key)
-  underlying = pdfextracter.get_underlying(page_elems) # window_schedule_elems
+  underlying = pdfextracter.get_underlying(window_schedule_elems)
   pdfdrawer.draw_elems(elems=underlying, drawer=drawer)
   drawer.show("A Windows Key")
   pdfdrawer.waitKey(0)

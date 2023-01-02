@@ -166,9 +166,6 @@ class PygletDrawApp(pyglet.window.Window):
   def update(self):
     pass
 
-  def run(self):
-    pyglet.app.run()
-
   def __init_gl(self, width, height):
     # Set clear color
     pyglet.gl.glClearColor(255/255, 255/255, 255/255, 255/255)
@@ -188,8 +185,29 @@ class PygletDraw():
     self.page_width = width
     self.page_height = height
     self.app = PygletDrawApp(window_width=800, window_height=600, page_width=width, page_height=height)
+    self.list_app = PygletDrawApp(window_width=400, window_height=600, page_width=400, page_height=10_000)
+
     self.draw_color = (0, 0, 0)
     self.draw_refs = []
+    self.draw_refs.append(
+      pyglet.gui.TextEntry(text="Test Entry", x=0, y=0, width=400, color=(255, 0, 0, 255), text_color=(0, 0, 0, 255), batch=self.list_app.draw_batch)
+    )
+    self.draw_refs.append(
+      pyglet.gui.TextEntry(text="Test Entry 2", x=0, y=100, width=400, color=(255, 0, 0, 255), text_color=(0, 0, 0, 255), batch=self.list_app.draw_batch)
+    )
+    def on_press():
+      print("Pressed")
+    button_label = pyglet.resource.image("xmark-solid.png")
+    button_label.width /= 10
+    button_label.height /= 10
+    button = pyglet.gui.PushButton(x=0, y=200, pressed=button_label, depressed=button_label, batch=self.list_app.draw_batch)
+    def on_release():
+      print("Button released")
+    button.set_handler("on_press", on_release)
+    button.set_handler("on_release", on_release)
+    self.draw_refs.append(
+      button
+    )
 
   def draw_path(self, path, color):
     color = self.draw_color
