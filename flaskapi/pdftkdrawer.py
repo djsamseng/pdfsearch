@@ -207,8 +207,8 @@ class ZoomCanvas(ttk.Frame):
       x = self.canvas.canvasx(event.x)
       y = self.canvas.canvasy(event.y)
       bbox = self.canvas.bbox(self.container)  # get image area
-      if bbox[0] < x < bbox[2] and bbox[1] < y < bbox[3]: pass  # Ok! Inside the image
-      else: return  # zoom only inside image area
+      #if bbox[0] < x < bbox[2] and bbox[1] < y < bbox[3]: pass  # Ok! Inside the image
+      #else: return  # zoom only inside image area
       scale = 1.0
       # Respond to Linux (event.num) or Windows (event.delta) wheel event
       if event.num == 5 or event.delta == -120:  # scroll down (text getssmaller)
@@ -239,11 +239,11 @@ class ZoomCanvas(ttk.Frame):
       self.canvas.itemconfigure(item_id, state=new_state)
 
   def grid(self, **kw):
-        """ Put CanvasImage widget on the parent widget """
-        self.master.grid(**kw)  # place CanvasImage widget on the grid
-        self.master.grid(sticky='nswe')  # make frame container sticky
-        self.master.rowconfigure(0, weight=1)  # make canvas expandable
-        self.master.columnconfigure(0, weight=1)
+    """ Put CanvasImage widget on the parent widget """
+    self.master.grid(**kw)  # place CanvasImage widget on the grid
+    self.master.grid(sticky='nswe')  # make frame container sticky
+    self.master.rowconfigure(0, weight=1)  # make canvas expandable
+    self.master.columnconfigure(0, weight=1)
 
 class TkDrawerControlPanel:
   def __init__(self, root: tk.Tk, controls_width, controls_height) -> None:
