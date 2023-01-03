@@ -59,6 +59,44 @@ def get_underlying(elems: typing.Iterable[pdfminer.layout.LTComponent]) -> ElemL
     extend_out_if_element(out=out, elem=get_underlying_from_element(elem=elem))
   return out
 
+def get_underlying_parent_links_impl(
+  out: typing.List[pdfminer.layout.LTComponent],
+  elem: pdfminer.layout.LTComponent,
+  elem_parent_idx: typing.Union[None, int]
+):
+  if isinstance(elem, pdfminer.layout.LTContainer):
+    out.append((elem, elem_parent_idx)) # Add the container
+    child_parent_idx = len(out) - 1 # Get the container's idx
+    for child in elem:
+      # Add the first child
+      # Get the first child's idx
+      # Add the first child's children - recurse
+      get_underlying_parent_links_impl(out=out, elem=child, elem_parent_idx=child_parent_idx)
+  elif isinstance(elem, pdfminer.layout.LTChar):
+    if elem_parent_idx is None:
+      print(elem, elem_parent_idx)
+    out.append((elem, elem_parent_idx))
+  elif isinstance(elem, pdfminer.layout.LTAnno):
+    text = elem.get_text()
+    if text != "\n" and text != " ":
+      print("Unhandled LTAnno", elem)
+    # Not Added
+  elif isinstance(elem, pdfminer.layout.LTCurve):
+    out.append((elem, elem_parent_idx))
+  elif isinstance(elem, pdfminer.layout.LTFigure):
+    # Not Added
+    pass
+  else:
+    print("Unhandled elem:", elem)
+
+def get_underlying_parent_links(
+  elems: typing.Iterable[pdfminer.layout.LTComponent],
+):
+  out: typing.List[typing.Tuple[pdfminer.layout.LTComponent, int]] = []
+  for elem in elems:
+    get_underlying_parent_links_impl(out=out, elem=elem, elem_parent_idx=None)
+  return out
+
 def box_contains(outer: BboxType, inner: BboxType):
   x0a, y0a, x1a, y1a = outer
   x0b, y0b, x1b, y1b = inner

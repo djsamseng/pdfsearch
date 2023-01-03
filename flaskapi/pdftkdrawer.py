@@ -374,8 +374,9 @@ def draw_elems(elems: ElemListType, drawer: TkDrawer):
       if elem.linewidth > 0:
         drawer.draw_path(elem=elem)
     else:
-      print("Unhandled draw", elem)
-      assert False, "Unhandled draw" + str(elem)
+      pass
+      #print("Unhandled draw", elem)
+      #assert False, "Unhandled draw" + str(elem)
 
 def extract_window_schedule_and_save():
   page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[3-1])

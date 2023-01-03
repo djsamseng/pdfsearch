@@ -8,9 +8,7 @@ Download pdflib [Prebuilt (older browsers)](https://mozilla.github.io/pdf.js/get
 
 ```bash
 cd flaskapi && pip3 install -r requirements.txt
-git clone git@github.com:djsamseng/pdfminer.six.git
-cd pdfminer.six # edit layout.py LTChar self.fontsize e= fontsize
-pip3 install -e .
+pip3 install git+https://github.com/pdfminer/pdfminer.six
 ```
 
 ## Running
