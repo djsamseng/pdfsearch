@@ -5,7 +5,9 @@ import numpy as np
 import fitz
 import pdfminer, pdfminer.layout
 import pyglet # pip install pyglet==1.5.27
+import typing
 
+import pdfextracter
 from pdfextracter import ElemListType
 
 def imshow(name, im, mouse_callback=None):
@@ -282,12 +284,12 @@ class FitzDraw():
     shape.finish(color=color, closePath=False)
     shape.commit()
 
-  def insert_text(self, pt, text):
+  def insert_text(self, pt, text, font_size=11):
     # Each letter needs to be flipped up down if rotate=0 or left right if rotate=180 which isn't possible because the flip needs
     # to be local ie the letter positioning cannot change
     x, y = pt
     x, y = self.rot_point(x, y)
-    self.page.insert_text((x, y), text, fontname="helv", fontsize=11, rotate=180)
+    self.page.insert_text((x, y), text, fontname="helv", fontsize=font_size, rotate=180)
 
   def show(self, name, callback=None):
     out_pix = self.page.get_pixmap()
@@ -318,3 +320,22 @@ def draw_elems(elems: ElemListType, drawer: FitzDraw):
 
 def waitKey(code:int):
   cv2.waitKey(code)
+
+def first_floor_construction(args):
+  with np.load("first_floor_construction.npz", allow_pickle=True) as f:
+    page_elems, width, height = f["elems"], f["width"], f["height"]
+    page_elems: typing.List[pdfminer.layout.LTComponent] = page_elems
+    width = int(width)
+    height = int(height)
+
+  underlying = pdfextracter.get_underlying(elems=page_elems)
+  drawer = FitzDraw(width=width, height=height)
+  draw_elems(elems=underlying, drawer=drawer)
+  drawer.show("First floor")
+  waitKey(0)
+
+def main():
+  first_floor_construction(args=None)
+
+if __name__ == "__main__":
+  main()

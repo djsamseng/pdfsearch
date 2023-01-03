@@ -1,8 +1,16 @@
 
+import argparse
+import typing
 import math
 
 import tkinter as tk
 from tkinter import ttk
+
+import numpy as np
+import pdfminer, pdfminer.layout, pdfminer.high_level
+
+import pdfextracter
+from pdfextracter import ElemListType
 
 def compute_bezier_points(vertices, numPoints=30):
   result = []
@@ -121,7 +129,8 @@ class ZoomCanvas(ttk.Frame):
     self.delta = 1.3  # zoom magnitude
     # Put image into container rectangle and use it to set proper coordinates to the image
     self.container = self.canvas.create_rectangle(0, 0, self.width, self.height, width=0)
-    self.label_ids = []
+    self.label_ids: typing.List[tk._CanvasItemId] = []
+    self.item_ids: typing.List[typing.List[tk._CanvasItemId]] = []
 
   def rot_point(self, x, y):
     return x, self.height - y
@@ -130,6 +139,7 @@ class ZoomCanvas(ttk.Frame):
     x, y = 0, 0
     x_start, y_start = x, y
     color = "black"
+    line_ids = []
     for pt in path:
       if pt[0] == 'm':
         x, y = pt[1]
@@ -138,7 +148,8 @@ class ZoomCanvas(ttk.Frame):
       elif pt[0] == 'l':
         x2, y2 = pt[1]
         x2, y2 = self.rot_point(x2, y2)
-        self.canvas.create_line(x, y, x2, y2, fill=color)
+        line_id = self.canvas.create_line(x, y, x2, y2, fill=color)
+        line_ids.append(line_id)
         x, y = x2, y2
       elif pt[0] == 'c':
         (x2, y2), (x3, y3), (x4, y4) = pt[1:]
@@ -149,17 +160,19 @@ class ZoomCanvas(ttk.Frame):
         for idx in range(1, len(bezier_points)):
           xstart, ystart = bezier_points[idx-1]
           xend, yend = bezier_points[idx]
-          self.canvas.create_line(xstart, ystart, xend, yend, fill=color)
+          line_id = self.canvas.create_line(xstart, ystart, xend, yend, fill=color)
+          line_ids.append(line_id)
         x, y = x4, y4
       elif pt[0] == 'h':
-        self.canvas.create_line(x, y, x_start, y_start, fill=color)
+        line_id = self.canvas.create_line(x, y, x_start, y_start, fill=color)
+        line_ids.append(line_id)
+    return line_ids
 
   def insert_text(self, pt, text, font_size=12):
     x, y = pt
     x, y = self.rot_point(x, y)
     text_id = self.canvas.create_text(x, y, fill="black", font=("Arial", font_size), text=text)
-    self.label_ids.append((text_id, font_size))
-
+    return [text_id]
 
   def unused(self):
     import random
@@ -219,6 +232,12 @@ class ZoomCanvas(ttk.Frame):
         "font": ("Arial", new_font_size)
       })
 
+  def set_item_visibility(self, item_ids):
+    for item_id in item_ids:
+      old_state = self.canvas.itemcget(item_id, "state")
+      new_state = "normal" if old_state == "hidden" else "hidden"
+      self.canvas.itemconfigure(item_id, state=new_state)
+
   def grid(self, **kw):
         """ Put CanvasImage widget on the parent widget """
         self.master.grid(**kw)  # place CanvasImage widget on the grid
@@ -241,27 +260,38 @@ class TkDrawerControlPanel:
       master=self.frame
     )
     self.canvas.grid(row=0, column=0, sticky="news")
+    self.hbar = ttk.Scrollbar(master=self.frame, orient="horizontal", command=self.canvas.xview)
+    self.hbar.grid(row=0, column=0, sticky="ew")
     self.vbar = ttk.Scrollbar(master=self.frame, orient='vertical', command=self.canvas.yview)
     self.vbar.grid(row=0, column=1, sticky="ns")
 
-    self.canvas.configure(yscrollcommand=self.vbar.set)
+    self.canvas.configure(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
 
     self.frame_buttons = tk.Frame(master=self.canvas)
     self.canvas.create_window((0, 0), window=self.frame_buttons, anchor="nw")
     self.container = self.canvas.create_rectangle((0, 0, controls_width, height_needed), width=0)
 
-    for i in range(20):
-      button = ttk.Button(master=self.frame_buttons, text="Button {0}".format(i))
-      button.grid(row=i, column=0, sticky="news")
-
-    self.frame_buttons.update_idletasks()
+    self.buttons = []
 
     self.frame.config(width=controls_width)
-    self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
     self.canvas.bind_all('<MouseWheel>', self.__wheel)  # zoom for Windows and MacOS, but not Linux
     self.canvas.bind_all('<Button-5>',   self.__wheel)  # zoom for Linux, wheel scroll down
     self.canvas.bind_all('<Button-4>',   self.__wheel)  # zoom for Linux, wheel scroll up
+
+  def add_button(self, text, callback):
+    def on_press():
+      old_bg = button.cget("background")
+      new_bg = "#d9d9d9" if old_bg == "white" else "white"
+      button.config(background=new_bg)
+      callback()
+    button = tk.Button(master=self.frame_buttons, text=text, command=on_press)
+    button.grid(row=len(self.buttons)+1, column=0, sticky="w")
+    self.buttons.append(button)
+
+  def finish_draw(self):
+    self.frame_buttons.update_idletasks()
+    self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
   def grid(self, **kwargs):
     self.frame.grid(**kwargs)
@@ -293,8 +323,8 @@ class TkDrawerMainWindow(ttk.Frame):
     self.master.rowconfigure(0, weight=1) # Expandable
     self.master.columnconfigure(0, weight=1)
     self.master.bind("<Key>", lambda event: self.master.after_idle(self.__keystroke, event))
-    controlPanel = TkDrawerControlPanel(root=self.master, controls_width=100, controls_height=1_000)
-    controlPanel.grid(row=0, column=1)
+    self.controlPanel = TkDrawerControlPanel(root=self.master, controls_width=200, controls_height=1_000)
+    self.controlPanel.grid(row=0, column=1)
     self.canvas = ZoomCanvas(root=self.master, page_width=page_width, page_height=page_height)
     self.canvas.grid(row=0, column=0)
 
@@ -302,13 +332,142 @@ class TkDrawerMainWindow(ttk.Frame):
     if event.keycode in [9]: # Esc
       self.master.destroy()
 
+def pdfminer_class_name(elem: pdfminer.layout.LTComponent):
+  text = str(type(elem))
+  class_path = text.split("'")[1]
+  class_name = class_path.split(".")[-1]
+  return class_name
+
 class TkDrawer:
   def __init__(self, width:int, height:int) -> None:
     root = tk.Tk()
     self.app = TkDrawerMainWindow(root=root, window_width=800, window_height=600, page_width=width, page_height=height)
-  def draw_path(self, *args, **kwargs):
-    self.app.canvas.draw_path(*args, **kwargs)
-  def insert_text(self, *args, **kwargs):
-    self.app.canvas.insert_text(*args, **kwargs)
+  def draw_path(self, elem: pdfminer.layout.LTCurve):
+    ids = self.app.canvas.draw_path(path=elem.original_path, color=elem.stroking_color)
+    def on_press():
+      self.app.canvas.set_item_visibility(ids)
+    self.app.controlPanel.add_button(
+      text="{0} {1}".format(pdfminer_class_name(elem), elem.original_path),
+      callback=on_press)
+  def insert_text(self, elem):
+    x0, y0, x1, y1 = elem.bbox
+    text = elem.get_text()
+    # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
+    ids = self.app.canvas.insert_text(pt=(x0, y0), text=text, font_size=int(elem.size))
+    def on_press():
+      self.app.canvas.set_item_visibility(ids)
+    self.app.controlPanel.add_button(
+      text="{0} ({1},{2}) {3}".format(pdfminer_class_name(elem), x0, y0, text),
+      callback=on_press)
   def show(self, name, callback=None):
+    self.app.controlPanel.finish_draw()
     self.app.mainloop()
+
+def draw_elems(elems: ElemListType, drawer: TkDrawer):
+  for elem in elems:
+    if isinstance(elem, pdfminer.layout.LTChar):
+      drawer.insert_text(elem=elem)
+    elif isinstance(elem, pdfminer.layout.LTRect):
+      if elem.linewidth > 0:
+        drawer.draw_path(elem=elem)
+    elif isinstance(elem, pdfminer.layout.LTCurve):
+      if elem.linewidth > 0:
+        drawer.draw_path(elem=elem)
+    else:
+      print("Unhandled draw", elem)
+      assert False, "Unhandled draw" + str(elem)
+
+def extract_window_schedule_and_save():
+  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[3-1])
+  page = next(iter(page_gen))
+
+  drawer = TkDrawer(width=page.width, height=page.height)
+  elems = pdfextracter.get_underlying(elems=page)
+
+  y0, x0 = 918, 958
+  y1, x1 = 2100, 1865
+  bbox = (x0, page.height-y1, x1, page.height-y0)
+  found_elems = pdfextracter.filter_contains_bbox(elems=elems, bbox=bbox)
+
+  draw_elems(elems=found_elems, drawer=drawer)
+  drawer.show("Window Schedule")
+  np.savez("window_schedule.npz", elems=found_elems, width=page.width, height=page.height)
+
+def extract_window_schedule_with_hierarchy_and_save():
+  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[3-1])
+  page = next(iter(page_gen))
+
+  y0, x0 = 918, 958
+  y1, x1 = 2100, 1865
+  bbox = (x0, page.height-y1, x1, page.height-y0)
+  found_elems = pdfextracter.filter_contains_bbox_hierarchical(elems=page, bbox=bbox)
+  #print(found_elems)
+
+  np.savez("window_schedule_hierarchy.npz", elems=found_elems, width=page.width, height=page.height)
+
+def extract_underlying_all_pages_and_save():
+  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf")
+  page_underlying = []
+  for page in page_gen:
+    elems = pdfextracter.get_underlying(elems=page)
+    page_underlying.append(elems)
+  np.savez("all_pages_underlying.npz", elems=page_underlying, width=page.width, height=page.height)
+
+def extract_all_pages_with_hierarchy_and_save():
+  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf")
+  all_elems = []
+  itr = 0
+  for page in page_gen:
+    elems = [elem for elem in page]
+    all_elems.append(elems)
+    itr += 1
+    if itr > 10:
+      break # TODO: Remove non picklable io.BufferObjects
+  np.savez("all_pages_hierarchy.npz", elems=all_elems, width=page.width, height=page.height)
+
+def get_awindows_key(window_schedule_elems: typing.Iterable[pdfminer.layout.LTComponent], page_width: int, page_height: int):
+  y0, x0 = 1027, 971
+  y1, x1 = 1043, 994
+  bbox = (x0, page_height-y1, x1, page_height-y0)
+  key_elems = pdfextracter.filter_contains_bbox_hierarchical(elems=window_schedule_elems, bbox=bbox)
+  return key_elems
+
+def print_elem_tree(elems, depth=0):
+  for elem in elems:
+    print("".ljust(depth, "-"), elem)
+    if isinstance(elem, pdfminer.layout.LTContainer):
+      print_elem_tree(elems=elem, depth=depth+1)
+
+def extract_window_schedule_test():
+  with np.load("window_schedule_hierarchy.npz", allow_pickle=True) as f:
+    window_schedule_elems, width, height = f["elems"], f["width"], f["height"]
+    window_schedule_elems: pdfextracter.ElemListType = window_schedule_elems
+    width = int(width)
+    height = int(height)
+  with np.load("all_pages_hierarchy.npz", allow_pickle=True) as f:
+    all_pages_elems = f["elems"]
+  page_elems = all_pages_elems[2]
+
+  drawer = TkDrawer(width=width, height=height) #pdfdrawer.FitzDraw(width=width, height=height)
+  awindows_key = get_awindows_key(window_schedule_elems=window_schedule_elems, page_width=width, page_height=height)
+  print_elem_tree(elems=window_schedule_elems)
+  print("========")
+  print_elem_tree(elems=awindows_key)
+  underlying = pdfextracter.get_underlying(window_schedule_elems)
+  draw_elems(elems=underlying, drawer=drawer)
+  drawer.show("A Windows Key")
+
+def parse_args():
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--awindows", dest="awindows", default=False, action="store_true")
+  return parser.parse_args()
+
+def main():
+  args = parse_args()
+  if args.awindows:
+    extract_window_schedule_test()
+  else:
+    extract_window_schedule_test()
+
+if __name__ == "__main__":
+  main()

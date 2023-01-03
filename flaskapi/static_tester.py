@@ -1,6 +1,7 @@
 
 import argparse
 import typing
+import time
 
 import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level
@@ -9,87 +10,59 @@ import pdfextracter
 import pdfdrawer
 import pdftkdrawer
 
-def extract_window_schedule_and_save():
-  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[3-1])
-  page = next(iter(page_gen))
+import rtree
 
-  drawer = pdfdrawer.FitzDraw(width=page.width, height=page.height)
-  elems = pdfextracter.get_underlying(elems=page)
-
-  y0, x0 = 918, 958
-  y1, x1 = 2100, 1865
-  bbox = (x0, page.height-y1, x1, page.height-y0)
-  found_elems = pdfextracter.filter_contains_bbox(elems=elems, bbox=bbox)
-
-  pdfdrawer.draw_elems(elems=found_elems, drawer=drawer)
-  drawer.show("Window Schedule")
-  pdfdrawer.waitKey(0)
-  np.savez("window_schedule.npz", elems=found_elems, width=page.width, height=page.height)
-
-def extract_window_schedule_with_hierarchy_and_save():
-  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[3-1])
-  page = next(iter(page_gen))
-
-  y0, x0 = 918, 958
-  y1, x1 = 2100, 1865
-  bbox = (x0, page.height-y1, x1, page.height-y0)
-  found_elems = pdfextracter.filter_contains_bbox_hierarchical(elems=page, bbox=bbox)
-  #print(found_elems)
-
-  np.savez("window_schedule_hierarchy.npz", elems=found_elems, width=page.width, height=page.height)
-
-def extract_underlying_all_pages_and_save():
-  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf")
-  page_underlying = []
-  for page in page_gen:
-    elems = pdfextracter.get_underlying(elems=page)
-    page_underlying.append(elems)
-  np.savez("all_pages_underlying.npz", elems=page_underlying, width=page.width, height=page.height)
-
-def extract_all_pages_with_hierarchy_and_save():
-  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf")
-  all_elems = []
-  itr = 0
-  for page in page_gen:
-    elems = [elem for elem in page]
-    all_elems.append(elems)
-    itr += 1
-    if itr > 10:
-      break # TODO: Remove non picklable io.BufferObjects
-  np.savez("all_pages_hierarchy.npz", elems=all_elems, width=page.width, height=page.height)
-
-def get_awindows_key(window_schedule_elems: typing.Iterable[pdfminer.layout.LTComponent], page_width: int, page_height: int):
-  y0, x0 = 1027, 971
-  y1, x1 = 1043, 994
-  bbox = (x0, page_height-y1, x1, page_height-y0)
-  key_elems = pdfextracter.filter_contains_bbox_hierarchical(elems=window_schedule_elems, bbox=bbox)
-  return key_elems
-
-def print_elem_tree(elems, depth=0):
-  for elem in elems:
-    print("".ljust(depth, "-"), elem)
-    if isinstance(elem, pdfminer.layout.LTContainer):
-      print_elem_tree(elems=elem, depth=depth+1)
-
-def extract_window_schedule_test():
+def extract_window_schedule_test(args):
+  load_all = True
+  t0 = time.time()
   with np.load("window_schedule_hierarchy.npz", allow_pickle=True) as f:
     window_schedule_elems, width, height = f["elems"], f["width"], f["height"]
-    window_schedule_elems: pdfextracter.ElemListType = window_schedule_elems
+    window_schedule_elems: typing.List[pdfminer.layout.LTComponent] = window_schedule_elems
     width = int(width)
     height = int(height)
-  with np.load("all_pages_hierarchy.npz", allow_pickle=True) as f:
-    all_pages_elems = f["elems"]
-  page_elems = all_pages_elems[2]
+  t1 = time.time()
+  if load_all:
+    with np.load("all_pages_hierarchy.npz", allow_pickle=True) as f:
+      all_pages_elems = f["elems"]
+    page_elems: typing.List[pdfminer.layout.LTComponent] = all_pages_elems[8]
+    underlying =  pdfextracter.get_underlying(elems=page_elems)
+    drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+    pdftkdrawer.draw_elems(elems=underlying, drawer=drawer)
+    drawer.show("First floor construction plan")
+    np.savez("first_floor_construction.npz", elems=page_elems, width=width, height=height)
+  t2 = time.time()
 
-  drawer = pdftkdrawer.TkDrawer(width=width, height=height) #pdfdrawer.FitzDraw(width=width, height=height)
-  awindows_key = get_awindows_key(window_schedule_elems=window_schedule_elems, page_width=width, page_height=height)
-  print_elem_tree(elems=window_schedule_elems)
-  print("========")
-  print_elem_tree(elems=awindows_key)
-  underlying = pdfextracter.get_underlying(window_schedule_elems)
-  pdfdrawer.draw_elems(elems=underlying, drawer=drawer)
-  drawer.show("A Windows Key")
-  pdfdrawer.waitKey(0)
+  print(t1-t0, t2-t1)
+
+def extract_window_key(args):
+  with np.load("first_floor_construction.npz", allow_pickle=True) as f:
+    page_elems, width, height = f["elems"], f["width"], f["height"]
+    page_elems: typing.List[pdfminer.layout.LTComponent] = page_elems
+    width = int(width)
+    height = int(height)
+
+  underlying =  pdfextracter.get_underlying(elems=page_elems)
+
+  def index_insertion_generator(elems: typing.List[pdfminer.layout.LTComponent]):
+    for i, elem in enumerate(elems):
+      x0, y0, x1, y1 = elem.bbox
+      yield (i, (x0, height-y1, x1, height-y0), i)
+  rtree_index = rtree.index.Index(index_insertion_generator(elems=underlying))
+  y0, x0 = 1756, 1391
+  y1, x1 = 1781, 1418
+  found = rtree_index.intersection((x0, y0, x1, y1))
+  q01_drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  q01_elems = [underlying[idx] for idx in found]
+  pdftkdrawer.draw_elems(elems=q01_elems, drawer=q01_drawer)
+  # Each elem is a button. Press to toggle hide/show
+  # Press another button to export
+  # draw elems with hierarchy and keep hierarchy
+  q01_drawer.show("Q01")
+  return
+
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  pdftkdrawer.draw_elems(elems=underlying, drawer=drawer)
+  drawer.show("First floor construction plan")
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -99,9 +72,9 @@ def parse_args():
 def main():
   args = parse_args()
   if args.awindows:
-    extract_window_schedule_test()
+    extract_window_schedule_test(args)
   else:
-    extract_window_schedule_test()
+    extract_window_key(args)
 
 if __name__ == "__main__":
   main()
