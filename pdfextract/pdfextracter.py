@@ -2,7 +2,6 @@
 
 import typing
 
-import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level
 
 ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
@@ -19,7 +18,7 @@ class LTWrapper:
     self.elem = elem
     self.parent_idx = parent_idx
 
-  def __dict__(self):
+  def as_dict(self):
     original_path = []
     text = ""
     if isinstance(self.elem, pdfminer.layout.LTCurve):
@@ -27,7 +26,7 @@ class LTWrapper:
     if isinstance(self.elem, pdfminer.layout.LTText):
       text = self.elem.get_text()
 
-    return {
+    return dict({
       "elem": {
         "x0": self.elem.x0,
         "y0": self.elem.y0,
@@ -38,7 +37,7 @@ class LTWrapper:
         "text": text,
       },
       "parent_idx": self.parent_idx
-    }
+    })
 
 def get_underlying_parent_links_impl(
   out: typing.List[LTWrapper],
@@ -46,9 +45,9 @@ def get_underlying_parent_links_impl(
   elem_parent_idx: typing.Union[None, int]
 ):
   if isinstance(elem, pdfminer.layout.LTContainer):
-    out.append(LTWrapper(elem=elem, parent_idx=elem_parent_idx)) # Add the container
+    out.append(LTWrapper(elem=typing.cast(pdfminer.layout.LTComponent, elem), parent_idx=elem_parent_idx)) # Add the container
     child_parent_idx = len(out) - 1 # Get the container's idx
-    for child in elem:
+    for child in typing.cast(typing.Iterable[pdfminer.layout.LTComponent], elem):
       # Add the first child
       # Get the first child's idx
       # Add the first child's children - recurse
@@ -89,9 +88,8 @@ def box_contains(outer: BboxType, inner: BboxType):
   return False
 
 def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTWrapper], bbox: BboxType) -> typing.List[LTWrapper]:
-  out = []
-  to_process: typing.List[LTWrapper] = []
-  old_idx_to_new_idx = dict()
+  out: typing.List[LTWrapper] = []
+  old_idx_to_new_idx: typing.Dict[int, int] = dict()
   for old_idx, wrapper in enumerate(elems):
     elem = wrapper.elem
     new_parent_idx = None
@@ -103,26 +101,5 @@ def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTWrapper], bbox: B
     if box_contains(outer=bbox, inner=elem.bbox):
       out.append(LTWrapper(elem=elem, parent_idx=new_parent_idx))
       old_idx_to_new_idx[old_idx] = len(out) - 1
-    elif isinstance(elem, pdfminer.layout.LTContainer):
-      # I don't fit so I won't be included in out but my children might
-      to_process.append(wrapper)
-
-  while len(to_process) > 0:
-    container_wrapper = to_process.pop()
-    container_elem = container_wrapper.elem
-    for wrapper in container_elem:
-      elem = wrapper.elem
-      new_parent_idx = None
-      if wrapper.parent_idx is not None:
-        if wrapper.parent_idx in old_idx_to_new_idx:
-          new_parent_idx = old_idx_to_new_idx[wrapper.parent_idx]
-      if isinstance(elem, pdfminer.layout.LTAnno):
-        continue
-      if box_contains(outer=bbox, inner=elem.bbox):
-        out.append(LTWrapper(elem=elem, parent_idx=new_parent_idx))
-        old_idx_to_new_idx[old_idx] = len(out) - 1
-      elif isinstance(elem, pdfminer.layout.LTContainer):
-        # I don't fit so I won't be included in out but my children might
-        to_process.append(elem)
 
   return out

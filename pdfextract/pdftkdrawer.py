@@ -1,19 +1,20 @@
 
-import argparse
 import typing
-import math
 
 import tkinter as tk
 from tkinter import ttk
 
 import numpy as np
-import pdfminer, pdfminer.layout, pdfminer.high_level
+import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
 import pdfextracter
 import debug_utils
 
-def compute_bezier_points(vertices, numPoints=30):
-  result = []
+def compute_bezier_points(
+  vertices:typing.Tuple[typing.Tuple[int,int],typing.Tuple[int,int],typing.Tuple[int,int],typing.Tuple[int,int]],
+  numPoints:int=30
+):
+  result: typing.List[typing.Tuple[int,int]] = []
 
   b0x = vertices[0][0]
   b0y = vertices[0][1]
@@ -58,7 +59,7 @@ def compute_bezier_points(vertices, numPoints=30):
   # Compute points at each step
   result.append((int(pointX), int(pointY)))
 
-  for i in range(numSteps):
+  for _ in range(numSteps):
       pointX += firstFDX
       pointY += firstFDY
 
@@ -77,7 +78,7 @@ class AutoScrollbar(ttk.Scrollbar):
   A scrollbar that hides itself if it's not needed.
   Works only if you use the grid geometry manager
   '''
-  def set(self, lo, hi):
+  def set(self, lo: float, hi: float):
     if float(lo) <= 0.0 and float(hi) >= 1.0:
       self.grid_remove()
     else:
@@ -95,7 +96,7 @@ class ZoomCanvas(ttk.Frame):
   page_width: int - width of the underlying canvas cropped to parent size
   page_height: int - height of the underlying canvas cropped to parent size
   '''
-  def __init__(self, root, page_width: int, page_height: int):
+  def __init__(self, root: tk.Tk, page_width: int, page_height: int):
     self.width = page_width
     self.height = page_height
     self.master = ttk.Frame(root)
@@ -132,14 +133,14 @@ class ZoomCanvas(ttk.Frame):
     self.label_ids: typing.List[tk._CanvasItemId] = []
     self.item_ids: typing.List[typing.List[tk._CanvasItemId]] = []
 
-  def rot_point(self, x, y):
+  def rot_point(self, x: float, y: float):
     return x, self.height - y
 
-  def draw_path(self, path, color):
+  def draw_path(self, path: typing.List[pdfminer.utils.PathSegment], color: str):
     x, y = 0, 0
     x_start, y_start = x, y
     color = "black"
-    line_ids = []
+    line_ids: typing.List[tk._CanvasItemId] = []
     for pt in path:
       if pt[0] == 'm':
         x, y = pt[1]
@@ -168,14 +169,14 @@ class ZoomCanvas(ttk.Frame):
         line_ids.append(line_id)
     return line_ids
 
-  def draw_rect(self, box):
+  def draw_rect(self, box: typing.Tuple[float, float, float, float]):
     x0, y0, x1, y1 = box
     x0, y0 = self.rot_point(x0, y0)
     x1, y1 = self.rot_point(x1, y1)
     rect_id = self.canvas.create_rectangle(x0, y0, x1, y1)
     return [rect_id]
 
-  def insert_text(self, pt, text, font_size=12):
+  def insert_text(self, pt: typing.Tuple[float, float], text: str, font_size:int=12):
     x, y = pt
     x, y = self.rot_point(x, y)
     text_id = self.canvas.create_text(x, y, fill="black", font=("Arial", font_size), text=text)
@@ -185,7 +186,7 @@ class ZoomCanvas(ttk.Frame):
     import random
     # Plot some optional random rectangles for the test purposes
     minsize, maxsize, number = 5, 20, 10
-    for n in range(number):
+    for _ in range(number):
       x0 = random.randint(0, self.width - maxsize)
       y0 = random.randint(0, self.height - maxsize)
       x1 = x0 + random.randint(minsize, maxsize)
@@ -256,7 +257,7 @@ class ZoomCanvas(ttk.Frame):
     self.master.columnconfigure(0, weight=1)
 
 class TkDrawerControlPanel:
-  def __init__(self, root: tk.Tk, controls_width, controls_height) -> None:
+  def __init__(self, root: tk.Tk, controls_width: int, controls_height: int) -> None:
     num_elements = 20
     height_needed = num_elements * 40
 
@@ -281,7 +282,7 @@ class TkDrawerControlPanel:
     self.canvas.create_window((0, 0), window=self.frame_buttons, anchor="nw")
     self.container = self.canvas.create_rectangle((0, 0, controls_width, height_needed), width=0)
 
-    self.buttons = []
+    self.buttons: typing.List[ttk.Button] = []
 
     self.frame.config(width=controls_width)
 
@@ -289,7 +290,13 @@ class TkDrawerControlPanel:
     self.canvas.bind_all('<Button-5>',   self.__wheel)  # zoom for Linux, wheel scroll down
     self.canvas.bind_all('<Button-4>',   self.__wheel)  # zoom for Linux, wheel scroll up
 
-  def add_button(self, text, callback=None, on_enter_cb=None, on_leave_cb=None):
+  def add_button(
+    self,
+    text: str,
+    callback: typing.Union[typing.Callable[[],None], None] = None,
+    on_enter_cb: typing.Union[typing.Callable[[],None], None] = None,
+    on_leave_cb: typing.Union[typing.Callable[[],None], None] = None,
+  ):
     def on_press():
       old_bg = button.cget("background")
       new_bg = "#d9d9d9" if old_bg == "white" else "white"
@@ -318,7 +325,7 @@ class TkDrawerControlPanel:
     self.frame.rowconfigure(0, weight=1)
     self.frame.columnconfigure(0, weight=1)
 
-  def outside(self, x, y):
+  def outside(self, x: float, y: float):
     bbox = self.canvas.coords(self.container)
     if bbox[0] < x < bbox[2] and bbox[1] < y < bbox[3]:
       return False
@@ -335,7 +342,7 @@ class TkDrawerControlPanel:
       self.canvas.yview_scroll(-1, what="units")
 
 class TkDrawerMainWindow(ttk.Frame):
-  def __init__(self, root: tk.Tk, window_width, window_height, page_width, page_height):
+  def __init__(self, root: tk.Tk, window_width: int, window_height: int, page_width: int, page_height: int):
     ttk.Frame.__init__(self, master=root)
     self.master.title("Pdf Drawer")
     self.master.geometry("{0}x{1}".format(window_width, window_height))
@@ -394,7 +401,7 @@ class TkDrawer:
     self.app.controlPanel.add_button(
       text="{0} ({1},{2}) {3}".format(pdfminer_class_name(elem), x0, y0, text),
       callback=on_press)
-  def show(self, name, callback=None):
+  def show(self, name: str):
     self.app.controlPanel.finish_draw()
     self.app.mainloop()
 
@@ -424,7 +431,7 @@ class TkDrawer:
 
 
 
-def get_awindows_key(window_schedule_elems: typing.Iterable[pdfminer.layout.LTComponent], page_width: int, page_height: int):
+def get_awindows_key(window_schedule_elems: typing.Iterable[pdfextracter.LTWrapper], page_width: int, page_height: int):
   y0, x0 = 1027, 971
   y1, x1 = 1043, 994
   bbox = (x0, page_height-y1, x1, page_height-y0)
@@ -438,9 +445,11 @@ def test_drawer():
     width = int(width)
     height = int(height)
 
+  window_schedule_wrappers = pdfextracter.get_underlying_parent_links(elems=window_schedule_elems)
+
   drawer = TkDrawer(width=width, height=height)
-  awindows_key = get_awindows_key(window_schedule_elems=window_schedule_elems, page_width=width, page_height=height)
-  debug_utils.print_elem_tree(elems=awindows_key)
+  awindows_key = get_awindows_key(window_schedule_elems=window_schedule_wrappers, page_width=width, page_height=height)
+  debug_utils.print_elem_tree(elems=[a.elem for a in awindows_key])
   underlying = pdfextracter.get_underlying_parent_links(window_schedule_elems)
   drawer.draw_elems(elems=underlying)
   drawer.show("A Windows Key")
