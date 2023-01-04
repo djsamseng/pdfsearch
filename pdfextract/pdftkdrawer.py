@@ -168,6 +168,13 @@ class ZoomCanvas(ttk.Frame):
         line_ids.append(line_id)
     return line_ids
 
+  def draw_rect(self, box):
+    x0, y0, x1, y1 = box
+    x0, y0 = self.rot_point(x0, y0)
+    x1, y1 = self.rot_point(x1, y1)
+    rect_id = self.canvas.create_rectangle(x0, y0, x1, y1)
+    return [rect_id]
+
   def insert_text(self, pt, text, font_size=12):
     x, y = pt
     x, y = self.rot_point(x, y)
@@ -232,10 +239,13 @@ class ZoomCanvas(ttk.Frame):
         "font": ("Arial", new_font_size)
       })
 
-  def set_item_visibility(self, item_ids):
+  def set_item_visibility(self, item_ids, visibility=None):
     for item_id in item_ids:
-      old_state = self.canvas.itemcget(item_id, "state")
-      new_state = "normal" if old_state == "hidden" else "hidden"
+      if visibility is None:
+        old_state = self.canvas.itemcget(item_id, "state")
+        new_state = "normal" if old_state == "hidden" else "hidden"
+      else:
+        new_state = "normal" if visibility else "hidden"
       self.canvas.itemconfigure(item_id, state=new_state)
 
   def grid(self, **kw):
@@ -279,13 +289,22 @@ class TkDrawerControlPanel:
     self.canvas.bind_all('<Button-5>',   self.__wheel)  # zoom for Linux, wheel scroll down
     self.canvas.bind_all('<Button-4>',   self.__wheel)  # zoom for Linux, wheel scroll up
 
-  def add_button(self, text, callback):
+  def add_button(self, text, callback=None, on_enter_cb=None, on_leave_cb=None):
     def on_press():
       old_bg = button.cget("background")
       new_bg = "#d9d9d9" if old_bg == "white" else "white"
       button.config(background=new_bg)
-      callback()
+      if callback is not None:
+        callback()
+    def on_enter(*args):
+      if on_enter_cb is not None:
+        on_enter_cb()
+    def on_leave(*args):
+      if on_leave_cb is not None:
+        on_leave_cb()
     button = tk.Button(master=self.frame_buttons, text=text, command=on_press)
+    button.bind("<Enter>", on_enter)
+    button.bind("<Leave>", on_leave)
     button.grid(row=len(self.buttons)+1, column=0, sticky="w")
     self.buttons.append(button)
 
@@ -342,18 +361,34 @@ class TkDrawer:
   def __init__(self, width:int, height:int) -> None:
     root = tk.Tk()
     self.app = TkDrawerMainWindow(root=root, window_width=800, window_height=600, page_width=width, page_height=height)
-  def draw_path(self, elem: pdfminer.layout.LTCurve):
+  def insert_container(self, elem: pdfminer.layout.LTContainer, parent_idx: typing.Union[int, None]):
+    ids = self.app.canvas.draw_rect(box=elem.bbox)
+    self.app.canvas.set_item_visibility(ids, visibility=False)
+    text = ""
+    if isinstance(elem, pdfminer.layout.LTText):
+      text += " " + elem.get_text()
+    def on_enter():
+      self.app.canvas.set_item_visibility(ids, visibility=True)
+    def on_leave():
+      self.app.canvas.set_item_visibility(ids, visibility=False)
+    self.app.controlPanel.add_button(
+      text="{0} {1} {2}".format(pdfminer_class_name(elem), elem.bbox, text),
+      on_enter_cb=on_enter,
+      on_leave_cb=on_leave
+    )
+  def draw_path(self, elem: pdfminer.layout.LTCurve, parent_idx: typing.Union[int, None]):
     ids = self.app.canvas.draw_path(path=elem.original_path, color=elem.stroking_color)
     def on_press():
       self.app.canvas.set_item_visibility(ids)
     self.app.controlPanel.add_button(
       text="{0} {1}".format(pdfminer_class_name(elem), elem.original_path),
       callback=on_press)
-  def insert_text(self, elem: pdfminer.layout.LTChar):
+  def insert_text(self, elem: pdfminer.layout.LTChar, parent_idx: typing.Union[int, None]):
     x0, y0, x1, y1 = elem.bbox
     text = elem.get_text()
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
-    ids = self.app.canvas.insert_text(pt=(x0, y0), text=text, font_size=int(elem.size))
+    # y1 because we flip the point on the y axis
+    ids = self.app.canvas.insert_text(pt=(x0, y1), text=text, font_size=int(elem.size))
     def on_press():
       self.app.canvas.set_item_visibility(ids)
     self.app.controlPanel.add_button(
@@ -363,20 +398,25 @@ class TkDrawer:
     self.app.controlPanel.finish_draw()
     self.app.mainloop()
 
-  def draw_elems(self, elems: pdfextracter.ElemListType):
+  def draw_elems(self, elems: typing.Iterable[pdfextracter.LTWrapper]):
     # Want to accept the hierarchy
     # If we get a container, we want to present the container in the control panel with its inner text
     # however when we draw we draw the underlying LTChar
     # When we select the container in the control panel we want to highlight the bbox
-    for elem in elems:
-      if isinstance(elem, pdfminer.layout.LTChar):
-        self.insert_text(elem=elem)
+    # When sending to the client, we send the positions of what we found and how to draw it
+    for wrapper in elems:
+      elem = wrapper.elem
+      if isinstance(elem, pdfminer.layout.LTContainer):
+        # Children always come immediately after container so indentation will be underneath parent
+        self.insert_container(elem=elem, parent_idx=wrapper.parent_idx)
+      elif isinstance(elem, pdfminer.layout.LTChar):
+        self.insert_text(elem=elem, parent_idx=wrapper.parent_idx)
       elif isinstance(elem, pdfminer.layout.LTRect):
         if elem.linewidth > 0:
-          self.draw_path(elem=elem)
+          self.draw_path(elem=elem, parent_idx=wrapper.parent_idx)
       elif isinstance(elem, pdfminer.layout.LTCurve):
         if elem.linewidth > 0:
-          self.draw_path(elem=elem)
+          self.draw_path(elem=elem, parent_idx=wrapper.parent_idx)
       else:
         pass
         #print("Unhandled draw", elem)
@@ -401,7 +441,7 @@ def test_drawer():
   drawer = TkDrawer(width=width, height=height)
   awindows_key = get_awindows_key(window_schedule_elems=window_schedule_elems, page_width=width, page_height=height)
   debug_utils.print_elem_tree(elems=awindows_key)
-  underlying = pdfextracter.get_underlying(window_schedule_elems)
+  underlying = pdfextracter.get_underlying_parent_links(window_schedule_elems)
   drawer.draw_elems(elems=underlying)
   drawer.show("A Windows Key")
 

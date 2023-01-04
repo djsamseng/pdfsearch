@@ -8,6 +8,38 @@ import pdfminer, pdfminer.layout, pdfminer.high_level
 ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
 BboxType = typing.Tuple[float, float, float, float]
 
+class LTWrapper:
+  elem: pdfminer.layout.LTComponent
+  parent_idx: typing.Union[int, None]
+  def __init__(
+    self,
+    elem: pdfminer.layout.LTComponent,
+    parent_idx: typing.Union[int, None]
+  ) -> None:
+    self.elem = elem
+    self.parent_idx = parent_idx
+
+  def __dict__(self):
+    original_path = []
+    text = ""
+    if isinstance(self.elem, pdfminer.layout.LTCurve):
+      original_path = self.elem.original_path
+    if isinstance(self.elem, pdfminer.layout.LTText):
+      text = self.elem.get_text()
+
+    return {
+      "elem": {
+        "x0": self.elem.x0,
+        "y0": self.elem.y0,
+        "width": self.elem.width,
+        "height": self.elem.height,
+        "bbox": self.elem.bbox,
+        "original_path": original_path,
+        "text": text,
+      },
+      "parent_idx": self.parent_idx
+    }
+
 def extend_out_if_element(out: ElemListType, elem: typing.Union[None, list, pdfminer.layout.LTCurve, pdfminer.layout.LTChar]):
   if elem == None:
     return
@@ -60,12 +92,12 @@ def get_underlying(elems: typing.Iterable[pdfminer.layout.LTComponent]) -> ElemL
   return out
 
 def get_underlying_parent_links_impl(
-  out: typing.List[pdfminer.layout.LTComponent],
+  out: typing.List[LTWrapper],
   elem: pdfminer.layout.LTComponent,
   elem_parent_idx: typing.Union[None, int]
 ):
   if isinstance(elem, pdfminer.layout.LTContainer):
-    out.append((elem, elem_parent_idx)) # Add the container
+    out.append(LTWrapper(elem=elem, parent_idx=elem_parent_idx)) # Add the container
     child_parent_idx = len(out) - 1 # Get the container's idx
     for child in elem:
       # Add the first child
@@ -75,14 +107,14 @@ def get_underlying_parent_links_impl(
   elif isinstance(elem, pdfminer.layout.LTChar):
     if elem_parent_idx is None:
       print(elem, elem_parent_idx)
-    out.append((elem, elem_parent_idx))
+    out.append(LTWrapper(elem, parent_idx=elem_parent_idx))
   elif isinstance(elem, pdfminer.layout.LTAnno):
     text = elem.get_text()
     if text != "\n" and text != " ":
       print("Unhandled LTAnno", elem)
     # Not Added
   elif isinstance(elem, pdfminer.layout.LTCurve):
-    out.append((elem, elem_parent_idx))
+    out.append(LTWrapper(elem, parent_idx=elem_parent_idx))
   elif isinstance(elem, pdfminer.layout.LTFigure):
     # Not Added
     pass
@@ -92,7 +124,7 @@ def get_underlying_parent_links_impl(
 def get_underlying_parent_links(
   elems: typing.Iterable[pdfminer.layout.LTComponent],
 ):
-  out: typing.List[typing.Tuple[pdfminer.layout.LTComponent, int]] = []
+  out: typing.List[LTWrapper] = []
   for elem in elems:
     get_underlying_parent_links_impl(out=out, elem=elem, elem_parent_idx=None)
   return out
