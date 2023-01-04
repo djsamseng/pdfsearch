@@ -40,57 +40,6 @@ class LTWrapper:
       "parent_idx": self.parent_idx
     }
 
-def extend_out_if_element(out: ElemListType, elem: typing.Union[None, list, pdfminer.layout.LTCurve, pdfminer.layout.LTChar]):
-  if elem == None:
-    return
-  elif isinstance(elem, list):
-    out.extend(elem)
-  elif isinstance(elem, pdfminer.layout.LTCurve):
-    out.append(elem)
-  elif isinstance(elem, pdfminer.layout.LTChar):
-    out.append(elem)
-  else:
-    print("Unhandled extend:", elem)
-
-def get_underlying_from_element(elem: pdfminer.layout.LTComponent) -> typing.Union[None, list, pdfminer.layout.LTCurve, pdfminer.layout.LTChar]:
-  if isinstance(elem, pdfminer.layout.LTTextLineHorizontal):
-    out = []
-    for sub_elem in elem:
-      extend_out_if_element(out=out, elem=get_underlying_from_element(sub_elem))
-    return out
-  elif isinstance(elem, pdfminer.layout.LTTextBoxHorizontal):
-    out = []
-    for sub_elem in elem:
-      extend_out_if_element(out=out, elem=get_underlying_from_element(sub_elem))
-    return out
-  elif isinstance(elem, pdfminer.layout.LTTextContainer):
-    print(elem)
-    assert False, "Unhandled LTTextContainer" + str(elem)
-  elif isinstance(elem, pdfminer.layout.LTChar):
-    return elem
-  elif isinstance(elem, pdfminer.layout.LTAnno):
-    text = elem.get_text()
-    if text != "\n" and text != " ":
-      print("Unhandled LTAnno", elem)
-    return None
-  elif isinstance(elem, pdfminer.layout.LTCurve):
-    return elem
-  elif isinstance(elem, pdfminer.layout.LTLine):
-    # LTLine and LTRect is a LTCurve
-    print("Line:", elem.pts, elem.fill, elem.stroking_color, elem.stroke, elem.non_stroking_color, elem.evenodd, elem.linewidth)
-    assert False, "Unhandled line:" + str(elem)
-  elif isinstance(elem, pdfminer.layout.LTFigure):
-    print("Unhandled LTFigure:", elem)
-  else:
-    print("Unhandled:", elem)
-    assert False, "Unhandled elem:" + str(elem)
-
-def get_underlying(elems: typing.Iterable[pdfminer.layout.LTComponent]) -> ElemListType:
-  out: ElemListType = []
-  for elem in elems:
-    extend_out_if_element(out=out, elem=get_underlying_from_element(elem=elem))
-  return out
-
 def get_underlying_parent_links_impl(
   out: typing.List[LTWrapper],
   elem: pdfminer.layout.LTComponent,
@@ -139,32 +88,41 @@ def box_contains(outer: BboxType, inner: BboxType):
       return True
   return False
 
-def filter_contains_bbox(elems: ElemListType, bbox: BboxType) -> ElemListType:
+def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTWrapper], bbox: BboxType) -> typing.List[LTWrapper]:
   out = []
-  for elem in elems:
-    if box_contains(outer=bbox, inner=elem.bbox):
-      out.append(elem)
-  return out
-
-def filter_contains_bbox_hierarchical(elems: typing.Iterable[pdfminer.layout.LTComponent], bbox: BboxType) -> typing.List[pdfminer.layout.LTComponent]:
-  out = []
-  to_process: typing.List[pdfminer.layout.LTContainer] = []
-  for elem in elems:
+  to_process: typing.List[LTWrapper] = []
+  old_idx_to_new_idx = dict()
+  for old_idx, wrapper in enumerate(elems):
+    elem = wrapper.elem
+    new_parent_idx = None
+    if wrapper.parent_idx is not None:
+      if wrapper.parent_idx in old_idx_to_new_idx:
+        new_parent_idx = old_idx_to_new_idx[wrapper.parent_idx]
     if isinstance(elem, pdfminer.layout.LTAnno):
       continue
     if box_contains(outer=bbox, inner=elem.bbox):
-      out.append(elem)
+      out.append(LTWrapper(elem=elem, parent_idx=new_parent_idx))
+      old_idx_to_new_idx[old_idx] = len(out) - 1
     elif isinstance(elem, pdfminer.layout.LTContainer):
-      to_process.append(elem)
+      # I don't fit so I won't be included in out but my children might
+      to_process.append(wrapper)
 
   while len(to_process) > 0:
-    container = to_process.pop()
-    for elem in container:
+    container_wrapper = to_process.pop()
+    container_elem = container_wrapper.elem
+    for wrapper in container_elem:
+      elem = wrapper.elem
+      new_parent_idx = None
+      if wrapper.parent_idx is not None:
+        if wrapper.parent_idx in old_idx_to_new_idx:
+          new_parent_idx = old_idx_to_new_idx[wrapper.parent_idx]
       if isinstance(elem, pdfminer.layout.LTAnno):
         continue
       if box_contains(outer=bbox, inner=elem.bbox):
-        out.append(elem)
+        out.append(LTWrapper(elem=elem, parent_idx=new_parent_idx))
+        old_idx_to_new_idx[old_idx] = len(out) - 1
       elif isinstance(elem, pdfminer.layout.LTContainer):
+        # I don't fit so I won't be included in out but my children might
         to_process.append(elem)
 
   return out
