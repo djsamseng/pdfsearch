@@ -1,6 +1,6 @@
 
-import argparse
 import typing
+import time
 
 import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level
@@ -133,14 +133,95 @@ def extract_window_key(args: typing.Any):
 
     drawer.show("First floor construction plan")
 
-def parse_args():
-  parser = argparse.ArgumentParser()
-  parser.add_argument("--awindows", dest="awindows", default=False, action="store_true")
-  return parser.parse_args()
+def brute_force_find_contents(
+  elem_wrappers: typing.List[pdfextracter.LTWrapper],
+  bboxes: typing.List[typing.Tuple[float,float,float,float]],
+):
+  out: typing.List[pdfextracter.LTWrapper] = []
+  for wrapper in elem_wrappers:
+    elem = wrapper.elem
+    bbox = elem.bbox
+    for search_box in bboxes:
+      if pdfextracter.box_contains(outer=search_box, inner=bbox):
+        out.append(wrapper) # TODO: multiple boxes
+  return out
+
+def brute_force_find_shape(
+  elem_wrappers: typing.List[pdfextracter.LTWrapper],
+  height: float,
+  width: float
+):
+  out: typing.List[pdfextracter.LTWrapper] = []
+  for wrapper in elem_wrappers:
+    elem = wrapper.elem
+    diff = np.abs(height - elem.height) + np.abs(width - elem.width)
+    if diff < 1:
+      out.append(wrapper)
+  return out
+
+def kdtree_vs_brute_force():
+  with np.load("../flaskapi/first_floor_construction.npz", allow_pickle=True) as f:
+    page_elems, width, height = f["elems"], f["width"], f["height"]
+    page_elems: typing.List[pdfminer.layout.LTComponent] = page_elems
+    width = int(width)
+    height = int(height)
+
+  elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page_elems)
+
+  find_width = 19.5
+  find_height = 13.62
+  i0 = time.time()
+  indexer = PdfIndexer(wrappers=elem_wrappers, page_width=width, page_height=height)
+  i1 = time.time()
+
+  search_elem_shape = [find_width, find_height]
+  neighbor_idxes: typing.List[int] = indexer.find_by_shape_kdtree.query_ball_point(x=search_elem_shape, r=1) # type: ignore
+  i2 = time.time()
+
+  b0 = time.time()
+  brute_results = brute_force_find_shape(elem_wrappers=elem_wrappers, height=find_height, width=find_width)
+  b1 = time.time()
+
+  print("Brute:", len(brute_results), b1-b0)
+  print("TDTree:", len(neighbor_idxes), i1-i0, i2-i1)
+
+def rtree_vs_brute_force():
+  with np.load("../flaskapi/first_floor_construction.npz", allow_pickle=True) as f:
+    page_elems, width, height = f["elems"], f["width"], f["height"]
+    page_elems: typing.List[pdfminer.layout.LTComponent] = page_elems
+    width = int(width)
+    height = int(height)
+
+  elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page_elems)
+
+  y0, x0 = 1756, 1391
+  y1, x1 = 1781, 1418
+  bbox = (x0, y0, x1, y1)
+  bbox_flipped = (x0, height-y1, x1, height-y0)
+
+  for _ in range(1):
+    tb0 = time.time()
+    brute_force_result = brute_force_find_contents(elem_wrappers=elem_wrappers, bboxes=[bbox_flipped])
+    tb1 = time.time()
+    tr0 = time.time()
+    indexer = PdfIndexer(wrappers=elem_wrappers, page_width=width, page_height=height)
+    tr1 = time.time()
+    rtree_result_idxes = indexer.find_by_position_rtree.contains(bbox) # type: ignore
+    tr2 = time.time()
+    rtree_result_idxes: typing.List[int] = list(rtree_result_idxes)
+    tr3 = time.time()
+
+    print("Brute force:", len(brute_force_result), tb1-tb0)
+    print("rtree: {0} indexing time: {1} search time: {2} generator time: {3}".format(
+      len(rtree_result_idxes),
+      tr1-tr0,
+      tr2-tr1,
+      tr3-tr2,
+    ))
+
 
 def main():
-  args = parse_args()
-  extract_window_key(args)
+  kdtree_vs_brute_force()
 
 if __name__ == "__main__":
   main()
