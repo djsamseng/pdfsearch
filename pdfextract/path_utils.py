@@ -67,8 +67,10 @@ def compute_bezier_points(
 
   return result
 
+LinePointsType = typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]
+
 def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
-  lines: typing.List[typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]] = []
+  lines: typing.List[LinePointsType] = []
   x, y = 0, 0
   x_start, y_start = x, y
   for pt in path:

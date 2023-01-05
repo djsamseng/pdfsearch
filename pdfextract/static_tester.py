@@ -17,35 +17,6 @@ def text_is_window_key(text: str):
     return True
   return False
 
-def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
-  lines: typing.List[typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]] = []
-  x, y = 0, 0
-  x_start, y_start = x, y
-  for pt in path:
-    pt_type = pt[0]
-    if pt_type == "m":
-      pt = typing.cast(typing.Tuple[str, typing.Tuple[float, float]], pt)
-      x, y = pt[1]
-      x_start, y_start = x, y
-    elif pt_type == "l":
-      pt = typing.cast(typing.Tuple[str, typing.Tuple[float, float]], pt)
-      x2, y2 = pt[1]
-      lines.append(((x, y), (x2, y2)))
-      x, y = x2, y2
-    elif pt_type == "c":
-      pt = typing.cast(typing.Tuple[str, typing.Tuple[float, float], typing.Tuple[float, float], typing.Tuple[float, float]], pt)
-      (x2, y2), (x3, y3), (x4, y4) = pt[1:]
-      bezier_points = path_utils.compute_bezier_points(vertices=((x, y), (x2, y2), (x3, y3), (x4, y4)))
-      for bezier_idx in range(1, len(bezier_points)):
-        bezier_x_start, bezier_y_start = bezier_points[bezier_idx - 1]
-        bezier_x_end, bezier_y_end = bezier_points[bezier_idx]
-        lines.append(((bezier_x_start, bezier_y_start), (bezier_x_end, bezier_y_end)))
-      x, y = x4, y4
-    elif pt_type == "h":
-      lines.append(((x, y), (x_start, y_start)))
-    else:
-      print("Unhandled path point:", pt)
-  return lines
 
 
 class PdfIndexer:
@@ -98,11 +69,72 @@ class PdfIndexer:
 
   def find_similar_shapes(
     self,
-    wrapper: pdfextracter.LTWrapper,
+    wrapper_to_find: pdfextracter.LTWrapper,
     query_radius: float,
   ) -> typing.List[pdfextracter.LTWrapper]:
-    similar_height_width = self.find_similar_height_width(width=wrapper.elem.width, height=wrapper.elem.height, query_radius=query_radius)
+    similar_height_width = self.find_similar_height_width(
+      width=wrapper_to_find.elem.width,
+      height=wrapper_to_find.elem.height,
+      query_radius=query_radius
+    )
+    elem = wrapper_to_find.elem
+    if isinstance(elem, pdfminer.layout.LTCurve):
+      return find_similar_curves(wrapper_to_find=wrapper_to_find, wrappers_to_search=similar_height_width, max_dist=query_radius)
+    return []
 
+def line_distance(
+  linea: path_utils.LinePointsType,
+  lineb: path_utils.LinePointsType,
+):
+  (x0a, y0a), (x1a, y1a) = linea
+  (x0b, y0b), (x1b, y1b) = lineb
+  dist_forward = np.abs(x0a-x0b) + np.abs(y0a-y0b) + np.abs(x1a-x1b) + np.abs(y1a-y1b)
+  dist_backward = np.abs(x0a-x1b) + np.abs(y0a-y1b) + np.abs(x1a-x0b) + np.abs(y1a-y0b)
+  return min(dist_forward, dist_backward)
+
+def line_set_distance(
+  lines1: typing.List[path_utils.LinePointsType],
+  lines2: typing.List[path_utils.LinePointsType],
+  max_dist: float,
+):
+  total_dist = 0.
+  if len(lines1) == 0 or len(lines2) == 0:
+    return total_dist
+
+  for linea in lines1:
+    best_dist = line_distance(linea=linea, lineb=lines2[0])
+    for lineb in lines2:
+      dist = line_distance(linea=linea, lineb=lineb)
+      best_dist = min(best_dist, dist)
+    total_dist += best_dist
+    if max_dist >= 0 and total_dist > max_dist:
+      # Return early
+      return total_dist
+  return total_dist
+
+# TODO: Search for union of multiple wrappers_to_find
+def find_similar_curves(
+  wrapper_to_find: pdfextracter.LTWrapper,
+  wrappers_to_search: typing.List[pdfextracter.LTWrapper],
+  max_dist: float,
+) -> typing.List[pdfextracter.LTWrapper]:
+  lines_to_find = wrapper_to_find.get_zeroed_path_lines()
+  if len(lines_to_find) == 0:
+    return []
+
+  results: typing.List[pdfextracter.LTWrapper] = []
+  for wrapper in wrappers_to_search:
+    potential_lines = wrapper.get_zeroed_path_lines()
+    if len(potential_lines) == 0:
+      continue
+    if len(potential_lines) != len(lines_to_find):
+      # TODO: Are they visually equivalent?
+      continue
+    dist = line_set_distance(lines1=lines_to_find, lines2=potential_lines, max_dist=max_dist)
+    if dist < max_dist:
+      results.append(wrapper)
+
+  return results
 
 
 def find_similar(
@@ -148,8 +180,9 @@ def extract_window_key(args: typing.Any):
   y0, x0 = 1756, 1391
   y1, x1 = 1781, 1418
   found = rtree_index.intersection((x0, y0, x1, y1))
-  q01 = [elem_wrappers[idx].elem for idx in found]
-  search_elem = q01[1]
+  q01 = [elem_wrappers[idx] for idx in found]
+  search_wrapper = q01[1]
+  search_elem = search_wrapper.elem
 
 
   all_elem_shapes = [[wrapper.elem.width, wrapper.elem.height] for wrapper in elem_wrappers]
@@ -196,9 +229,12 @@ def extract_window_key(args: typing.Any):
   # Match by shape then search for text inside - works only if shape matches
   print("Count from shapes:", len(draw_wrappers), "Count by text:", len(found_by_text)/2)
 
+  indexer = PdfIndexer(wrappers=elem_wrappers, page_width=width, page_height=height)
+  indexer_found_shapes = indexer.find_similar_shapes(wrapper_to_find=search_wrapper, query_radius=1)
+  print("Count from indexer no text:", len(indexer_found_shapes))
   if show_ui:
     drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-    drawer.draw_elems(elems=draw_wrappers)
+    drawer.draw_elems(elems=indexer_found_shapes)
 
     drawer.show("First floor construction plan")
 

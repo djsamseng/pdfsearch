@@ -3,6 +3,7 @@
 import typing
 
 import pdfminer, pdfminer.layout, pdfminer.high_level
+import path_utils
 
 ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
 BboxType = typing.Tuple[float, float, float, float]
@@ -17,6 +18,39 @@ class LTWrapper:
   ) -> None:
     self.elem = elem
     self.parent_idx = parent_idx
+    self.__path_lines = None
+    self.__zeroed_path_lines: typing.Union[typing.List[path_utils.LinePointsType], None] = None
+
+  def get_path_lines(self):
+    if self.__path_lines is not None:
+      return self.__path_lines
+
+    if isinstance(self.elem, pdfminer.layout.LTCurve):
+      if self.elem.original_path is not None:
+        self.__path_lines = path_utils.path_to_lines(path=self.elem.original_path)
+    if self.__path_lines is None:
+      self.__path_lines = []
+
+    return self.__path_lines
+
+  def get_zeroed_path_lines(self):
+    if self.__zeroed_path_lines is not None:
+      return self.__zeroed_path_lines
+
+    self.__zeroed_path_lines = []
+    path_lines = self.get_path_lines()
+    if len(path_lines) == 0:
+      return self.__zeroed_path_lines
+
+    (x0, y0), (x1, y1) = path_lines[0]
+    xmin = min(x0, x1)
+    ymin = min(y0, y1)
+    for (x0, y0), (x1, y1) in path_lines:
+      xmin = min(xmin, min(x0, x1))
+      ymin = min(ymin, min(y0, y1))
+    for (x0, y0), (x1, y1) in path_lines:
+      self.__zeroed_path_lines.append(((x0-xmin, y0-ymin), (x1-xmin, y1-ymin)))
+    return self.__zeroed_path_lines
 
   def as_dict(self):
     original_path = []

@@ -9,7 +9,6 @@ import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
 import pdfextracter
 import debug_utils
-import path_utils
 
 
 class AutoScrollbar(ttk.Scrollbar):
@@ -75,9 +74,9 @@ class ZoomCanvas(ttk.Frame):
   def rot_point(self, x: float, y: float):
     return x, self.height - y
 
-  def draw_path(self, path: typing.List[pdfminer.utils.PathSegment], color: str):
+  def draw_path(self, wrapper: pdfextracter.LTWrapper, color: str):
     color = "black"
-    line_points = path_utils.path_to_lines(path=path)
+    line_points = wrapper.get_path_lines()
     line_ids: typing.List[tk._CanvasItemId] = []
     for line in line_points:
       (x0, y0), (x1, y1) = line
@@ -301,8 +300,9 @@ class TkDrawer:
       on_enter_cb=on_enter,
       on_leave_cb=on_leave
     )
-  def draw_path(self, elem: pdfminer.layout.LTCurve, parent_idx: typing.Union[int, None]):
-    ids = self.app.canvas.draw_path(path=elem.original_path, color=elem.stroking_color)
+  def draw_path(self, wrapper: pdfextracter.LTWrapper, parent_idx: typing.Union[int, None]):
+    elem = wrapper.elem
+    ids = self.app.canvas.draw_path(wrapper=wrapper, color=elem.stroking_color)
     def on_press():
       self.app.canvas.set_item_visibility(ids)
     self.app.controlPanel.add_button(
@@ -338,10 +338,10 @@ class TkDrawer:
         self.insert_text(elem=elem, parent_idx=wrapper.parent_idx)
       elif isinstance(elem, pdfminer.layout.LTRect):
         if elem.linewidth > 0:
-          self.draw_path(elem=elem, parent_idx=wrapper.parent_idx)
+          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx)
       elif isinstance(elem, pdfminer.layout.LTCurve):
         if elem.linewidth > 0:
-          self.draw_path(elem=elem, parent_idx=wrapper.parent_idx)
+          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx)
       else:
         pass
         #print("Unhandled draw", elem)
