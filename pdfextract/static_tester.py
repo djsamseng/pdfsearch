@@ -3,10 +3,11 @@ import argparse
 import typing
 
 import numpy as np
-import pdfminer, pdfminer.layout, pdfminer.high_level
+import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
 import pdfextracter
 import pdftkdrawer
+import path_utils
 
 import scipy.spatial # type: ignore
 import rtree
@@ -15,6 +16,37 @@ def text_is_window_key(text: str):
   if len(text) == 3 and text[0].isalpha() and text[1:].isdigit():
     return True
   return False
+
+def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
+  lines: typing.List[typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]] = []
+  x, y = 0, 0
+  x_start, y_start = x, y
+  for pt in path:
+    pt_type = pt[0]
+    if pt_type == "m":
+      pt = typing.cast(typing.Tuple[str, typing.Tuple[float, float]], pt)
+      x, y = pt[1]
+      x_start, y_start = x, y
+    elif pt_type == "l":
+      pt = typing.cast(typing.Tuple[str, typing.Tuple[float, float]], pt)
+      x2, y2 = pt[1]
+      lines.append(((x, y), (x2, y2)))
+      x, y = x2, y2
+    elif pt_type == "c":
+      pt = typing.cast(typing.Tuple[str, typing.Tuple[float, float], typing.Tuple[float, float], typing.Tuple[float, float]], pt)
+      (x2, y2), (x3, y3), (x4, y4) = pt[1:]
+      bezier_points = path_utils.compute_bezier_points(vertices=((x, y), (x2, y2), (x3, y3), (x4, y4)))
+      for bezier_idx in range(1, len(bezier_points)):
+        bezier_x_start, bezier_y_start = bezier_points[bezier_idx - 1]
+        bezier_x_end, bezier_y_end = bezier_points[bezier_idx]
+        lines.append(((bezier_x_start, bezier_y_start), (bezier_x_end, bezier_y_end)))
+      x, y = x4, y4
+    elif pt_type == "h":
+      lines.append(((x, y), (x_start, y_start)))
+    else:
+      print("Unhandled path point:", pt)
+  return lines
+
 
 class PdfIndexer:
   # To find contents inside shapes
@@ -27,15 +59,51 @@ class PdfIndexer:
     page_width: int,
     page_height: int,
   ) -> None:
+    self.page_width = page_width
+    self.page_height = page_height
+    self.wrappers = wrappers
     def index_insertion_generator(elems: typing.List[pdfextracter.LTWrapper]):
       for i, wrapper in enumerate(elems):
         elem = wrapper.elem
-        x0, y0, x1, y1 = elem.bbox
-        yield (i, (x0, page_height-y1, x1, page_height-y0), i)
+        yield (i, elem.bbox, i)
 
     self.find_by_position_rtree = rtree.index.Index(index_insertion_generator(elems=wrappers))
     all_elem_shapes = [[wrapper.elem.width, wrapper.elem.height] for wrapper in wrappers]
     self.find_by_shape_kdtree = scipy.spatial.KDTree(data=all_elem_shapes)
+
+  def find_contains(
+    self,
+    bbox: typing.Tuple[float, float, float, float],
+    y_is_down: bool = False,
+  ) -> typing.List[pdfextracter.LTWrapper]:
+    if y_is_down:
+      x0, y0, x1, y1 = bbox
+      bbox = (x0, self.page_height - y1, x1, self.page_height - y0)
+    result_idxes = self.find_by_position_rtree.contains(bbox)
+    if result_idxes is None:
+      return []
+    results = [self.wrappers[idx] for idx in result_idxes]
+    return results
+
+  def find_similar_height_width(
+    self,
+    width: float,
+    height: float,
+    query_radius: float,
+  ) -> typing.List[pdfextracter.LTWrapper]:
+    search_shape = [width, height]
+    result_idxes: typing.List[int] = self.find_by_shape_kdtree.query_ball_point(x=search_shape, r=query_radius) # type: ignore
+    results = [self.wrappers[idx] for idx in result_idxes]
+    return results
+
+  def find_similar_shapes(
+    self,
+    wrapper: pdfextracter.LTWrapper,
+    query_radius: float,
+  ) -> typing.List[pdfextracter.LTWrapper]:
+    similar_height_width = self.find_similar_height_width(width=wrapper.elem.width, height=wrapper.elem.height, query_radius=query_radius)
+
+
 
 def find_similar(
   indexer: PdfIndexer,
@@ -43,6 +111,7 @@ def find_similar(
   inner_text_matcher: typing.Callable[[str], bool]
 ):
   # all elements with similar shaped bbox
+
 
   # same len(original_path)
   # then break the original path into individual lines

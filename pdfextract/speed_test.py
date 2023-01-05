@@ -148,44 +148,53 @@ def brute_force_find_contents(
 
 def brute_force_find_shape(
   elem_wrappers: typing.List[pdfextracter.LTWrapper],
-  height: float,
-  width: float
+  shapes_hw: typing.List[typing.Tuple[float, float]],
 ):
   out: typing.List[pdfextracter.LTWrapper] = []
   for wrapper in elem_wrappers:
     elem = wrapper.elem
-    diff = np.abs(height - elem.height) + np.abs(width - elem.width)
-    if diff < 1:
-      out.append(wrapper)
+    for height, width in shapes_hw:
+      diff = np.abs(height - elem.height) + np.abs(width - elem.width)
+      if diff < 1:
+        out.append(wrapper)
   return out
 
 def kdtree_vs_brute_force():
-  with np.load("../flaskapi/first_floor_construction.npz", allow_pickle=True) as f:
-    page_elems, width, height = f["elems"], f["width"], f["height"]
-    page_elems: typing.List[pdfminer.layout.LTComponent] = page_elems
-    width = int(width)
-    height = int(height)
-
-  elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page_elems)
+  elem_wrappers, width, height = load_elems()
 
   find_width = 19.5
   find_height = 13.62
   i0 = time.time()
+  # O(nlogn)
   indexer = PdfIndexer(wrappers=elem_wrappers, page_width=width, page_height=height)
   i1 = time.time()
 
   search_elem_shape = [find_width, find_height]
+  # O(log(num_elements) * num_shapes_to_find)
   neighbor_idxes: typing.List[int] = indexer.find_by_shape_kdtree.query_ball_point(x=search_elem_shape, r=1) # type: ignore
   i2 = time.time()
 
   b0 = time.time()
-  brute_results = brute_force_find_shape(elem_wrappers=elem_wrappers, height=find_height, width=find_width)
+
+  # O(num_elements * num_shapes_to_find)
+  # 1000 * 1 vs 1000log(1000) + log(1000) * 1 = 6900
+  # 1000 * 100 vs 1000log(1000) + log(1000) * 100 = 7600
+  brute_results = brute_force_find_shape(elem_wrappers=elem_wrappers, shapes_hw=[(find_height, find_width)])
   b1 = time.time()
 
   print("Brute:", len(brute_results), b1-b0)
   print("TDTree:", len(neighbor_idxes), i1-i0, i2-i1)
 
-def rtree_vs_brute_force():
+  avg_num_elements_per_page = 43_000 * 10
+  for num_shapes_to_find in range(1, 100):
+    brute_force_O = avg_num_elements_per_page * num_shapes_to_find
+    tdtree_O = avg_num_elements_per_page * np.log(avg_num_elements_per_page) + np.log(avg_num_elements_per_page) * num_shapes_to_find
+    if tdtree_O < brute_force_O:
+      # 11 shapes single page, 13 shapes 10 pages
+      print("{0}: brute force {1} tdtree {2}".format(num_shapes_to_find, brute_force_O, tdtree_O))
+      break
+
+def load_elems():
   with np.load("../flaskapi/first_floor_construction.npz", allow_pickle=True) as f:
     page_elems, width, height = f["elems"], f["width"], f["height"]
     page_elems: typing.List[pdfminer.layout.LTComponent] = page_elems
@@ -193,6 +202,10 @@ def rtree_vs_brute_force():
     height = int(height)
 
   elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page_elems)
+  return elem_wrappers, width, height
+
+def rtree_vs_brute_force():
+  elem_wrappers, width, height = load_elems()
 
   y0, x0 = 1756, 1391
   y1, x1 = 1781, 1418
@@ -219,9 +232,35 @@ def rtree_vs_brute_force():
       tr3-tr2,
     ))
 
+def indexer_repeat_query_speed_test():
+  elem_wrappers, width, height = load_elems()
+  indexer = PdfIndexer(wrappers=elem_wrappers, page_width=width, page_height=height)
+  y0, x0 = 1756, 1391
+  y1, x1 = 1781, 1418
+
+  times = []
+  for _ in range(5):
+    t0 = time.time()
+    res_rtree = indexer.find_by_position_rtree.intersection((x0, y0, x1, y1))
+    res_rtree = list(res_rtree)
+    t1 = time.time()
+    find_width = 19.5
+    find_height = 13.62
+    search_elem_shape = [find_width, find_height]
+    t2 = time.time()
+    res_kdtree = indexer.find_by_shape_kdtree.query_ball_point(x=search_elem_shape, r=1)
+    t3 = time.time()
+    times.append((t1-t0, t3-t2))
+    if len(res_rtree) == 0 or len(res_kdtree) == 0:
+      print(len(res_rtree), len(res_kdtree))
+      print("No results found")
+  print(times)
+
 
 def main():
   kdtree_vs_brute_force()
+  rtree_vs_brute_force()
+  indexer_repeat_query_speed_test()
 
 if __name__ == "__main__":
   main()

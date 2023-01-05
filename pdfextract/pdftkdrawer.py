@@ -9,69 +9,8 @@ import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
 import pdfextracter
 import debug_utils
+import path_utils
 
-def compute_bezier_points(
-  vertices:typing.Tuple[typing.Tuple[int,int],typing.Tuple[int,int],typing.Tuple[int,int],typing.Tuple[int,int]],
-  numPoints:int=30
-):
-  result: typing.List[typing.Tuple[int,int]] = []
-
-  b0x = vertices[0][0]
-  b0y = vertices[0][1]
-  b1x = vertices[1][0]
-  b1y = vertices[1][1]
-  b2x = vertices[2][0]
-  b2y = vertices[2][1]
-  b3x = vertices[3][0]
-  b3y = vertices[3][1]
-
-  # Compute polynomial coefficients from Bezier points
-  ax = -b0x + 3 * b1x + -3 * b2x + b3x
-  ay = -b0y + 3 * b1y + -3 * b2y + b3y
-
-  bx = 3 * b0x + -6 * b1x + 3 * b2x
-  by = 3 * b0y + -6 * b1y + 3 * b2y
-
-  cx = -3 * b0x + 3 * b1x
-  cy = -3 * b0y + 3 * b1y
-
-  dx = b0x
-  dy = b0y
-
-  # Set up the number of steps and step size
-  numSteps = numPoints - 1 # arbitrary choice
-  h = 1.0 / numSteps # compute our step size
-
-  # Compute forward differences from Bezier points and "h"
-  pointX = dx
-  pointY = dy
-
-  firstFDX = ax * (h * h * h) + bx * (h * h) + cx * h
-  firstFDY = ay * (h * h * h) + by * (h * h) + cy * h
-
-
-  secondFDX = 6 * ax * (h * h * h) + 2 * bx * (h * h)
-  secondFDY = 6 * ay * (h * h * h) + 2 * by * (h * h)
-
-  thirdFDX = 6 * ax * (h * h * h)
-  thirdFDY = 6 * ay * (h * h * h)
-
-  # Compute points at each step
-  result.append((int(pointX), int(pointY)))
-
-  for _ in range(numSteps):
-      pointX += firstFDX
-      pointY += firstFDY
-
-      firstFDX += secondFDX
-      firstFDY += secondFDY
-
-      secondFDX += thirdFDX
-      secondFDY += thirdFDY
-
-      result.append((int(pointX), int(pointY)))
-
-  return result
 
 class AutoScrollbar(ttk.Scrollbar):
   '''
@@ -137,36 +76,15 @@ class ZoomCanvas(ttk.Frame):
     return x, self.height - y
 
   def draw_path(self, path: typing.List[pdfminer.utils.PathSegment], color: str):
-    x, y = 0, 0
-    x_start, y_start = x, y
     color = "black"
+    line_points = path_utils.path_to_lines(path=path)
     line_ids: typing.List[tk._CanvasItemId] = []
-    for pt in path:
-      if pt[0] == 'm':
-        x, y = pt[1]
-        x, y = self.rot_point(x, y)
-        x_start, y_start = x, y
-      elif pt[0] == 'l':
-        x2, y2 = pt[1]
-        x2, y2 = self.rot_point(x2, y2)
-        line_id = self.canvas.create_line(x, y, x2, y2, fill=color)
-        line_ids.append(line_id)
-        x, y = x2, y2
-      elif pt[0] == 'c':
-        (x2, y2), (x3, y3), (x4, y4) = pt[1:]
-        x2, y2 = self.rot_point(x2, y2)
-        x3, y3 = self.rot_point(x3, y3)
-        x4, y4 = self.rot_point(x4, y4)
-        bezier_points = compute_bezier_points(vertices=[(x, y), (x2, y2), (x3, y3), (x4, y4)])
-        for idx in range(1, len(bezier_points)):
-          xstart, ystart = bezier_points[idx-1]
-          xend, yend = bezier_points[idx]
-          line_id = self.canvas.create_line(xstart, ystart, xend, yend, fill=color)
-          line_ids.append(line_id)
-        x, y = x4, y4
-      elif pt[0] == 'h':
-        line_id = self.canvas.create_line(x, y, x_start, y_start, fill=color)
-        line_ids.append(line_id)
+    for line in line_points:
+      (x0, y0), (x1, y1) = line
+      x0, y0 = self.rot_point(x0, y0)
+      x1, y1 = self.rot_point(x1, y1)
+      line_id = self.canvas.create_line(x0, y0, x1, y1, fill=color)
+      line_ids.append(line_id)
     return line_ids
 
   def draw_rect(self, box: typing.Tuple[float, float, float, float]):
