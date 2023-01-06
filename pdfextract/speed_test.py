@@ -238,7 +238,7 @@ def indexer_repeat_query_speed_test():
   y0, x0 = 1756, 1391
   y1, x1 = 1781, 1418
 
-  times = []
+  times: typing.List[typing.Tuple[float, float]] = []
   for _ in range(5):
     t0 = time.time()
     res_rtree = indexer.find_by_position_rtree.intersection((x0, y0, x1, y1))
@@ -248,7 +248,7 @@ def indexer_repeat_query_speed_test():
     find_height = 13.62
     search_elem_shape = [find_width, find_height]
     t2 = time.time()
-    res_kdtree = indexer.find_by_shape_kdtree.query_ball_point(x=search_elem_shape, r=1)
+    res_kdtree = indexer.find_by_shape_kdtree.query_ball_point(x=search_elem_shape, r=1) # type: ignore
     t3 = time.time()
     times.append((t1-t0, t3-t2))
     if len(res_rtree) == 0 or len(res_kdtree) == 0:

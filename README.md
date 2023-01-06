@@ -46,6 +46,56 @@ cd flaskapi && flask --app main.py --debug run
 - [By using an API Gateway WebSocket API in front of Lambda, you don’t need a machine to stay always on, eating away your project budget. API Gateway handles connections and invokes Lambda whenever there’s a new event. Scaling is handled on the service side. To update our connected clients from the backend, we can use the API Gateway callback URL.](https://aws.amazon.com/blogs/compute/from-poll-to-push-transform-apis-using-amazon-api-gateway-rest-apis-and-websockets/)
   - **Good example of what we want**
 
+## Production
+- [Vercel Free tier](https://vercel.com/pricing)
+  - Any file inside the folder pages/api is mapped to /api/* and will be treated as an API endpoint (a serverless function)
+    - serverless functions: 100GB-hours = 360,000 requests with 1 second duration = 8 requests/minute
+    - GB-hours = duration * memory allocated [link](https://vercel.com/guides/what-are-gb-hrs-for-serverless-function-execution)
+      - default = 1GB memory [configuration](https://vercel.com/docs/project-configuration#project-configuration/functions)
+  - Middleware becomes edge functions [nextjs deployment reference](https://nextjs.org/docs/deployment)
+    - [Middleware matching requests](https://nextjs.org/docs/advanced-features/middleware)
+    - edge functions: 500_000 execution units, 1 million invocations
+  - 100 GB Bandwidth
+- [AWS Free tier - go with Firebase instead!](https://aws.amazon.com/free/?all-free-tier.sort-by=item.additionalFields.SortRank&all-free-tier.sort-order=asc&awsf.Free%20Tier%20Types=*all&awsf.Free%20Tier%20Categories=*all)
+  - Amazon DynamoDB always free
+    - 25GB storage
+    - 200M requests per month
+  - AWS Lambda always free
+    - 1 millions requests/month = 20 requests/minute
+    - 3.2 million seconds compute time/month = 53_333 minutes = 888 hours = 37 days
+  - AWS S3 storage
+    - $0.023/GB + $0.005 per 1000 requests
+- [Firebase Free tier](https://firebase.google.com/pricing)
+  - Realtime database
+    - 1 GB storage
+    - 10 GB transfer
+  - Firebase database
+    - 1 GB storage
+    - 50,000 reads
+    - 20,000 writes
+    - 20,000 deletes
+    - charged for listening/realtime updates each time the query results change (awesome for a websocket)
+  - Cloud storage
+    - 5 GB storage
+    - 30GB/day
+    - 2,100,000 operations
+  - Cloud functions [pricing](https://cloud.google.com/functions/pricing)
+    - first 2 million invocations free
+    - 400,000 GB-seconds
+    - 200,000 GHz-seconds compute time
+    - 5GB Internet traffic outbound
+
+
+### Workflow
+- User uploads pdf to dynamodb. Return key
+  - [Javascript API for dynamodb](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GettingStarted.WriteItem.html)
+  - [NextJS API Routes with dynamodb](https://github.com/vercel/examples/tree/main/solutions/aws-dynamodb)
+- User triggers pdf processing by sending a POST request to lambda
+  - [Https endpoint to invoke lambda function](https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html)
+  - [Lambda getting started](https://docs.aws.amazon.com/lambda/latest/dg/getting-started.html)
+  - Lambda function timeout default 3 seconds, max 15 minutes [configuration](https://docs.aws.amazon.com/lambda/latest/dg/configuration-function-common.html#configuration-timeout-console)
+- Lambda writes to dynamodb with progress
+  - [Python API for dynamodb](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/dynamodb.html)
 
 ## Getting Started
 
