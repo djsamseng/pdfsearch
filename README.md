@@ -21,13 +21,15 @@ cd flaskapi && flask --app main.py --debug run
 ```
 
 ## TODO
-- [pdfjs in react](https://pspdfkit.com/blog/2021/how-to-build-a-reactjs-viewer-with-pdfjs/)
-- [nextjs head to include scripts](https://nextjs.org/docs/api-reference/next/head)
-- [run python from react](https://python.plainenglish.io/python-in-react-with-pyodide-a9c45d4d38ff)
 - [nextjs user authentication with supabase](https://dev.to/mryechkin/user-authentication-in-nextjs-with-supabase-4l12)
 - [Learning nextjs progress](https://nextjs.org/learn/basics/create-nextjs-app?utm_source=next-site&utm_medium=homepage-cta&utm_campaign=next-website)
 - [Learning effects in React](https://beta.reactjs.org/learn/synchronizing-with-effects#not-an-effect-initializing-the-application)
 - [Deploy flask application on vercel](https://dev.to/yash_makan/4-best-python-web-app-hosting-services-for-freewith-complete-process-57nb)
+- [Create test lambda function and run locally with python](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)
+  - [More in depth tutorial - Deploy lambda using containers](https://aws.amazon.com/blogs/aws/new-for-aws-lambda-container-image-support/)
+  - [Learning about AWS Lambda progress](https://docs.aws.amazon.com/lambda/latest/dg/foundation-progmodel.html)
+  - [Clean up Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/getting-started.html#gettingstarted-cleanup)
+  - [Example auto cleanup script](https://github.com/awsdocs/aws-lambda-developer-guide/blob/main/sample-apps/blank-python/5-cleanup.sh)
 
 ## Coding work
 ### Backend Python
@@ -56,10 +58,11 @@ cd flaskapi && flask --app main.py --debug run
     - [Middleware matching requests](https://nextjs.org/docs/advanced-features/middleware)
     - edge functions: 500_000 execution units, 1 million invocations
   - 100 GB Bandwidth
-- [AWS Free tier - go with Firebase instead!](https://aws.amazon.com/free/?all-free-tier.sort-by=item.additionalFields.SortRank&all-free-tier.sort-order=asc&awsf.Free%20Tier%20Types=*all&awsf.Free%20Tier%20Categories=*all)
+- [AWS Free tier](https://aws.amazon.com/free/?all-free-tier.sort-by=item.additionalFields.SortRank&all-free-tier.sort-order=asc&awsf.Free%20Tier%20Types=*all&awsf.Free%20Tier%20Categories=*all)
   - Amazon DynamoDB always free
     - 25GB storage
     - 200M requests per month
+    - DynamoDB streams for monitoring database changes
   - AWS Lambda always free
     - 1 millions requests/month = 20 requests/minute
     - 3.2 million seconds compute time/month = 53_333 minutes = 888 hours = 37 days
@@ -80,11 +83,12 @@ cd flaskapi && flask --app main.py --debug run
     - 30GB/day
     - 2,100,000 operations
   - Cloud functions [pricing](https://cloud.google.com/functions/pricing)
+    - [Python support](https://cloud.google.com/functions/docs/concepts/python-runtime)
     - first 2 million invocations free
     - 400,000 GB-seconds
     - 200,000 GHz-seconds compute time
     - 5GB Internet traffic outbound
-
+- AWS has better reviews, better performance, better pricing, better documentation and python support, better configuration UI
 
 ### Workflow
 - User uploads pdf to dynamodb. Return key
@@ -96,6 +100,12 @@ cd flaskapi && flask --app main.py --debug run
   - Lambda function timeout default 3 seconds, max 15 minutes [configuration](https://docs.aws.amazon.com/lambda/latest/dg/configuration-function-common.html#configuration-timeout-console)
 - Lambda writes to dynamodb with progress
   - [Python API for dynamodb](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/dynamodb.html)
+  - [Dynamodb streams for monitoring progress](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html)
+
+## Accounts
+- Gmail: devcider@gmail.com
+- AWS: devcider@gmail.com
+- Docker
 
 ## Getting Started
 
