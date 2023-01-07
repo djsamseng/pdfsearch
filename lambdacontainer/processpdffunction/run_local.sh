@@ -1,9 +1,10 @@
 #!/bin/bash
 
-if docker build -t processpdf . ; then
+if docker compose build; then
   echo "=== Build Success ==="
 else
   echo "=== Build Failure ==="
   exit 1
 fi
-docker run -p 9000:8080 processpdf
+
+docker compose up -d
