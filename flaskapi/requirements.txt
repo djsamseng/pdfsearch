@@ -1,5 +1,5 @@
 Flask # BSD-3 allows redistribution
-# miner.six # See README for install # MIT allows redistribution
+pdfminer-six @ git+https://github.com/pdfminer/pdfminer.six@master # MIT allows redistribution
 numpy # Even more open than MIT allows redistribution
 # tkinter # BSD-3 allow redistribution
 rtee # MIT allows redistribution
