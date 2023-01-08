@@ -3,7 +3,7 @@
 import cv2
 import numpy as np
 import fitz
-import pdfminer, pdfminer.layout
+import pdfminer, pdfminer.layout, pdfminer.high_level
 import pyglet # pip install pyglet==1.5.27
 import typing
 
@@ -334,8 +334,20 @@ def first_floor_construction(args):
   drawer.show("First floor")
   waitKey(0)
 
+def fitz_draw():
+  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[9])
+  pages = list(page_gen)
+  page = pages[0]
+  width = int(page.width)
+  height = int(page.height)
+  underlying = pdfextracter.get_underlying(elems=page)
+  drawer = FitzDraw(width=width, height=height)
+  draw_elems(elems=underlying, drawer=drawer)
+  drawer.show("First floor")
+  waitKey(0)
+
 def main():
-  first_floor_construction(args=None)
+  fitz_draw()
 
 if __name__ == "__main__":
   main()

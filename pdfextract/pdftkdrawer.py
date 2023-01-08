@@ -121,6 +121,7 @@ class ZoomCanvas(ttk.Frame):
 
   def move_from(self, event):
       ''' Remember previous coordinates for scrolling with the mouse '''
+      print("Click:", event.x, event.y, self.imscale)
       self.canvas.scan_mark(event.x, event.y)
 
   def move_to(self, event):
