@@ -99,6 +99,7 @@ def get_underlying_parent_links_impl(
     out.append(LTWrapper(elem, parent_idx=elem_parent_idx))
   elif isinstance(elem, pdfminer.layout.LTFigure):
     # Not Added
+    print("Unhandled figure", elem)
     pass
   else:
     print("Unhandled elem:", elem)

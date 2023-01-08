@@ -4,11 +4,20 @@ import argparse
 import pdfminer.high_level
 
 import pdfextracter
+import pdfindexer
 import pdftkdrawer
 
-def get_construction_plan_notes_circle():
+def get_construction_plan_notes_circle(indexer: pdfindexer.PdfIndexer):
   y0, x0 = 1559, 1831
   y1, x1 = 1588, 1859
+  room = 100
+  y0 -= room
+  x0 -= room
+  y1 += room
+  x1 += room
+
+  matches = indexer.find_contains(bbox=(x0, y0, x1, y1), y_is_down=True)
+  return matches
 
 def get_window_label_symbol():
   y0, x0 = 1755, 1393
@@ -41,22 +50,22 @@ def get_pdf():
   width = int(page.width)
   height = int(page.height)
   elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page)
-
-  print(len(elem_wrappers), width, height)
-  elem_wrappers = elem_wrappers[:5000]
-  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-  drawer.draw_elems(elems=elem_wrappers)
-  drawer.show("First Floor Construction Plan")
+  return elem_wrappers, width, height
 
 def get_all_symbols():
-  get_pdf()
+  wrappers, width, height = get_pdf()
+  indexer = pdfindexer.PdfIndexer(wrappers=wrappers, page_width=width, page_height=height)
+  notes_circle = get_construction_plan_notes_circle(indexer=indexer)
+
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=notes_circle, align_top_left=True)
+  drawer.show("First Floor Construction Plan")
 
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--windowsymbol", dest="windowsymbol", default=False, action="store_true")
   return parser.parse_args()
 
-# Locate symbols by running flaskapi/pdfdrawer.py
 def main():
   get_all_symbols()
 

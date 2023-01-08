@@ -36,6 +36,9 @@ class PdfIndexer:
     bbox: typing.Tuple[float, float, float, float],
     y_is_down: bool = False,
   ) -> typing.List[pdfextracter.LTWrapper]:
+    '''
+    bbox = x0, y0, x1, y1
+    '''
     if y_is_down:
       x0, y0, x1, y1 = bbox
       bbox = (x0, self.page_height - y1, x1, self.page_height - y0)

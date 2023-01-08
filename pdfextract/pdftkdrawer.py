@@ -63,25 +63,32 @@ class ZoomCanvas(ttk.Frame):
     self.canvas.bind('<MouseWheel>', self.wheel)  # with Windows and MacOS, but not Linux
     self.canvas.bind('<Button-5>',   self.wheel)  # only with Linux, wheel scroll down
     self.canvas.bind('<Button-4>',   self.wheel)  # only with Linux, wheel scroll up
-    self.width, self.height = 2400, 1600
+    self.width, self.height = page_width, page_height
     self.imscale = 1.0  # scale for the canvaas image
     self.delta = 1.3  # zoom magnitude
     # Put image into container rectangle and use it to set proper coordinates to the image
     self.container = self.canvas.create_rectangle(0, 0, self.width, self.height, width=0)
     self.label_ids: typing.List[tk._CanvasItemId] = []
     self.item_ids: typing.List[typing.List[tk._CanvasItemId]] = []
+    self.has_zoomed = False
 
   def rot_point(self, x: float, y: float):
     return x, self.height - y
 
-  def draw_path(self, wrapper: pdfextracter.LTWrapper, color: str):
+  def draw_path(
+    self,
+    wrapper: pdfextracter.LTWrapper,
+    color: str,
+    xmin: int,
+    ymin: int
+  ):
     color = "black"
     line_points = wrapper.get_path_lines()
     line_ids: typing.List[tk._CanvasItemId] = []
     for line in line_points:
       (x0, y0), (x1, y1) = line
-      x0, y0 = self.rot_point(x0, y0)
-      x1, y1 = self.rot_point(x1, y1)
+      x0, y0 = self.rot_point(x0-xmin, y0+ymin)
+      x1, y1 = self.rot_point(x1-xmin, y1+ymin)
       line_id = self.canvas.create_line(x0, y0, x1, y1, fill=color)
       line_ids.append(line_id)
     return line_ids
@@ -121,7 +128,13 @@ class ZoomCanvas(ttk.Frame):
 
   def move_from(self, event):
       ''' Remember previous coordinates for scrolling with the mouse '''
-      print("Click:", event.x, event.y, self.imscale)
+      x = self.canvas.canvasx(event.x)
+      y = self.canvas.canvasy(event.y)
+      if self.has_zoomed:
+        print("Has zoomed (y,x)", (y,x))
+      else:
+        print("(y, x)", (y, x))
+
       self.canvas.scan_mark(event.x, event.y)
 
   def move_to(self, event):
@@ -130,6 +143,7 @@ class ZoomCanvas(ttk.Frame):
 
   def wheel(self, event):
       ''' Zoom with mouse wheel '''
+      self.has_zoomed = True
       x = self.canvas.canvasx(event.x)
       y = self.canvas.canvasy(event.y)
       bbox = self.canvas.bbox(self.container)  # get image area
@@ -285,9 +299,19 @@ def pdfminer_class_name(elem: pdfminer.layout.LTComponent):
 class TkDrawer:
   def __init__(self, width:int, height:int) -> None:
     root = tk.Tk()
-    self.app = TkDrawerMainWindow(root=root, window_width=800, window_height=600, page_width=width, page_height=height)
-  def insert_container(self, elem: pdfminer.layout.LTContainer, parent_idx: typing.Union[int, None]):
-    ids = self.app.canvas.draw_rect(box=elem.bbox)
+    self.page_width = width
+    self.page_height = height
+    self.app = TkDrawerMainWindow(root=root, window_width=1200, window_height=800, page_width=width, page_height=height)
+  def insert_container(
+    self,
+    elem: pdfminer.layout.LTComponent,
+    parent_idx: typing.Union[int, None],
+    xmin: int,
+    ymin: int,
+  ):
+    x0, y0, x1, y1 = elem.bbox
+    box = (x0-xmin, y0-ymin, x1-xmin, y1-ymin)
+    ids = self.app.canvas.draw_rect(box=box)
     self.app.canvas.set_item_visibility(ids, visibility=False)
     text = ""
     if isinstance(elem, pdfminer.layout.LTText):
@@ -297,24 +321,36 @@ class TkDrawer:
     def on_leave():
       self.app.canvas.set_item_visibility(ids, visibility=False)
     self.app.controlPanel.add_button(
-      text="{0} {1} {2}".format(pdfminer_class_name(elem), elem.bbox, text),
+      text="{0} {1} {2}".format(pdfminer_class_name(elem), box, text),
       on_enter_cb=on_enter,
       on_leave_cb=on_leave
     )
-  def draw_path(self, wrapper: pdfextracter.LTWrapper, parent_idx: typing.Union[int, None]):
+  def draw_path(
+    self,
+    wrapper: pdfextracter.LTWrapper,
+    parent_idx: typing.Union[int, None],
+    xmin: int,
+    ymin: int,
+  ):
     elem = wrapper.elem
-    ids = self.app.canvas.draw_path(wrapper=wrapper, color=elem.stroking_color)
+    ids = self.app.canvas.draw_path(wrapper=wrapper, color=elem.stroking_color, xmin=xmin, ymin=ymin)
     def on_press():
       self.app.canvas.set_item_visibility(ids)
     self.app.controlPanel.add_button(
       text="{0} {1}".format(pdfminer_class_name(elem), elem.original_path),
       callback=on_press)
-  def insert_text(self, elem: pdfminer.layout.LTChar, parent_idx: typing.Union[int, None]):
+  def insert_text(
+    self,
+    elem: pdfminer.layout.LTChar,
+    parent_idx: typing.Union[int, None],
+    xmin: int,
+    ymin: int
+  ):
     x0, y0, x1, y1 = elem.bbox
     text = elem.get_text()
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
     # y1 because we flip the point on the y axis
-    ids = self.app.canvas.insert_text(pt=(x0, y1), text=text, font_size=int(elem.size))
+    ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(elem.size))
     def on_press():
       self.app.canvas.set_item_visibility(ids)
     self.app.controlPanel.add_button(
@@ -324,30 +360,43 @@ class TkDrawer:
     self.app.controlPanel.finish_draw()
     self.app.mainloop()
 
-  def draw_elems(self, elems: typing.Iterable[pdfextracter.LTWrapper]):
+  def draw_elems(self, elems: typing.Iterable[pdfextracter.LTWrapper], align_top_left: bool=False):
     # Want to accept the hierarchy
     # If we get a container, we want to present the container in the control panel with its inner text
     # however when we draw we draw the underlying LTChar
     # When we select the container in the control panel we want to highlight the bbox
     # When sending to the client, we send the positions of what we found and how to draw it
+    if align_top_left:
+      xmin, ymin = self.get_minx_miny(wrappers=elems)
+    else:
+      xmin, ymin = 0, 0
     for wrapper in elems:
       elem = wrapper.elem
       if isinstance(elem, pdfminer.layout.LTContainer):
         # Children always come immediately after container so indentation will be underneath parent
-        self.insert_container(elem=elem, parent_idx=wrapper.parent_idx)
+        self.insert_container(elem=elem, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
       elif isinstance(elem, pdfminer.layout.LTChar):
-        self.insert_text(elem=elem, parent_idx=wrapper.parent_idx)
+        self.insert_text(elem=elem, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
       elif isinstance(elem, pdfminer.layout.LTRect):
         if elem.linewidth > 0:
-          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx)
+          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
       elif isinstance(elem, pdfminer.layout.LTCurve):
         if elem.linewidth > 0:
-          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx)
+          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
       else:
         pass
         #print("Unhandled draw", elem)
         #assert False, "Unhandled draw" + str(elem)
 
+  def get_minx_miny(self, wrappers: typing.Iterable[pdfextracter.LTWrapper]):
+    xmin = self.page_width
+    ymax = 0
+    for wrapper in wrappers:
+      if isinstance(wrapper.elem, pdfminer.layout.LTCurve):
+        x0, y0, x1, y1 = wrapper.elem.bbox
+        xmin = min(xmin, min(x0, x1))
+        ymax = max(ymax, max(y0, y1))
+    return int(xmin), self.page_height - int(ymax)
 
 
 def get_awindows_key(window_schedule_elems: typing.Iterable[pdfextracter.LTWrapper], page_width: int, page_height: int):
