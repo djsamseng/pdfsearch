@@ -1,12 +1,19 @@
 
-
+import json
 import typing
 
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
+
+import debug_utils
 import path_utils
 
 ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
 BboxType = typing.Tuple[float, float, float, float]
+
+class LTJsonEncoder(json.JSONEncoder):
+  def default(self, o: typing.Any):
+    if isinstance(o, LTJson):
+      return o.as_dict()
 
 class LTJson:
   def __init__(
@@ -75,6 +82,64 @@ class LTJson:
       if "children_idxes" in serialized_json:
         self.children_idxes = serialized_json["children_idxes"]
 
+  def __eq__(self, other: object) -> bool:
+    if not debug_utils.is_debug:
+      print("===== __eq__ should not be called in production =====")
+      return False
+    if not isinstance(other, LTJson):
+      return False
+    for key in self.__dict__.keys():
+      if key == "bbox":
+        if not self.__eq_bbox(other):
+          return False
+      elif key == "original_path":
+        if not self.__eq_original_path(other):
+          return False
+      elif self.__dict__[key] != other.__dict__[key]:
+        print("Failed:", key, self.__dict__[key], other.__dict__[key])
+        return False
+    return True
+
+  def __eq_bbox(self, other: object) -> bool:
+    if not debug_utils.is_debug:
+      print("===== __eq_bbox should not be called in production =====")
+      return False
+    if not isinstance(other, LTJson):
+      return False
+    for itr in range(len(self.bbox)):
+      if self.bbox[itr] != other.bbox[itr]:
+        print("Bbox failed")
+        return False
+    return True
+
+  def __eq_original_path(self, other: object) -> bool:
+    if not debug_utils.is_debug:
+      print("===== __eq_original_path should not be called in production =====")
+      return False
+    if not isinstance(other, LTJson):
+      return False
+    if self.original_path is None and other.original_path is None:
+      return True
+    if self.original_path is None or other.original_path is None:
+      print("original path failed")
+      return False
+
+    self_list = self.__deep_tuple_to_list(self.original_path)
+    other_list = self.__deep_tuple_to_list(other.original_path)
+    return self_list == other_list
+
+  def __deep_tuple_to_list(self, iterable: typing.Iterable[typing.Any]) -> typing.List[typing.Any]:
+    out: typing.List[typing.Any] = []
+    for elem in iterable:
+      if isinstance(elem, tuple) or isinstance(elem, list):
+        out_elem = self.__deep_tuple_to_list(typing.cast(typing.Iterable[typing.Any], elem))
+        out.append(out_elem)
+      else:
+        out.append(elem)
+    return out
+
+  def __str__(self) -> str:
+    return json.dumps(self.as_dict())
 
   def get_path_lines(self):
     if self.__path_lines is not None:
@@ -164,6 +229,7 @@ def box_contains(outer: BboxType, inner: BboxType):
 
 def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: BboxType) -> typing.List[LTJson]:
   out: typing.List[LTJson] = []
+  json_encoder = LTJsonEncoder()
   old_idx_to_new_idx: typing.Dict[int, int] = dict()
   for old_idx, wrapper in enumerate(elems):
     new_parent_idx = None
@@ -173,7 +239,9 @@ def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: Bbox
     if wrapper.is_annotation:
       continue
     if box_contains(outer=bbox, inner=wrapper.bbox):
-      out.append(LTJson(elem=wrapper, parent_idx=new_parent_idx))
+      elem_copy = LTJson(serialized_json=json.loads(json_encoder.encode(wrapper)))
+      elem_copy.parent_idx = new_parent_idx
+      out.append(elem_copy)
       old_idx_to_new_idx[old_idx] = len(out) - 1
 
   return out

@@ -1,8 +1,11 @@
 
 import argparse
+import json
 
+import numpy as np
 import pdfminer.high_level
 
+import debug_utils
 import pdfextracter
 import pdfindexer
 import pdftkdrawer
@@ -94,9 +97,26 @@ def get_all_symbols():
     drawer.show("First Floor Construction Plan")
 
 
+def test_encode_decode():
+  debug_utils.is_debug = True
+  elem_wrappers, _, _ = get_pdf()
+  encoder = pdfextracter.LTJsonEncoder()
+  json_string = encoder.encode(elem_wrappers)
+
+  elem_dicts = json.loads(json_string)
+  np.testing.assert_allclose(len(elem_dicts), len(elem_wrappers))
+  elems = [pdfextracter.LTJson(serialized_json=elem) for elem in elem_dicts]
+  for idx in range(len(elems)):
+    if elems[idx] != elem_wrappers[idx]:
+      print("Not equal:", elems[idx], elem_wrappers[idx])
+      return
+
+  np.testing.assert_array_equal(elems, elem_wrappers) # type: ignore
+  assert elems == elem_wrappers
 
 def parse_args():
   parser = argparse.ArgumentParser()
+  parser.add_argument("--test", dest="test", default=False, action="store_true")
   # Save the results to a file
   parser.add_argument("--save", dest="save", default=False, action="store_true")
   # Take the saved file and upload
@@ -104,7 +124,11 @@ def parse_args():
   return parser.parse_args()
 
 def main():
-  get_all_symbols()
+  args = parse_args()
+  if args.test:
+    test_encode_decode()
+  else:
+    get_all_symbols()
 
 if __name__ == "__main__":
   main()
