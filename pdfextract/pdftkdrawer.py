@@ -77,7 +77,7 @@ class ZoomCanvas(ttk.Frame):
 
   def draw_path(
     self,
-    wrapper: pdfextracter.LTWrapper,
+    wrapper: pdfextracter.LTJson,
     color: str,
     xmin: int,
     ymin: int
@@ -290,11 +290,14 @@ class TkDrawerMainWindow(ttk.Frame):
     if event.keycode in [9]: # Esc
       self.master.destroy()
 
-def pdfminer_class_name(elem: pdfminer.layout.LTComponent):
-  text = str(type(elem))
-  class_path = text.split("'")[1]
-  class_name = class_path.split(".")[-1]
-  return class_name
+def pdfminer_class_name(elem: pdfextracter.LTJson):
+  if elem.is_container:
+    return "Container"
+  if elem.original_path is not None:
+    return "Curve"
+  if elem.text is not None:
+    return "Text"
+  return "Unknown" + str(elem.__dict__)
 
 class TkDrawer:
   def __init__(self, width:int, height:int) -> None:
@@ -304,7 +307,7 @@ class TkDrawer:
     self.app = TkDrawerMainWindow(root=root, window_width=1200, window_height=800, page_width=width, page_height=height)
   def insert_container(
     self,
-    elem: pdfminer.layout.LTComponent,
+    elem: pdfextracter.LTJson,
     parent_idx: typing.Union[int, None],
     xmin: int,
     ymin: int,
@@ -327,30 +330,30 @@ class TkDrawer:
     )
   def draw_path(
     self,
-    wrapper: pdfextracter.LTWrapper,
+    wrapper: pdfextracter.LTJson,
     parent_idx: typing.Union[int, None],
     xmin: int,
     ymin: int,
   ):
-    elem = wrapper.elem
-    ids = self.app.canvas.draw_path(wrapper=wrapper, color=elem.stroking_color, xmin=xmin, ymin=ymin)
+    ids = self.app.canvas.draw_path(wrapper=wrapper, color="black", xmin=xmin, ymin=ymin)
     def on_press():
       self.app.canvas.set_item_visibility(ids)
     self.app.controlPanel.add_button(
-      text="{0} {1}".format(pdfminer_class_name(elem), elem.original_path),
+      text="{0} {1}".format(pdfminer_class_name(wrapper), wrapper.original_path),
       callback=on_press)
   def insert_text(
     self,
-    elem: pdfminer.layout.LTChar,
+    elem: pdfextracter.LTJson,
     parent_idx: typing.Union[int, None],
     xmin: int,
     ymin: int
   ):
     x0, y0, x1, y1 = elem.bbox
-    text = elem.get_text()
+    text = elem.text or ""
+    font_size = elem.size or 11
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
     # y1 because we flip the point on the y axis
-    ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(elem.size))
+    ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size))
     def on_press():
       self.app.canvas.set_item_visibility(ids)
     self.app.controlPanel.add_button(
@@ -360,7 +363,7 @@ class TkDrawer:
     self.app.controlPanel.finish_draw()
     self.app.mainloop()
 
-  def draw_elems(self, elems: typing.Iterable[pdfextracter.LTWrapper], align_top_left: bool=False):
+  def draw_elems(self, elems: typing.Iterable[pdfextracter.LTJson], align_top_left: bool=False):
     # Want to accept the hierarchy
     # If we get a container, we want to present the container in the control panel with its inner text
     # however when we draw we draw the underlying LTChar
@@ -371,35 +374,31 @@ class TkDrawer:
     else:
       xmin, ymin = 0, 0
     for wrapper in elems:
-      elem = wrapper.elem
-      if isinstance(elem, pdfminer.layout.LTContainer):
+      if wrapper.is_container:
         # Children always come immediately after container so indentation will be underneath parent
-        self.insert_container(elem=elem, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
-      elif isinstance(elem, pdfminer.layout.LTChar):
-        self.insert_text(elem=elem, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
-      elif isinstance(elem, pdfminer.layout.LTRect):
-        if elem.linewidth > 0:
-          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
-      elif isinstance(elem, pdfminer.layout.LTCurve):
-        if elem.linewidth > 0:
+        self.insert_container(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
+      elif wrapper.text is not None:
+        self.insert_text(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
+      elif wrapper.original_path is not None and wrapper.linewidth is not None:
+        if wrapper.linewidth > 0:
           self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
       else:
-        pass
-        #print("Unhandled draw", elem)
+        #pass
+        print("Unhandled draw", wrapper)
         #assert False, "Unhandled draw" + str(elem)
 
-  def get_minx_miny(self, wrappers: typing.Iterable[pdfextracter.LTWrapper]):
+  def get_minx_miny(self, wrappers: typing.Iterable[pdfextracter.LTJson]):
     xmin = self.page_width
     ymax = 0
     for wrapper in wrappers:
-      if isinstance(wrapper.elem, pdfminer.layout.LTCurve):
-        x0, y0, x1, y1 = wrapper.elem.bbox
+      if wrapper.original_path is not None:
+        x0, y0, x1, y1 = wrapper.bbox
         xmin = min(xmin, min(x0, x1))
         ymax = max(ymax, max(y0, y1))
     return int(xmin), self.page_height - int(ymax)
 
 
-def get_awindows_key(window_schedule_elems: typing.Iterable[pdfextracter.LTWrapper], page_width: int, page_height: int):
+def get_awindows_key(window_schedule_elems: typing.Iterable[pdfextracter.LTJson], page_width: int, page_height: int):
   y0, x0 = 1027, 971
   y1, x1 = 1043, 994
   bbox = (x0, page_height-y1, x1, page_height-y0)
@@ -417,7 +416,7 @@ def test_drawer():
 
   drawer = TkDrawer(width=width, height=height)
   awindows_key = get_awindows_key(window_schedule_elems=window_schedule_wrappers, page_width=width, page_height=height)
-  debug_utils.print_elem_tree(elems=[a.elem for a in awindows_key])
+  # debug_utils.print_elem_tree(elems=awindows_key)
   underlying = pdfextracter.get_underlying_parent_links(window_schedule_elems)
   drawer.draw_elems(elems=underlying)
   drawer.show("A Windows Key")
