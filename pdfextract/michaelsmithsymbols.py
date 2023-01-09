@@ -78,7 +78,7 @@ def get_pdf():
   elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page)
   return elem_wrappers, width, height
 
-def get_all_symbols():
+def get_all_symbols(save: bool):
   wrappers, width, height = get_pdf()
   indexer = pdfindexer.PdfIndexer(wrappers=wrappers, page_width=width, page_height=height)
   # symbol = drawing, label = circle
@@ -90,11 +90,25 @@ def get_all_symbols():
   sink_symbol = get_sink_symbol(indexer=indexer)
   toilet_symbol = get_toilet_symbol(indexer=indexer)
 
-  all_symbols = [notes_circle, window_label, window_symbol, door_label, door_symbol, sink_symbol, toilet_symbol]
-  for symbol in all_symbols:
-    drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-    drawer.draw_elems(elems=symbol, align_top_left=True)
-    drawer.show("First Floor Construction Plan")
+  all_symbols = {
+    "notes_circle": notes_circle,
+    "window_label": window_label,
+    "window_symbol": window_symbol,
+    "door_label": door_label,
+    "door_symbol": door_symbol,
+    "sink_symbol": sink_symbol,
+    "toilet_symbol": toilet_symbol,
+  }
+  if save:
+    encoder = pdfextracter.LTJsonEncoder()
+    json_string = encoder.encode(all_symbols)
+    with open("../lambdacontainer/processpdffunction/symbols_michael_smith.json", "w") as f:
+      f.write(json_string)
+  else:
+    for key, symbol in all_symbols.items():
+      drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+      drawer.draw_elems(elems=symbol, align_top_left=True)
+      drawer.show(key)
 
 
 def test_encode_decode():
@@ -113,6 +127,11 @@ def test_encode_decode():
 
   np.testing.assert_array_equal(elems, elem_wrappers) # type: ignore
   assert elems == elem_wrappers
+  if True:
+    for idx1 in range(len(elems)):
+      for idx2 in range(len(elems)):
+        if idx1 != idx2:
+          assert elems[idx1] != elems[idx2], "idx1={0} idx2={1} elem1={2} elem2={3}".format(idx1, idx2, elems[idx1], elems[idx2])
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -128,7 +147,7 @@ def main():
   if args.test:
     test_encode_decode()
   else:
-    get_all_symbols()
+    get_all_symbols(save=args.save)
 
 if __name__ == "__main__":
   main()

@@ -96,7 +96,6 @@ class LTJson:
         if not self.__eq_original_path(other):
           return False
       elif self.__dict__[key] != other.__dict__[key]:
-        print("Failed:", key, self.__dict__[key], other.__dict__[key])
         return False
     return True
 
@@ -108,7 +107,6 @@ class LTJson:
       return False
     for itr in range(len(self.bbox)):
       if self.bbox[itr] != other.bbox[itr]:
-        print("Bbox failed")
         return False
     return True
 
@@ -121,7 +119,6 @@ class LTJson:
     if self.original_path is None and other.original_path is None:
       return True
     if self.original_path is None or other.original_path is None:
-      print("original path failed")
       return False
 
     self_list = self.__deep_tuple_to_list(self.original_path)
