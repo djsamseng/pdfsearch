@@ -12,7 +12,11 @@ enum CanvasMouseEvents {
   OUT = "OUT",
 }
 
-export function PdfMaker(props: { pdfDocumentUrl: string, pdfFileObj: File, getContentFromDrawPaths: (drawPaths: Array<ClientDrawPath>, page: number) => void }) {
+export function PdfMaker(props: {
+  pdfDocumentUrl: string,
+  pdfFileObj: File,
+  getContentFromDrawPaths: (drawPaths: Array<ClientDrawPath>, page: number) => void
+}) {
   const canvasRef = useRef(null);
   const [ page, setPage ] = useState(1);
   const [ scale, setScale ] = useState(0.4);

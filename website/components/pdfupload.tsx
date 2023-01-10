@@ -9,9 +9,26 @@ import PdfSelected from "./pdfselected";
 import { ClientDrawPath } from "../utils/sharedtypes";
 import { SelectInPdfResponse } from "../utils/requestresponsetypes";
 
+async function sha256(message: string) {
+  // encode as UTF-8
+  const msgBuffer = new TextEncoder().encode(message);
+
+  // hash the message
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+
+  // convert ArrayBuffer to Array
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+  // convert bytes to hex string
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
+
 export default function PdfUpload() {
   const [ pdfDocumentUrl, setPdfDocumentUrl ] = useState<string | undefined>(undefined);
   const [ pdfFileObj, setPdfFileObj ] = useState<File | null>(null);
+  const [ pdfHash, setPdfHash ] = useState<string | null>(null);
   const [ pdfSelectedObjects, setPdfSelectedObjects ] = useState<PdfElements>([]);
   function onPdfFileChange(evt: ChangeEvent<HTMLInputElement>) {
     const fileObj = evt.target.files && evt.target.files[0];
@@ -19,9 +36,21 @@ export default function PdfUpload() {
     if (!fileObj) {
       return;
     }
-    const url = URL.createObjectURL(fileObj);
-    setPdfFileObj(fileObj);
-    setPdfDocumentUrl(url);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const bytes = evt.target && evt.target.result;
+      if (bytes instanceof ArrayBuffer) {
+        const hashBuffer = await window.crypto.subtle.digest("SHA-256", bytes);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const digest = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        setPdfHash(digest);
+        const url = URL.createObjectURL(fileObj);
+        setPdfFileObj(fileObj);
+        setPdfDocumentUrl(url);
+      }
+    }
+    reader.readAsArrayBuffer(fileObj);
+
   }
   async function getContentFromDrawPaths(drawPaths: Array<ClientDrawPath>, page: number) {
     const formData = new FormData();
@@ -51,11 +80,14 @@ export default function PdfUpload() {
 
   }
 
+  // TODO: App upload button to Dynamdb using hash and pdfFile in FormData
   return (
     <div className="w-full text-center">
       <input type="file" accept=".pdf" onChange={onPdfFileChange} />
       { pdfDocumentUrl && pdfFileObj && (
-        <PdfMaker pdfDocumentUrl={pdfDocumentUrl} pdfFileObj={pdfFileObj} getContentFromDrawPaths={getContentFromDrawPaths} />
+        <PdfMaker pdfDocumentUrl={pdfDocumentUrl}
+          pdfFileObj={pdfFileObj}
+          getContentFromDrawPaths={getContentFromDrawPaths} />
       )}
       { pdfSelectedObjects.length > 0 && (
         <PdfSelected elems={pdfSelectedObjects} />

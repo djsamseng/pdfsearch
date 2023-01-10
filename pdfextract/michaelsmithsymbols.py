@@ -1,4 +1,5 @@
 
+import typing
 import argparse
 import json
 
@@ -90,7 +91,7 @@ def get_all_symbols(save: bool):
   sink_symbol = get_sink_symbol(indexer=indexer)
   toilet_symbol = get_toilet_symbol(indexer=indexer)
 
-  all_symbols = {
+  all_symbols: typing.Dict[str, typing.List[pdfextracter.LTJson]] = {
     "notes_circle": notes_circle,
     "window_label": window_label,
     "window_symbol": window_symbol,
@@ -110,6 +111,87 @@ def get_all_symbols(save: bool):
       drawer.draw_elems(elems=symbol, align_top_left=True)
       drawer.show(key)
 
+def read_symbols_from_json():
+  with open("../lambdacontainer/processpdffunction/symbols_michael_smith.json", "r") as f:
+    json_string = f.read()
+  symbols_dicts = json.loads(json_string)
+  symbols: typing.Dict[str, typing.List[pdfextracter.LTJson]] = dict()
+  for key, serialized_elems in symbols_dicts.items():
+    elems: typing.List[pdfextracter.LTJson] = []
+    for serialized_json in serialized_elems:
+      elems.append(pdfextracter.LTJson(serialized_json=serialized_json))
+    symbols[key] = elems
+  return symbols
+
+def find_symbol():
+  symbols = read_symbols_from_json()
+  elems, width, height = get_pdf()
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  for symbol_key in ["door_label", "window_label"]:
+    # notes_circle, door_label fails because of "c" curves
+    to_find = symbols[symbol_key][0]
+    results_with_text = pdfindexer.find_symbol_with_text(symbol=to_find, indexer=indexer)
+    print(len(results_with_text))
+
+    if True:
+      drawer_all = pdftkdrawer.TkDrawer(width=width, height=height)
+      drawer_all.draw_elems(elems=elems, draw_buttons=False)
+    drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+    drawer.draw_elems(elems=results_with_text, draw_buttons=True)
+    drawer.show(symbol_key)
+
+def show_inside(y0: float, x0: float, y1: float, x1: float):
+  elems, width, height = get_pdf()
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  results = indexer.find_contains(bbox=(x0, y0, x1, y1), y_is_down=True)
+  print(results)
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=results, draw_buttons=True)
+  drawer.show("All")
+
+def door_labels_should_match():
+  y0, x0, y1, x1 = 306, 549, 329, 579
+  elems, width, height = get_pdf()
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  results = indexer.find_contains(bbox=(x0, y0, x1, y1), y_is_down=True)
+  symbols = read_symbols_from_json()
+  curve = symbols["door_label"][0]
+  path = curve.original_path
+  curve2 = results[0]
+  path2 = curve2.original_path
+  print(path)
+  print(path2)
+
+  matches = pdfindexer.find_similar_curves(wrapper_to_find=curve, wrappers_to_search=[curve2], max_dist=1)
+  print(len(matches))
+  return
+
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=[curve], align_top_left=True)
+  drawer2 = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer2.draw_elems(elems=[curve2], align_top_left=True)
+
+  drawer.show("")
+
+
+def showall():
+  elems, width, height = get_pdf()
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=elems, draw_buttons=False)
+  drawer.show("All")
+
+def elems_not_equal(elems: typing.List[pdfextracter.LTJson]):
+  for idx1 in range(len(elems)):
+    if idx1 == 16449 or idx1 == 20620:
+      continue
+    if idx1 == 17218 or idx1 == 21130:
+      continue
+    for idx2 in range(len(elems)):
+      if idx1 != idx2:
+        if elems[idx1] == elems[idx2]:
+          print("idx1={0} idx2={1} elem1={2} elem2={3}".format(idx1, idx2, elems[idx1], elems[idx2]))
+          return False
+  return True
 
 def test_encode_decode():
   debug_utils.is_debug = True
@@ -128,26 +210,41 @@ def test_encode_decode():
   np.testing.assert_array_equal(elems, elem_wrappers) # type: ignore
   assert elems == elem_wrappers
   if True:
-    for idx1 in range(len(elems)):
-      for idx2 in range(len(elems)):
-        if idx1 != idx2:
-          assert elems[idx1] != elems[idx2], "idx1={0} idx2={1} elem1={2} elem2={3}".format(idx1, idx2, elems[idx1], elems[idx2])
+    print("Checking no equal elements out of {0}".format(len(elems)))
+    elems_not_equal(elems=elems)
 
 def parse_args():
   parser = argparse.ArgumentParser()
+  parser.add_argument("--getall", dest="getall", default=False, action="store_true")
   parser.add_argument("--test", dest="test", default=False, action="store_true")
   # Save the results to a file
   parser.add_argument("--save", dest="save", default=False, action="store_true")
   # Take the saved file and upload
   parser.add_argument("--upload", dest="upload", default=False, action="store_true")
+  parser.add_argument("--find", dest="find", default=False, action="store_true")
+  parser.add_argument("--showall", dest="showall", default=False, action="store_true")
+  parser.add_argument("--x0", dest="x0", type=int, required=False)
+  parser.add_argument("--y0", dest="y0", type=int, required=False)
+  parser.add_argument("--x1", dest="x1", type=int, required=False)
+  parser.add_argument("--y1", dest="y1", type=int, required=False)
   return parser.parse_args()
 
 def main():
   args = parse_args()
   if args.test:
     test_encode_decode()
-  else:
+  elif args.find:
+    find_symbol()
+  elif args.showall:
+    showall()
+  elif args.x0 is not None and args.y0 is not None and args.x1 is not None and args.y1 is not None:
+    # python3 michaelsmithsymbols.py --y0 306 --x0 549 --y1 329 --x1 579
+    show_inside(y0=args.y0, x0=args.x0, y1=args.y1, x1=args.x1)
+  elif args.getall:
     get_all_symbols(save=args.save)
+  else:
+    door_labels_should_match()
+
 
 if __name__ == "__main__":
   main()

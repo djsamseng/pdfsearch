@@ -59,12 +59,9 @@ class LTJson:
         self.is_annotation = True
 
     if serialized_json is not None:
-      if "bbox" in serialized_json:
-        self.bbox = serialized_json["bbox"]
-      if "width" in serialized_json:
-        self.width = serialized_json["width"]
-      if "height" in serialized_json:
-        self.height = serialized_json["height"]
+      self.bbox = serialized_json["bbox"]
+      self.width = serialized_json["width"]
+      self.height = serialized_json["height"]
       if "text" in serialized_json:
         self.text = serialized_json["text"]
       if "size" in serialized_json:
@@ -73,14 +70,10 @@ class LTJson:
         self.original_path = serialized_json["original_path"]
       if "linewidth" in serialized_json:
         self.linewidth = serialized_json["linewidth"]
-      if "is_container" in serialized_json:
-        self.is_container = serialized_json["is_container"]
-      if "is_annotation" in serialized_json:
-        self.is_annotation = serialized_json["is_annotation"]
-      if "parent_idx" in serialized_json:
-        self.parent_idx = serialized_json["parent_idx"]
-      if "children_idxes" in serialized_json:
-        self.children_idxes = serialized_json["children_idxes"]
+      self.is_container = serialized_json["is_container"]
+      self.is_annotation = serialized_json["is_annotation"]
+      self.parent_idx = serialized_json["parent_idx"]
+      self.children_idxes = serialized_json["children_idxes"]
 
   def __eq__(self, other: object) -> bool:
     if not debug_utils.is_debug:

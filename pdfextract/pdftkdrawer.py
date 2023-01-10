@@ -311,6 +311,7 @@ class TkDrawer:
     parent_idx: typing.Union[int, None],
     xmin: int,
     ymin: int,
+    draw_buttons: bool,
   ):
     x0, y0, x1, y1 = elem.bbox
     box = (x0-xmin, y0-ymin, x1-xmin, y1-ymin)
@@ -319,34 +320,38 @@ class TkDrawer:
     text = ""
     if isinstance(elem, pdfminer.layout.LTText):
       text += " " + elem.get_text()
-    def on_enter():
-      self.app.canvas.set_item_visibility(ids, visibility=True)
-    def on_leave():
-      self.app.canvas.set_item_visibility(ids, visibility=False)
-    self.app.controlPanel.add_button(
-      text="{0} {1} {2}".format(pdfminer_class_name(elem), box, text),
-      on_enter_cb=on_enter,
-      on_leave_cb=on_leave
-    )
+    if draw_buttons:
+      def on_enter():
+        self.app.canvas.set_item_visibility(ids, visibility=True)
+      def on_leave():
+        self.app.canvas.set_item_visibility(ids, visibility=False)
+      self.app.controlPanel.add_button(
+        text="{0} {1} {2}".format(pdfminer_class_name(elem), box, text),
+        on_enter_cb=on_enter,
+        on_leave_cb=on_leave
+      )
   def draw_path(
     self,
     wrapper: pdfextracter.LTJson,
     parent_idx: typing.Union[int, None],
     xmin: int,
     ymin: int,
+    draw_buttons: bool,
   ):
     ids = self.app.canvas.draw_path(wrapper=wrapper, color="black", xmin=xmin, ymin=ymin)
-    def on_press():
-      self.app.canvas.set_item_visibility(ids)
-    self.app.controlPanel.add_button(
-      text="{0} {1}".format(pdfminer_class_name(wrapper), wrapper.original_path),
-      callback=on_press)
+    if draw_buttons:
+      def on_press():
+        self.app.canvas.set_item_visibility(ids)
+      self.app.controlPanel.add_button(
+        text="{0} {1}".format(pdfminer_class_name(wrapper), wrapper.original_path),
+        callback=on_press)
   def insert_text(
     self,
     elem: pdfextracter.LTJson,
     parent_idx: typing.Union[int, None],
     xmin: int,
-    ymin: int
+    ymin: int,
+    draw_buttons: bool
   ):
     x0, y0, x1, y1 = elem.bbox
     text = elem.text or ""
@@ -354,16 +359,17 @@ class TkDrawer:
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
     # y1 because we flip the point on the y axis
     ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size))
-    def on_press():
-      self.app.canvas.set_item_visibility(ids)
-    self.app.controlPanel.add_button(
-      text="{0} ({1},{2}) {3}".format(pdfminer_class_name(elem), x0, y0, text),
-      callback=on_press)
+    if draw_buttons:
+      def on_press():
+        self.app.canvas.set_item_visibility(ids)
+      self.app.controlPanel.add_button(
+        text="{0} ({1},{2}) {3}".format(pdfminer_class_name(elem), x0, y0, text),
+        callback=on_press)
   def show(self, name: str):
     self.app.controlPanel.finish_draw()
     self.app.mainloop()
 
-  def draw_elems(self, elems: typing.Iterable[pdfextracter.LTJson], align_top_left: bool=False):
+  def draw_elems(self, elems: typing.Iterable[pdfextracter.LTJson], align_top_left: bool=False, draw_buttons: bool=True):
     # Want to accept the hierarchy
     # If we get a container, we want to present the container in the control panel with its inner text
     # however when we draw we draw the underlying LTChar
@@ -376,12 +382,12 @@ class TkDrawer:
     for wrapper in elems:
       if wrapper.is_container:
         # Children always come immediately after container so indentation will be underneath parent
-        self.insert_container(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
+        self.insert_container(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
       elif wrapper.text is not None:
-        self.insert_text(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
+        self.insert_text(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
       elif wrapper.original_path is not None and wrapper.linewidth is not None:
         if wrapper.linewidth > 0:
-          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin)
+          self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
       else:
         #pass
         print("Unhandled draw", wrapper)
