@@ -40,6 +40,7 @@ export default function PdfUpload() {
     reader.onload = async (evt) => {
       const bytes = evt.target && evt.target.result;
       if (bytes instanceof ArrayBuffer) {
+        // TODO: window.crypto may not be in old browsers
         const hashBuffer = await window.crypto.subtle.digest("SHA-256", bytes);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         const digest = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");

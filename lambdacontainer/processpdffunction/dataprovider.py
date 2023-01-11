@@ -15,6 +15,106 @@ else:
   db_client: typing.Any = boto3.client("dynamodb") # type: ignore
 
 
+def create_pdf_summary_table():
+  resp = db_client.create_table(
+    AttributeDefinitions=[
+      {
+        "AttributeName": "pdf_summary", # json data - can use expressions to query json strings
+        # https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.Attributes.html
+        "AttributeType": "S", # S=String N=Number B=Binary
+      },
+    ],
+    TableName="pdf_summary", # Free tier users
+    KeySchema=[
+      {
+        "AttributeName": "pdf_id",
+        "KeyType": "HASH"
+      },
+    ],
+    LocalSecondaryIndexes=[],
+    GlobalSecondaryIndexes=[],
+    BillingMode="PROVISIONED", # Required for free tier
+    ProvisionedThroughput={
+      "ReadCapactiyUnits": 10, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
+      "WriteCapacityUnits": 10, # 25 free tier total for all tables
+    },
+    StreamSpecification={
+      "StreamEnabled": False
+    },
+  )
+  print("pdf_summary table:", resp)
+
+def create_pdf_element_locations_table():
+  resp = db_client.create_table(
+    AttributeDefinitions=[
+      {
+        "AttributeName": "pdf_element_locations", # json data encoded as binary
+        "AttributeType": "B", # String Number Binary
+      },
+    ],
+    TableName="pdf_element_locations", # Paid tier users
+    KeySchema=[
+      {
+        "AttributeName": "pdf_id",
+        "KeyType": "HASH"
+      },
+    ],
+    LocalSecondaryIndexes=[],
+    GlobalSecondaryIndexes=[],
+    BillingMode="PROVISIONED", # Required for free tier
+    ProvisionedThroughput={
+      "ReadCapactiyUnits": 10, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
+      "WriteCapacityUnits": 10, # 25 free tier total for all tables
+    },
+    StreamSpecification={
+      "StreamEnabled": False
+    },
+  )
+  print("pdf_element_locations table:", resp)
+
+def create_streaming_progress_table():
+  resp = db_client.create_table(
+    AttributeDefinitions=[
+      {
+        "AttributeName": "total_steps", # json data encoded as binary
+        "AttributeType": "N", # String Number Binary
+      },
+      {
+        "AttributeName": "current_step", # json data encoded as binary
+        "AttributeType": "N", # String Number Binary
+      },
+      {
+        "AttributeName": "message", # json data encoded as binary
+        "AttributeType": "S", # String Number Binary
+      },
+    ],
+    TableName="streaming_progress", # Paid tier users
+    KeySchema=[
+      {
+        "AttributeName": "pdf_id",
+        "KeyType": "HASH"
+      },
+    ],
+    LocalSecondaryIndexes=[],
+    GlobalSecondaryIndexes=[],
+    BillingMode="PROVISIONED", # Required for free tier
+    ProvisionedThroughput={
+      "ReadCapactiyUnits": 2, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
+      "WriteCapacityUnits": 2, # 25 free tier total for all tables
+    },
+    StreamSpecification={
+      "StreamEnabled": True,
+      "StreamViewType": "NEW_IMAGE",
+    },
+  )
+  print("streaming_progress table:", resp)
+
+def create_tables():
+  # 1. Get the overall information
+  # 2. Get the drill in information
+  create_pdf_summary_table()
+  create_pdf_element_locations_table()
+
 def get_pdf_for_key(pdfkey: str) -> typing.Union[None, bytes]:
   if s3_client is None:
     if os.path.exists(pdfkey):

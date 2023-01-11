@@ -2,6 +2,7 @@
 import typing
 import argparse
 import json
+import gzip
 
 import numpy as np
 import pdfminer.high_level
@@ -127,18 +128,42 @@ def find_symbol():
   symbols = read_symbols_from_json()
   elems, width, height = get_pdf()
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  response_obj: typing.Dict[str, typing.Dict[str, typing.List[pdfextracter.LTJsonResponse]]] = {}
+  simple_response_obj: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
+  page_response_obj: typing.Dict[str, typing.List[pdfextracter.LTJsonResponse]] = {}
+  simple_page_response_obj: typing.Dict[str, typing.Any] = {}
   for symbol_key in ["door_label", "window_label"]:
     # notes_circle, door_label fails because of "c" curves
     to_find = symbols[symbol_key][0]
-    results_with_text = pdfindexer.find_symbol_with_text(symbol=to_find, indexer=indexer)
-    print(len(results_with_text))
-
-    if True:
+    results, result_inner_contents = pdfindexer.find_symbol_with_text(symbol=to_find, indexer=indexer)
+    result_response = [pdfextracter.LTJsonResponse(elem=elem) for elem in results]
+    page_response_obj[symbol_key] = result_response
+    labels = [elem.label for elem in result_response]
+    simple_page_response_obj[symbol_key] = len(labels)
+    print(symbol_key, len(results))
+    if False:
       drawer_all = pdftkdrawer.TkDrawer(width=width, height=height)
       drawer_all.draw_elems(elems=elems, draw_buttons=False)
     drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-    drawer.draw_elems(elems=results_with_text, draw_buttons=True)
+    to_draw = [elem for elem in results]
+    to_draw.extend(result_inner_contents)
+    drawer.draw_elems(elems=to_draw, draw_buttons=True)
     drawer.show(symbol_key)
+
+  response_obj["page9"] = page_response_obj
+  simple_response_obj["page9"] = simple_page_response_obj
+  encoder = pdfextracter.LTJsonEncoder()
+  json_string = encoder.encode(response_obj)
+  compressed_string = gzip.compress(bytes(json_string, "utf-8"))
+  simple_json_string = encoder.encode(simple_response_obj)
+  simple_compressed_string = gzip.compress(bytes(simple_json_string, "utf-8"))
+  # 1kb per symbol per page, 10k pdfs per GB
+  # $0.13 per RCU per hour
+  print(json_string)
+  print(simple_json_string)
+  print(len(json_string), len(json_string.encode("utf-8"))/1000, "kb", len(compressed_string)/1000, "kb")
+  print(len(simple_json_string), len(simple_json_string.encode("utf-8"))/1000, "kb", len(simple_compressed_string)/1000, "kb")
+
 
 def show_inside(y0: float, x0: float, y1: float, x1: float):
   elems, width, height = get_pdf()

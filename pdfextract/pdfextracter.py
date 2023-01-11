@@ -14,6 +14,8 @@ class LTJsonEncoder(json.JSONEncoder):
   def default(self, o: typing.Any):
     if isinstance(o, LTJson):
       return o.as_dict()
+    if isinstance(o, LTJsonResponse):
+      return o.as_dict()
 
 class LTJson:
   def __init__(
@@ -24,10 +26,11 @@ class LTJson:
     serialized_json: typing.Union[typing.Dict[str, typing.Any], None] = None,
   ) -> None:
     # Public serialized
-    self.bbox = (0, 0, 0, 0)
-    self.width = 0
-    self.height = 0
-    self.text = None
+    self.bbox: typing.Tuple[float, float, float, float] = (0, 0, 0, 0)
+    self.width: float = 0
+    self.height: float = 0
+    self.label: typing.Union[str, None] = None # text of elements inside
+    self.text: typing.Union[str, None] = None # get_text()
     self.size = None
     self.original_path = None
     self.linewidth = None
@@ -62,6 +65,8 @@ class LTJson:
       self.bbox = serialized_json["bbox"]
       self.width = serialized_json["width"]
       self.height = serialized_json["height"]
+      if "label" in serialized_json:
+        self.label = serialized_json["label"]
       if "text" in serialized_json:
         self.text = serialized_json["text"]
       if "size" in serialized_json:
@@ -160,6 +165,25 @@ class LTJson:
     for (x0, y0), (x1, y1) in path_lines:
       self.__zeroed_path_lines.append(((x0-xmin, y0-ymin), (x1-xmin, y1-ymin)))
     return self.__zeroed_path_lines
+
+  def as_dict(self):
+    out: typing.Dict[str, typing.Any] = dict()
+    for key in self.__dict__.keys():
+      if not key.startswith("_{0}__".format(self.__class__.__name__)):
+        out[key] = self.__dict__[key]
+    return out
+
+def to_precision(val: float):
+  return round(val, 3)
+
+class LTJsonResponse:
+  def __init__(
+    self,
+    elem: LTJson
+  ):
+    x0, y0, x1, y1 = elem.bbox
+    self.bbox = (to_precision(x0), to_precision(y0), to_precision(x1), to_precision(y1))
+    self.label = elem.label
 
   def as_dict(self):
     out: typing.Dict[str, typing.Any] = dict()

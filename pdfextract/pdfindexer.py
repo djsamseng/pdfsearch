@@ -128,13 +128,13 @@ def find_similar_curves(
 
 def find_symbol_with_text(symbol: pdfextracter.LTJson, indexer: PdfIndexer):
   results = indexer.find_similar_shapes(wrapper_to_find=symbol, query_radius=1)
-  results_with_text: typing.List[pdfextracter.LTJson] = []
+  result_inner_content: typing.List[pdfextracter.LTJson] = []
   for result in results:
-    results_with_text.append(result)
     children = indexer.find_contains(bbox=result.bbox)
     char_children = [ c for c in children if c.size is not None]
     char_children.sort(key=lambda c: c.bbox[0])
-    # text = "".join([c.text for c in char_children if c.text is not None])
-    results_with_text.extend(char_children)
+    text = "".join([c.text for c in char_children if c.text is not None])
+    result.label = text
+    result_inner_content.extend(char_children)
 
-  return results_with_text
+  return results, result_inner_content
