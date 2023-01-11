@@ -1,4 +1,5 @@
 
+import argparse
 import os
 import typing
 
@@ -19,9 +20,8 @@ def create_pdf_summary_table():
   resp = db_client.create_table(
     AttributeDefinitions=[
       {
-        "AttributeName": "pdf_summary", # json data - can use expressions to query json strings
-        # https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.Attributes.html
-        "AttributeType": "S", # S=String N=Number B=Binary
+        "AttributeName": "pdf_id",
+        "AttributeType": "S",
       },
     ],
     TableName="pdf_summary", # Free tier users
@@ -31,11 +31,9 @@ def create_pdf_summary_table():
         "KeyType": "HASH"
       },
     ],
-    LocalSecondaryIndexes=[],
-    GlobalSecondaryIndexes=[],
     BillingMode="PROVISIONED", # Required for free tier
     ProvisionedThroughput={
-      "ReadCapactiyUnits": 10, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
+      "ReadCapacityUnits": 10, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
       "WriteCapacityUnits": 10, # 25 free tier total for all tables
     },
     StreamSpecification={
@@ -48,8 +46,8 @@ def create_pdf_element_locations_table():
   resp = db_client.create_table(
     AttributeDefinitions=[
       {
-        "AttributeName": "pdf_element_locations", # json data encoded as binary
-        "AttributeType": "B", # String Number Binary
+        "AttributeName": "pdf_id",
+        "AttributeType": "S",
       },
     ],
     TableName="pdf_element_locations", # Paid tier users
@@ -59,11 +57,9 @@ def create_pdf_element_locations_table():
         "KeyType": "HASH"
       },
     ],
-    LocalSecondaryIndexes=[],
-    GlobalSecondaryIndexes=[],
     BillingMode="PROVISIONED", # Required for free tier
     ProvisionedThroughput={
-      "ReadCapactiyUnits": 10, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
+      "ReadCapacityUnits": 10, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
       "WriteCapacityUnits": 10, # 25 free tier total for all tables
     },
     StreamSpecification={
@@ -76,16 +72,8 @@ def create_streaming_progress_table():
   resp = db_client.create_table(
     AttributeDefinitions=[
       {
-        "AttributeName": "total_steps", # json data encoded as binary
-        "AttributeType": "N", # String Number Binary
-      },
-      {
-        "AttributeName": "current_step", # json data encoded as binary
-        "AttributeType": "N", # String Number Binary
-      },
-      {
-        "AttributeName": "message", # json data encoded as binary
-        "AttributeType": "S", # String Number Binary
+        "AttributeName": "pdf_id",
+        "AttributeType": "S",
       },
     ],
     TableName="streaming_progress", # Paid tier users
@@ -95,11 +83,9 @@ def create_streaming_progress_table():
         "KeyType": "HASH"
       },
     ],
-    LocalSecondaryIndexes=[],
-    GlobalSecondaryIndexes=[],
     BillingMode="PROVISIONED", # Required for free tier
     ProvisionedThroughput={
-      "ReadCapactiyUnits": 2, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
+      "ReadCapacityUnits": 2, # 25 free tier total for all tables. 1 = 1 read per second per 4KB item size. 400KB max item size
       "WriteCapacityUnits": 2, # 25 free tier total for all tables
     },
     StreamSpecification={
@@ -114,6 +100,7 @@ def create_tables():
   # 2. Get the drill in information
   create_pdf_summary_table()
   create_pdf_element_locations_table()
+  create_streaming_progress_table()
 
 def get_pdf_for_key(pdfkey: str) -> typing.Union[None, bytes]:
   if s3_client is None:
@@ -160,3 +147,29 @@ def get_from_key(pdfkey: str):
   )
   print("Here!", data)
   return data
+
+def list_tables():
+  tables = db_client.list_tables()
+  print(tables)
+
+def parse_args():
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--createtables", dest="createtables", default=False, action="store_true")
+  parser.add_argument("--listtables", dest="listtables", default=False, action="store_true")
+  return parser.parse_args()
+
+def main():
+  # DEV_LOCAL=True AWS_ACCESS_KEY_ID="DUMMY" AWS_SECRET_ACCESS_KEY="DUMMY" AWS_DEFAULT_REGION="DUMMY" python3 dataprovider.py --listtables
+  # DEV_LOCAL=True python3 dataprovider.py --listtables
+  args = parse_args()
+  if args.listtables:
+    list_tables()
+  elif args.createtables:
+    create_tables()
+
+if __name__ == "__main__":
+  if debugutils.is_dev():
+    db_client: typing.Any = boto3.client("dynamodb", endpoint_url="http://localhost:8000") # type: ignore
+    main()
+  else:
+    print("Append DEV_LOCAL=True python3 dataprovider.py")
