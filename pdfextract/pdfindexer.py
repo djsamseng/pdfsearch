@@ -4,8 +4,8 @@ import numpy as np
 import rtree
 import scipy.spatial # type: ignore
 
-import path_utils
-import pdfextracter
+from . import path_utils
+from . import pdfextracter
 
 class PdfIndexer:
   # To find contents inside shapes
@@ -15,8 +15,8 @@ class PdfIndexer:
   def __init__(
     self,
     wrappers: typing.List[pdfextracter.LTJson],
-    page_width: int,
-    page_height: int,
+    page_width: float,
+    page_height: float,
   ) -> None:
     self.page_width = page_width
     self.page_height = page_height

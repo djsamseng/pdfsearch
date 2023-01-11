@@ -11,6 +11,10 @@ cd flaskapi && pip3 install -r requirements.txt
 pip3 install git+https://github.com/pdfminer/pdfminer.six
 ```
 
+```bash
+ln -s ~/dev/pdfsearch/pdfextract/ ~/dev/pdfsearch/lambdacontainer/processpdffunction/pdfextract
+```
+
 ## Running
 ```bash
 cd website && npm run dev

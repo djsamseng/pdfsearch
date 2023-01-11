@@ -4,8 +4,8 @@ import typing
 
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
-import debug_utils
-import path_utils
+from . import debug_utils
+from . import path_utils
 
 ElemListType = typing.List[typing.Union[pdfminer.layout.LTCurve, pdfminer.layout.LTChar]]
 BboxType = typing.Tuple[float, float, float, float]
