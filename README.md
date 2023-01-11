@@ -13,6 +13,7 @@ pip3 install git+https://github.com/pdfminer/pdfminer.six
 
 ```bash
 ln -s ~/dev/pdfsearch/pdfextract/ ~/dev/pdfsearch/lambdacontainer/processpdffunction/pdfextract
+chmod 777 ./docker/dynamodb
 ```
 
 ## Running
