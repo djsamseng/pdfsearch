@@ -24,7 +24,7 @@ def process_pdf(pdfkey:str, pdfdata: bytes):
   else:
     pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfkey)
   for idx, page in enumerate(pages_gen):
-    dataprovider.write_processpdf_progress(pdfkey=pdfkey, cur_step=idx, message="Processing page: {0}".format(idx+1))
+    dataprovider.write_processpdf_progress(pdfkey=pdfkey, curr_step=idx+1, message="Processing page: {0}".format(idx+1))
     width = page.width
     height = page.height
     elems = pdfextracter.get_underlying_parent_links(elems=page)

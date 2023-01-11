@@ -1,5 +1,6 @@
 
 import argparse
+import enum
 import os
 import typing
 
@@ -15,6 +16,11 @@ else:
   s3_client: typing.Any = boto3.resource("s3") # type: ignore
   db_client: typing.Any = boto3.client("dynamodb") # type: ignore
 
+class TableNames(enum.Enum):
+  PDF_SUMMARY = "pdf_summary"
+  PDF_ELEMENT_LOCATIONS = "pdf_element_locations"
+  STREAMING_PROGRESS = "streaming_progress"
+
 
 def create_pdf_summary_table():
   resp = db_client.create_table(
@@ -24,7 +30,7 @@ def create_pdf_summary_table():
         "AttributeType": "S",
       },
     ],
-    TableName="pdf_summary", # Free tier users
+    TableName=TableNames.PDF_SUMMARY.value, # Free tier users
     KeySchema=[
       {
         "AttributeName": "pdf_id",
@@ -50,7 +56,7 @@ def create_pdf_element_locations_table():
         "AttributeType": "S",
       },
     ],
-    TableName="pdf_element_locations", # Paid tier users
+    TableName=TableNames.PDF_ELEMENT_LOCATIONS.value, # Paid tier users
     KeySchema=[
       {
         "AttributeName": "pdf_id",
@@ -76,7 +82,7 @@ def create_streaming_progress_table():
         "AttributeType": "S",
       },
     ],
-    TableName="streaming_progress", # Paid tier users
+    TableName=TableNames.STREAMING_PROGRESS.value, # Paid tier users
     KeySchema=[
       {
         "AttributeName": "pdf_id",
@@ -108,10 +114,12 @@ def get_pdf_for_key(pdfkey: str) -> typing.Union[None, bytes]:
       with open(file=pdfkey, mode="rb") as f:
         binary_str = f.read()
         return binary_str
+    print("DEV_LOCAL: {0} not found", pdfkey)
+    return None
   try:
     resp = s3_client.get_object(
       Bucket="",
-      Key="",
+      Key=pdfkey,
     )
     return resp["Body"].read()
   except botocore.exceptions.NoSuchKey as e: # type: ignore
@@ -122,31 +130,127 @@ def get_pdf_for_key(pdfkey: str) -> typing.Union[None, bytes]:
     print(e)
   except Exception as e:
     print(e)
+  return None
+
+UpdateType = typing.Dict[str, typing.Dict[str, typing.Dict[str, typing.Union[str, int, bool]]]]
+KeyType = typing.Dict[str, typing.Dict[str, typing.Union[str, int, bool]]]
+def make_streaming_progress_item(
+  pdfkey: str,
+  curr_step: typing.Union[int, None] = None,
+  num_steps_total: typing.Union[int, None] = None,
+  message: typing.Union[str, None] = None,
+  success: typing.Union[bool, None] = None,
+) -> typing.Tuple[KeyType, KeyType]:
+  key: KeyType = {
+    "pdf_id": {
+      "S": pdfkey,
+    }
+  }
+  item: KeyType = {}
+  if curr_step is not None:
+    item["curr_step"] = {
+      "N": str(curr_step),
+    }
+  if num_steps_total is not None:
+    item["num_steps_total"] = {
+      "N": str(num_steps_total),
+    }
+  if message is not None:
+    item["message"] = {
+      "S": message,
+    }
+  if success is not None:
+    item["success"] = {
+      "BOOL": success,
+    }
+  return key, item
+
+def make_streaming_progress_put(
+  pdfkey: str,
+  curr_step: typing.Union[int, None] = None,
+  num_steps_total: typing.Union[int, None] = None,
+  message: typing.Union[str, None] = None,
+  success: typing.Union[bool, None] = None,
+):
+  key_obj, content_obj = make_streaming_progress_item(
+    pdfkey=pdfkey,
+    curr_step=curr_step,
+    num_steps_total=num_steps_total,
+    message=message,
+    success=success)
+  for key, val in key_obj.items():
+    content_obj[key] = val
+  return content_obj
+
+def make_streaming_progress_update(
+  pdfkey: str,
+  curr_step: typing.Union[int, None] = None,
+  num_steps_total: typing.Union[int, None] = None,
+  message: typing.Union[str, None] = None,
+  success: typing.Union[bool, None] = None,
+):
+  key_obj, content_obj = make_streaming_progress_item(
+    pdfkey=pdfkey,
+    curr_step=curr_step,
+    num_steps_total=num_steps_total,
+    message=message,
+    success=success)
+  update_obj: UpdateType = {}
+  for key, val in content_obj.items():
+    update_obj[key] = {
+      "Value": val,
+    }
+  return key_obj, update_obj
 
 def write_processpdf_start(pdfkey: str, num_steps_total: int):
-  print(pdfkey, "start: 0 /", num_steps_total)
+  item = make_streaming_progress_put(pdfkey=pdfkey, curr_step=0, num_steps_total=num_steps_total)
+  db_client.put_item(
+    TableName=TableNames.STREAMING_PROGRESS.value,
+    Item=item
+  )
 
-def write_processpdf_progress(pdfkey: str, cur_step: int, message: str):
-  print(pdfkey, "Step:", cur_step)
+def write_processpdf_progress(pdfkey: str, curr_step: int, message: str):
+  key, update = make_streaming_progress_update(pdfkey=pdfkey, curr_step=curr_step)
+  db_client.update_item(
+    TableName=TableNames.STREAMING_PROGRESS.value,
+    Key=key,
+    AttributeUpdates=update,
+  )
 
 def write_processpdf_error(pdfkey: str, error_message: str):
   # Could occur before start
-  print(pdfkey, "Error:", error_message)
+  key, update = make_streaming_progress_update(pdfkey=pdfkey, message=error_message)
+  db_client.update_item(
+    TableName=TableNames.STREAMING_PROGRESS.value,
+    Key=key,
+    AttributeUpdates=update,
+  )
 
 def write_processpdf_done(pdfkey: str, success: bool):
-  print(pdfkey, "Done success:", success)
+  key, update = make_streaming_progress_update(pdfkey=pdfkey, success=success)
+  db_client.update_item(
+    TableName=TableNames.STREAMING_PROGRESS.value,
+    Key=key,
+    AttributeUpdates=update,
+  )
 
 def get_from_key(pdfkey: str):
   data = db_client.get_item(
-    TableName="pdfstorage",
+    TableName="pdf_summary",
     Key={
-      "id": {
+      "pdf_id": {
         "S": pdfkey, # String key https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/dynamodb.html#DynamoDB.Client.get_item
       }
     }
   )
-  print("Here!", data)
   return data
+
+def scan_streaming_progress():
+  resp = db_client.scan(
+    TableName=TableNames.STREAMING_PROGRESS.value,
+    Select="ALL_ATTRIBUTES",
+  )
+  print(resp)
 
 def list_tables():
   tables = db_client.list_tables()
@@ -156,6 +260,7 @@ def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--createtables", dest="createtables", default=False, action="store_true")
   parser.add_argument("--listtables", dest="listtables", default=False, action="store_true")
+  parser.add_argument("--scanstream", dest="scanstream", default=False, action="store_true")
   return parser.parse_args()
 
 def main():
@@ -164,8 +269,10 @@ def main():
   args = parse_args()
   if args.listtables:
     list_tables()
-  elif args.createtables:
+  if args.createtables:
     create_tables()
+  if args.scanstream:
+    scan_streaming_progress()
 
 if __name__ == "__main__":
   if debugutils.is_dev():
