@@ -1,14 +1,14 @@
 
-import React, { ChangeEvent, MouseEventHandler, MouseEvent, MutableRefObject, useRef, useState, useEffect, createContext } from "react";
-import { usePdf } from "@mikecousins/react-pdf";
-import { PDFDocumentProxy } from "pdfjs-dist";
+import React, { ChangeEvent, useState, } from "react";
+import { useSupabaseClient } from "@supabase/auth-helpers-react";
+
 
 import { PdfMaker } from "./pdfmaker";
 import { PdfElements, } from "../utils/sharedtypes";
 import PdfSelected from "./pdfselected";
 import { ClientDrawPath } from "../utils/sharedtypes";
 import { SelectInPdfResponse } from "../utils/requestresponsetypes";
-import { AwsConnectorContext, triggerPdfProcessing } from '../components/AwsConnector';
+
 
 async function sha256(message: string) {
   // encode as UTF-8
@@ -27,11 +27,11 @@ async function sha256(message: string) {
 
 
 export default function PdfUpload() {
+  const supabase = useSupabaseClient();
   const [ pdfDocumentUrl, setPdfDocumentUrl ] = useState<string | undefined>(undefined);
   const [ pdfFileObj, setPdfFileObj ] = useState<File | null>(null);
   const [ pdfHash, setPdfHash ] = useState<string | null>(null);
   const [ pdfSelectedObjects, setPdfSelectedObjects ] = useState<PdfElements>([]);
-  const { processPdfLoadingStatus, setProcessPdfLoadingStatus } = React.useContext(AwsConnectorContext);
   function onPdfFileChange(evt: ChangeEvent<HTMLInputElement>) {
     const fileObj = evt.target.files && evt.target.files[0];
     console.log(fileObj);
@@ -54,7 +54,7 @@ export default function PdfUpload() {
         if (!alreadyUploaded) {
           const uploadSuccess = await uploadPdf(pdfId, bytes);
           if (uploadSuccess) {
-            const processingTriggered = await triggerPdfProcessing(pdfId, setProcessPdfLoadingStatus);
+            const processingTriggered = await triggerPdfProcessing(pdfId);
           }
         }
       }
@@ -63,10 +63,34 @@ export default function PdfUpload() {
   }
 
   async function checkIfPdfAlreadyUploaded(pdfId: string) {
-    return false;
+    const { data, error } = await supabase.storage
+      .from("pdfs")
+      .list("public", {
+        limit: 1,
+        search: pdfId,
+      }
+    );
+    if (error) {
+      console.error("Failed to check if pdf already exists", error);
+      return false;
+    }
+    console.log(data);
+    return data.length > 0;
   }
 
   async function uploadPdf(pdfId: string, bytes: ArrayBuffer) {
+    const { error: uploadError } = await supabase.storage
+      .from("pdfs")
+      .upload(`public/${pdfId}.pdf`, bytes, { upsert: true });
+    if (uploadError) {
+      console.error("Failed to upload pdf:", uploadError);
+      return false;
+    }
+    console.log("Uploaded pdf");
+    return true;
+  }
+
+  async function triggerPdfProcessing(pdfId: string) {
     return true;
   }
 

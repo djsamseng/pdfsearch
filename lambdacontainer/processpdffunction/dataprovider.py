@@ -7,6 +7,7 @@ import typing
 import boto3 # type: ignore
 import botocore.exceptions # type: ignore
 import supabase
+import storage3
 import postgrest.types # type: ignore
 
 import debugutils
@@ -37,7 +38,13 @@ def get_pdf_for_key(pdfkey: str) -> typing.Union[None, bytes]:
       with open(file=pdfkey, mode="rb") as f:
         binary_str = f.read()
         return binary_str
-    print("DEV_LOCAL: {0} not found", pdfkey)
+    try:
+      storage_client: storage3.SyncStorageClient = typing.cast(storage3.SyncStorageClient, db_client.storage)
+      bytes = storage_client.from_("pdfs").download(pdfkey)
+      print("got bytes:", bytes)
+      return bytes
+    except Exception as e:
+      print("DEV_LOCAL: {0} not found", pdfkey, e)
     return None
   try:
     resp = s3_client.get_object(

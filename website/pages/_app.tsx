@@ -2,13 +2,16 @@ import '../styles/globals.css'
 import React from "react";
 import type { AppProps } from 'next/app'
 
-import { AwsConnectorContext } from '../components/AwsConnector'
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { SessionContextProvider, Session } from '@supabase/auth-helpers-react';
 
-export default function App({ Component, pageProps }: AppProps) {
-  const [ processPdfLoadingStatus,  setProcessPdfLoadingStatus ] = React.useState(false);
+export default function App({ Component, pageProps }: AppProps<{
+  initialSession: Session,
+}>) {
+  const [ supabase ] = React.useState(() => createBrowserSupabaseClient());
   return (
-    <AwsConnectorContext.Provider value={{ processPdfLoadingStatus, setProcessPdfLoadingStatus }}>
+    <SessionContextProvider supabaseClient={supabase} initialSession={pageProps.initialSession}>
       <Component {...pageProps} />
-    </AwsConnectorContext.Provider>
+    </SessionContextProvider>
   )
 }
