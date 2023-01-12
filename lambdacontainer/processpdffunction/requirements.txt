@@ -3,3 +3,4 @@ boto3
 pdfminer-six @ git+https://github.com/pdfminer/pdfminer.six@master
 rtree
 scipy
+supabase

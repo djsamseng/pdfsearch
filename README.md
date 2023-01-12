@@ -13,7 +13,13 @@ pip3 install git+https://github.com/pdfminer/pdfminer.six
 
 ```bash
 ln -s ~/dev/pdfsearch/pdfextract/ ~/dev/pdfsearch/lambdacontainer/processpdffunction/pdfextract
-chmod 777 ./docker/dynamodb
+cd website && npx supabase start
+```
+- Docker Desktop no longer creates /var/run/docker.sock [See this issue](https://github.com/supabase/cli/issues/167#issuecomment-1291465761)
+- To fix
+```bash
+npx supabase start --debug # Outputs /var/run/docker.sock
+sudo ln -s ~/.docker/desktop/docker.sock /var/run/docker.sock
 ```
 
 ## Running

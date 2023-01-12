@@ -39,6 +39,7 @@ async function triggerPdfProcessingImpl(pdfId: string, setProcessPdfLoadingStatu
   // https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-lambda/classes/invokecommand.html
   try {
     // This is sending the request but CORS is blocking the response
+    // https://github.com/lambci/docker-lambda/issues/256
     const resp = await fetch("http://localhost:9000/2015-03-31/functions/function/invocations", {
       method: "post",
       body: JSON.stringify({
