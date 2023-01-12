@@ -18,4 +18,4 @@ def process_pdf(pdfkey: str):
 def handler(event: typing.Any, context: typing.Any):
   pdfkey = event["pdfkey"]
   process_pdf(pdfkey=pdfkey)
-  return "Hello from AWS Lambda using Python !!!" + str(event)
+  return "Hello!"

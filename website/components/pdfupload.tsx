@@ -1,5 +1,5 @@
 
-import { ChangeEvent, MouseEventHandler, MouseEvent, MutableRefObject, useRef, useState, useEffect, createContext } from "react";
+import React, { ChangeEvent, MouseEventHandler, MouseEvent, MutableRefObject, useRef, useState, useEffect, createContext } from "react";
 import { usePdf } from "@mikecousins/react-pdf";
 import { PDFDocumentProxy } from "pdfjs-dist";
 
@@ -8,6 +8,7 @@ import { PdfElements, } from "../utils/sharedtypes";
 import PdfSelected from "./pdfselected";
 import { ClientDrawPath } from "../utils/sharedtypes";
 import { SelectInPdfResponse } from "../utils/requestresponsetypes";
+import { AwsConnectorContext, triggerPdfProcessing } from '../components/AwsConnector';
 
 async function sha256(message: string) {
   // encode as UTF-8
@@ -30,6 +31,7 @@ export default function PdfUpload() {
   const [ pdfFileObj, setPdfFileObj ] = useState<File | null>(null);
   const [ pdfHash, setPdfHash ] = useState<string | null>(null);
   const [ pdfSelectedObjects, setPdfSelectedObjects ] = useState<PdfElements>([]);
+  const { processPdfLoadingStatus, setProcessPdfLoadingStatus } = React.useContext(AwsConnectorContext);
   function onPdfFileChange(evt: ChangeEvent<HTMLInputElement>) {
     const fileObj = evt.target.files && evt.target.files[0];
     console.log(fileObj);
@@ -43,17 +45,33 @@ export default function PdfUpload() {
         // TODO: window.crypto may not be in old browsers
         const hashBuffer = await window.crypto.subtle.digest("SHA-256", bytes);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const digest = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-        setPdfHash(digest);
+        const pdfId = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        setPdfHash(pdfId);
         const url = URL.createObjectURL(fileObj);
         setPdfFileObj(fileObj);
         setPdfDocumentUrl(url);
+        const alreadyUploaded = await checkIfPdfAlreadyUploaded(pdfId);
+        if (!alreadyUploaded) {
+          const uploadSuccess = await uploadPdf(pdfId, bytes);
+          if (uploadSuccess) {
+            const processingTriggered = await triggerPdfProcessing(pdfId, setProcessPdfLoadingStatus);
+          }
+        }
       }
     }
     reader.readAsArrayBuffer(fileObj);
-
   }
+
+  async function checkIfPdfAlreadyUploaded(pdfId: string) {
+    return false;
+  }
+
+  async function uploadPdf(pdfId: string, bytes: ArrayBuffer) {
+    return true;
+  }
+
   async function getContentFromDrawPaths(drawPaths: Array<ClientDrawPath>, page: number) {
+    // TODO: Delete this function
     const formData = new FormData();
     if (!pdfFileObj) {
       console.error("No pdf file to upload");
