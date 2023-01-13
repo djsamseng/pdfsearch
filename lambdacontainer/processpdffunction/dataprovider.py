@@ -39,9 +39,8 @@ def get_pdf_for_key(pdfkey: str) -> typing.Union[None, bytes]:
         binary_str = f.read()
         return binary_str
     try:
-      storage_client: storage3.SyncStorageClient = typing.cast(storage3.SyncStorageClient, db_client.storage)
-      bytes = storage_client.from_("pdfs").download(pdfkey)
-      print("got bytes:", bytes)
+      storage_client: storage3.SyncStorageClient = typing.cast(storage3.SyncStorageClient, db_client.storage())
+      bytes = storage_client.from_("pdfs").download("public/" + pdfkey + ".pdf")
       return bytes
     except Exception as e:
       print("DEV_LOCAL: {0} not found", pdfkey, e)

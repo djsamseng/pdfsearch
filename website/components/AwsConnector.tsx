@@ -1,7 +1,6 @@
 
 import React, { useState } from "react";
 
-import { DynamoDBClient, GetItemCommand, } from "@aws-sdk/client-dynamodb";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { maxHeaderSize } from "http";
 
@@ -10,15 +9,6 @@ export const AwsConnectorContext = React.createContext({
   setProcessPdfLoadingStatus: (val: boolean) => {}
 });
 
-// https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-dynamodb/index.html
-const db_client = new DynamoDBClient({
-  endpoint: "http://localhost:8000",
-  region: "us-east-1",
-  credentials: {
-    accessKeyId: "DUMMY",
-    secretAccessKey: "DUMMY",
-  }
-});
 // https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-lambda/
 const lambda_client = new LambdaClient({
   endpoint: "http://localhost:9000",
@@ -35,69 +25,43 @@ const TableNames = {
   STREAMING_PROGRESS: "streaming_progress",
 }
 
-async function triggerPdfProcessingImpl(pdfId: string, setProcessPdfLoadingStatus: Function) {
+export async function triggerPdfProcessing(pdfId: string) {
   // https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-lambda/classes/invokecommand.html
   try {
     // This is sending the request but CORS is blocking the response
     // https://github.com/lambci/docker-lambda/issues/256
-    const resp = await fetch("http://localhost:9000/2015-03-31/functions/function/invocations", {
-      method: "post",
-      body: JSON.stringify({
-        pdfkey: "plan.pdf"
-      })
-    });
-    console.log(resp);
-    return;
-    const command = new InvokeCommand({
-      FunctionName: "processpdf",
-      Payload: {
-        // @ts-ignore
-        pdfkey: "plan.pdf",
-      }
-    });
-    const res = await lambda_client.send(command);
+    if (true) {
+      await fetch("http://localhost:9000/2015-03-31/functions/function/invocations", {
+        method: "post",
+        mode: "no-cors", // For dev
+        body: JSON.stringify({
+          pdfId: pdfId,
+        }),
+      });
+    }
+    else {
+      // Configure CORS https://github.com/aws/aws-lambda-runtime-interface-emulator/issues/16
+      // In the AWS console you can indeed configure CORS for HTTP requests to lambda. By default it allows all origins
+      // For local development it seems we'd just need to [add the headers](https://stackoverflow.com/questions/12830095/setting-http-headers)
+      // if [r.Method == Post](https://github.com/aws/aws-lambda-runtime-interface-emulator/blob/2ca3e4aec8ef5cec6139c531f8dd8c31dffc5bcd/cmd/aws-lambda-rie/handlers.go#L60).
+      // Should be able to compile https://github.com/aws/aws-lambda-runtime-interface-emulator/blob/develop/Makefile#L23
+      // then pull in the image in my own docker
+      // See make integ-tests-and-compile
+      const command = new InvokeCommand({
+        FunctionName: "processpdf",
+        Payload: {
+          // @ts-ignore
+          pdfkey: "plan.pdf",
+        }
+      });
+      const res = await lambda_client.send(command);
+      console.log(res);
+    }
+
   }
   catch (error) {
     console.error("Failed to Invoke pdfProcessing:", error);
-    setProcessPdfLoadingStatus(false);
     return false;
   }
-}
-
-async function waitForPdfProcessingImpl(pdfId: string, timeSoFar: number, setProcessPdfLoadingStatus: Function) {
-  if (timeSoFar > 10) {
-    setProcessPdfLoadingStatus(false);
-    return;
-  }
-
-  const command = new GetItemCommand({
-    TableName: TableNames.STREAMING_PROGRESS,
-    Key: {
-      "value": {
-        "S": pdfId
-      }
-    },
-  });
-  try {
-    const res = await db_client.send(command);
-    console.log(res);
-    const timeoutMs = 1000;
-    setTimeout(() => {
-      waitForPdfProcessingImpl(pdfId, timeSoFar + timeoutMs, setProcessPdfLoadingStatus);
-    }, timeoutMs);
-  }
-  catch (error) {
-    console.error("Failed to get loading status", error);
-    setProcessPdfLoadingStatus(false);
-  }
-}
-
-export async function triggerPdfProcessing(pdfId: string, setProcessPdfLoadingStatus: Function) {
-  setProcessPdfLoadingStatus(true);
-  const triggered = await triggerPdfProcessingImpl(pdfId, setProcessPdfLoadingStatus);
-  if (triggered) {
-    // waitForPdfProcessingImpl(pdfId, 0);
-  }
-
 }
 

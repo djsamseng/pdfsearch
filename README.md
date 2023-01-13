@@ -41,6 +41,7 @@ cd flaskapi && flask --app main.py --debug run
   - [Learning about AWS Lambda progress](https://docs.aws.amazon.com/lambda/latest/dg/foundation-progmodel.html)
   - [Clean up Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/getting-started.html#gettingstarted-cleanup)
   - [Example auto cleanup script](https://github.com/awsdocs/aws-lambda-developer-guide/blob/main/sample-apps/blank-python/5-cleanup.sh)
+- [Supabase NextJS](https://supabase.com/docs/guides/getting-started/tutorials/with-nextjs)
 
 ## Coding work
 ### Backend Python

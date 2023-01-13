@@ -8,6 +8,7 @@ import { PdfElements, } from "../utils/sharedtypes";
 import PdfSelected from "./pdfselected";
 import { ClientDrawPath } from "../utils/sharedtypes";
 import { SelectInPdfResponse } from "../utils/requestresponsetypes";
+import { triggerPdfProcessing } from "./AwsConnector";
 
 
 async function sha256(message: string) {
@@ -53,9 +54,10 @@ export default function PdfUpload() {
         const alreadyUploaded = await checkIfPdfAlreadyUploaded(pdfId);
         if (!alreadyUploaded) {
           const uploadSuccess = await uploadPdf(pdfId, bytes);
-          if (uploadSuccess) {
-            const processingTriggered = await triggerPdfProcessing(pdfId);
-          }
+        }
+        const alreadyProcessed = await checkIfPdfAlreadyProcessed(pdfId);
+        if (!alreadyProcessed) {
+          const processingTriggered = await triggerPdfProcessing(pdfId);
         }
       }
     }
@@ -90,12 +92,13 @@ export default function PdfUpload() {
     return true;
   }
 
-  async function triggerPdfProcessing(pdfId: string) {
-    return true;
+  async function checkIfPdfAlreadyProcessed(pdfId: string) {
+    return false;
   }
 
   async function getContentFromDrawPaths(drawPaths: Array<ClientDrawPath>, page: number) {
     // TODO: Delete this function
+    return;
     const formData = new FormData();
     if (!pdfFileObj) {
       console.error("No pdf file to upload");
