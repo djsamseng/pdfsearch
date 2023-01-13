@@ -21,6 +21,11 @@ cd website && npx supabase start
 npx supabase start --debug # Outputs /var/run/docker.sock
 sudo ln -s ~/.docker/desktop/docker.sock /var/run/docker.sock
 ```
+### Generate database types from local database
+```bash
+sudo ln -s ~/.docker/desktop/docker.sock /var/run/docker.sock # May need to rerun
+npx supabase gen types typescript --local > utils/database.types.ts
+```
 
 ## Running
 ```bash

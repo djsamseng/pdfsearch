@@ -19,14 +19,6 @@ def process_pdf(pdfkey: str):
 def handler(event: typing.Any, context: typing.Any):
   pdfId = event["pdfId"]
   process_pdf(pdfkey=pdfId)
-  ret: typing.Dict[str, typing.Any] = {
-    'statusCode': 200,
-    'headers': {
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Origin': 'http://localhost:3000',
-        'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
-    },
-    'body': json.dumps('Hello from Lambda!')
+  return {
+    "test": "Hello!"
   }
-  print("Returning:", ret)
-  return ret

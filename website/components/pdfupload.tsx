@@ -8,8 +8,11 @@ import { PdfElements, } from "../utils/sharedtypes";
 import PdfSelected from "./pdfselected";
 import { ClientDrawPath } from "../utils/sharedtypes";
 import { SelectInPdfResponse } from "../utils/requestresponsetypes";
-import { triggerPdfProcessing } from "./AwsConnector";
+import { Database } from "../utils/database.types";
+import { lambdaTriggerPdfProcessing } from "./AwsConnector";
 
+type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
+type PdfProcessingProgress = Database["public"]["Tables"]["pdf_processing_progress"]["Row"]
 
 async function sha256(message: string) {
   // encode as UTF-8
@@ -28,7 +31,7 @@ async function sha256(message: string) {
 
 
 export default function PdfUpload() {
-  const supabase = useSupabaseClient();
+  const supabase = useSupabaseClient<Database>();
   const [ pdfDocumentUrl, setPdfDocumentUrl ] = useState<string | undefined>(undefined);
   const [ pdfFileObj, setPdfFileObj ] = useState<File | null>(null);
   const [ pdfHash, setPdfHash ] = useState<string | null>(null);
@@ -49,14 +52,16 @@ export default function PdfUpload() {
         const pdfId = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
         setPdfHash(pdfId);
         const url = URL.createObjectURL(fileObj);
+        const pdfName = fileObj.name;
         setPdfFileObj(fileObj);
         setPdfDocumentUrl(url);
         const alreadyUploaded = await checkIfPdfAlreadyUploaded(pdfId);
         if (!alreadyUploaded) {
-          const uploadSuccess = await uploadPdf(pdfId, bytes);
+          const uploadSuccess = await uploadPdf(pdfId, pdfName, bytes);
         }
         const alreadyProcessed = await checkIfPdfAlreadyProcessed(pdfId);
         if (!alreadyProcessed) {
+          // First write to pdf_processing_progress
           const processingTriggered = await triggerPdfProcessing(pdfId);
         }
       }
@@ -80,7 +85,7 @@ export default function PdfUpload() {
     return data.length > 0;
   }
 
-  async function uploadPdf(pdfId: string, bytes: ArrayBuffer) {
+  async function uploadPdf(pdfId: string, pdfName: string, bytes: ArrayBuffer) {
     const { error: uploadError } = await supabase.storage
       .from("pdfs")
       .upload(`public/${pdfId}.pdf`, bytes, { upsert: true });
@@ -88,42 +93,57 @@ export default function PdfUpload() {
       console.error("Failed to upload pdf:", uploadError);
       return false;
     }
+    const { error: insertError } = await supabase
+      .from("pdf_summary")
+      .upsert({
+        pdf_id: pdfId,
+        pdf_name: pdfName,
+      })
+    if (insertError) {
+      console.error("Failed to insert pdf_summary", insertError);
+    }
     console.log("Uploaded pdf");
     return true;
   }
 
   async function checkIfPdfAlreadyProcessed(pdfId: string) {
+    const { data, error, status } = await supabase
+      .from("pdf_summary")
+      .select("*", { count: "exact", head: true })
+      .eq("pdf_id", pdfId)
+      .neq("pdf_summary", null)
+      .single();
+    if (error && status !== 406) {
+      console.error("Failed to check if pdf already processed:", error, status);
+      return false;
+    }
+    if (data) {
+      console.log("Already processed:", data);
+      return true;
+    }
+    console.log("406 error no rows", error);
     return false;
+  }
+
+  async function triggerPdfProcessing(pdfId: string) {
+    const { error: insertError } = await supabase
+      .from("pdf_processing_progress")
+      .upsert({
+        pdf_id: pdfId,
+        total_steps: 1,
+        curr_step: 0,
+        success: null,
+      })
+    if (insertError) {
+      console.error("Failed to write to pdf_processing_progress", insertError);
+    }
+    const lambdaTriggered = await lambdaTriggerPdfProcessing(pdfId);
+    return lambdaTriggered;
   }
 
   async function getContentFromDrawPaths(drawPaths: Array<ClientDrawPath>, page: number) {
     // TODO: Delete this function
     return;
-    const formData = new FormData();
-    if (!pdfFileObj) {
-      console.error("No pdf file to upload");
-      return;
-    }
-    // Matches requestresponsetypes.ts SelectInPdfRequest
-    formData.append("pdfFile", pdfFileObj)
-    formData.append("drawPaths", JSON.stringify(drawPaths));
-    formData.append("pageNumber", String(page))
-    // http://localhost:5000/selectinpdf
-    try {
-      const resp = await fetch("http://127.0.0.1:5000/selectinpdf", {
-        method: "post",
-        body: formData,
-      });
-      const json = await resp.json() as SelectInPdfResponse;
-      console.log("Got resp:", json);
-      if ("selectedPaths" in json) {
-        setPdfSelectedObjects(json.selectedPaths);
-      }
-    }
-    catch (error) {
-      console.error(error);
-    }
-
   }
 
   // TODO: App upload button to Dynamdb using hash and pdfFile in FormData

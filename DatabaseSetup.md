@@ -5,7 +5,8 @@
 ```sql
 CREATE TABLE IF NOT EXISTS pdf_summary (
   pdf_id TEXT PRIMARY KEY,
-  pdf_summary JSON NOT NULL
+  pdf_name TEXT NOT NULL,
+  pdf_summary JSON
 );
 CREATE TABLE IF NOT EXISTS pdf_element_locations (
   pdf_id TEXT NOT NULL,
