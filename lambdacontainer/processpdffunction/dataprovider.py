@@ -7,8 +7,7 @@ import typing
 import boto3 # type: ignore
 import botocore.exceptions # type: ignore
 import supabase
-import storage3
-import postgrest.types # type: ignore
+import storage3 # type: ignore
 
 import debugutils
 

@@ -199,6 +199,9 @@ def get_underlying_parent_links_impl(
 ):
   if isinstance(elem, pdfminer.layout.LTContainer):
     out.append(LTJson(elem=typing.cast(pdfminer.layout.LTComponent, elem), parent_idx=elem_parent_idx)) # Add the container
+    if isinstance(elem, pdfminer.layout.LTText):
+      # takes 20ms out of 150ms
+      out[-1].text = elem.get_text()
     child_parent_idx = len(out) - 1 # Get the container's idx
     for child in typing.cast(typing.Iterable[pdfminer.layout.LTComponent], elem):
       # Add the first child
@@ -207,7 +210,7 @@ def get_underlying_parent_links_impl(
       get_underlying_parent_links_impl(out=out, elem=child, elem_parent_idx=child_parent_idx)
   elif isinstance(elem, pdfminer.layout.LTChar):
     if elem_parent_idx is None:
-      print(elem, elem_parent_idx)
+      print("LTChar without parent:", elem, elem_parent_idx)
     out.append(LTJson(elem, parent_idx=elem_parent_idx))
   elif isinstance(elem, pdfminer.layout.LTAnno):
     text = elem.get_text()
@@ -259,3 +262,30 @@ def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: Bbox
       old_idx_to_new_idx[old_idx] = len(out) - 1
 
   return out
+
+class PageOperation():
+  def __init__(self) -> None:
+    pass
+
+class ConstructionPageOperation(PageOperation):
+  def __init__(self, floor_name:str, elem: LTJson) -> None:
+    super().__init__()
+    self.floor_name = floor_name
+    self.elem = elem
+  def __str__(self) -> str:
+    return "floor:{0}\nbbox:{2}".format(self.floor_name, self.elem.text, self.elem.bbox)
+  def __repr__(self) -> str:
+    return self.__str__()
+
+def extract_page_operations(page_elems: typing.Iterable[LTJson]):
+  ops: typing.List[ConstructionPageOperation] = []
+  for elem in page_elems:
+    if elem.is_container and elem.text is not None:
+      lower = elem.text.lower()
+      construction_idx = lower.find("construction")
+      plan_idx = lower.find("plan")
+      if construction_idx >= 1 and plan_idx > construction_idx:
+        # TODO: May occur multiple times
+        floor_name = lower[:construction_idx].replace("\n", " ").strip()
+        ops.append(ConstructionPageOperation(floor_name=floor_name, elem=elem))
+  return ops

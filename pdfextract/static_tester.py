@@ -7,9 +7,9 @@ import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 import rtree
 import scipy.spatial # type: ignore
 
-import pdfextracter
-import pdfindexer
-import pdftkdrawer
+from . import pdfextracter
+from . import pdfindexer
+from . import pdftkdrawer
 
 def text_is_window_key(text: str):
   if len(text) == 3 and text[0].isalpha() and text[1:].isdigit():
@@ -113,14 +113,55 @@ def extract_window_key(args: typing.Any):
 
     drawer.show("First floor construction plan")
 
+def extract_first_floor():
+  import time
+  page_gen = pdfminer.high_level.extract_pages(pdf_file="plan.pdf", page_numbers=[6,7,8,9])
+  for page_number, page in enumerate(page_gen):
+    tp0 = time.time()
+    elems = pdfextracter.get_underlying_parent_links(elems=page)
+    tp1 = time.time()
+    t0 = time.time()
+    page_ops = pdfextracter.extract_page_operations(page_elems=elems)
+    t1 = time.time()
+    print("===== Page {0} =====".format(page_number+6))
+    floor_name = ""
+    for p in page_ops:
+      if p.floor_name != floor_name:
+        floor_name = p.floor_name
+        print(p)
+
+    # extracting the page in enumerate(page_gen) takes the most time
+    print("Took:", tp1-tp0, t1-t0, time.time()-tp0)
+  return
+  y0a, x0 = 1873, 2772
+  y1a, x1 = 2113, 2977
+
+  y0 = height - y1a
+  y1 = height - y0a
+  results = pdfextracter.filter_contains_bbox_hierarchical(elems=elems, bbox=(x0,y0,x1,y1))
+  char_results = [r for r in results if r.size is not None]
+  containers = [r for r in results if r.is_container]
+  for parent in containers:
+    # TODO: set child idxes?
+    print(parent.text, "x,y=", parent.bbox[0], parent.bbox[1])
+  print(len(results), len(char_results), len(containers))
+  return
+
+
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=elems, draw_buttons=False)
+  drawer.show("First Floor")
+
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--awindows", dest="awindows", default=False, action="store_true")
   return parser.parse_args()
 
 def main():
-  args = parse_args()
-  extract_window_key(args)
+  args = parse_args() # type: ignore
+  #extract_window_key(args)
+  extract_first_floor()
 
 if __name__ == "__main__":
+  # python3 -m pdfextract.static_tester
   main()

@@ -7,8 +7,8 @@ from tkinter import ttk
 import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
-import pdfextracter
-import debug_utils
+from . import pdfextracter
+from . import debug_utils
 
 
 class AutoScrollbar(ttk.Scrollbar):
