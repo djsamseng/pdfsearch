@@ -119,6 +119,7 @@ def extract_first_floor():
   page_gen = pdfminer.high_level.extract_pages(pdf_file="plan.pdf", page_numbers=[6,7,8,9])
   for _, page in enumerate(page_gen):
     tp0 = time.time()
+    print(page.width, page.height)
     elems = pdfelemtransforms.get_underlying_parent_links(elems=page)
     tp1 = time.time()
 

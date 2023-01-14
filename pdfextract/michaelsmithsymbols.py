@@ -9,6 +9,7 @@ import pdfminer.high_level
 
 from . import debug_utils
 from . import pdfelemtransforms
+from . import pdfextracter
 from . import pdfindexer
 from . import pdftkdrawer
 from .ltjson import LTJson, LTJsonResponse, LTJsonEncoder
@@ -234,7 +235,7 @@ def door_labels_should_match():
 
 
 def showall():
-  elems, width, height = get_pdf()
+  elems, width, height = get_pdf(which=1)
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   drawer.draw_elems(elems=elems, draw_buttons=False)
   drawer.show("All")
@@ -297,12 +298,20 @@ def find_by_bbox_and_content():
   for symbol_name, symbol_matches in found_results.items():
     print(symbol_name, ":", len(symbol_matches))
 
+  print(pdfextracter.extract_page_name(indexer=items_indexer))
+
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   to_draw: typing.List[LTJson] = []
   for val in found_results.values():
     to_draw.extend(val)
   drawer.draw_elems(elems=to_draw, draw_buttons=True, align_top_left=False)
   drawer.show("Found")
+
+def findpagename():
+  elems, width, height = get_pdf(which=1)
+  items_indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  page_name = pdfextracter.extract_page_name(indexer=items_indexer)
+  print("Found page name: '{0}'".format(page_name))
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -315,6 +324,7 @@ def parse_args():
   parser.add_argument("--find", dest="find", default=False, action="store_true")
   parser.add_argument("--showall", dest="showall", default=False, action="store_true")
   parser.add_argument("--findbbox", dest="findbbox", default=False, action="store_true")
+  parser.add_argument("--findpagename", dest="findpagename", default=False, action="store_true")
   parser.add_argument("--x0", dest="x0", type=int, required=False)
   parser.add_argument("--y0", dest="y0", type=int, required=False)
   parser.add_argument("--x1", dest="x1", type=int, required=False)
@@ -339,6 +349,8 @@ def main():
     find_by_bbox_and_content()
   elif args.getall:
     get_all_symbols(save=args.save)
+  elif args.findpagename:
+    findpagename()
   else:
     door_labels_should_match()
 
