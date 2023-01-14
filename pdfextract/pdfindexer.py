@@ -95,7 +95,7 @@ def line_set_distance(
     for lineb in lines2:
       dist = line_distance(linea=linea, lineb=lineb)
       best_dist = min(best_dist, dist)
-    total_dist += best_dist
+    total_dist += best_dist / len(lines2)
     if max_dist >= 0 and total_dist > max_dist:
       # Return early
       return total_dist
@@ -120,7 +120,7 @@ def find_similar_curves(
       # TODO: Are they visually equivalent?
       continue
     dist = line_set_distance(lines1=lines_to_find, lines2=potential_lines, max_dist=max_dist)
-    if dist < max_dist * len(potential_lines):
+    if dist < max_dist:
       results.append(wrapper)
 
   return results

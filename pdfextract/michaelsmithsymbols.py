@@ -7,10 +7,10 @@ import gzip
 import numpy as np
 import pdfminer.high_level
 
-import debug_utils
-import pdfextracter
-import pdfindexer
-import pdftkdrawer
+from . import debug_utils
+from . import pdfextracter
+from . import pdfindexer
+from . import pdftkdrawer
 
 def find_contains_with_room(
   indexer: pdfindexer.PdfIndexer,
@@ -71,8 +71,11 @@ def get_toilet_symbol(indexer: pdfindexer.PdfIndexer):
   matches = find_contains_with_room(indexer=indexer, x0=x0, y0=y0, x1=x1, y1=y1)
   return matches
 
-def get_pdf():
-  page_gen = pdfminer.high_level.extract_pages(pdf_file="../plan.pdf", page_numbers=[9])
+def get_pdf(which:int = 0):
+  if which == 0:
+    page_gen = pdfminer.high_level.extract_pages(pdf_file="./plan.pdf", page_numbers=[9])
+  else:
+    page_gen = pdfminer.high_level.extract_pages(pdf_file="./planMichaelSmith2.pdf", page_numbers=[1])
   pages = list(page_gen)
   page = pages[0]
   width = int(page.width)
@@ -104,7 +107,7 @@ def get_all_symbols(save: bool):
   if save:
     encoder = pdfextracter.LTJsonEncoder()
     json_string = encoder.encode(all_symbols)
-    with open("../lambdacontainer/processpdffunction/symbols_michael_smith.json", "w") as f:
+    with open("./lambdacontainer/processpdffunction/symbols_michael_smith.json", "w") as f:
       f.write(json_string)
   else:
     for key, symbol in all_symbols.items():
@@ -113,7 +116,7 @@ def get_all_symbols(save: bool):
       drawer.show(key)
 
 def read_symbols_from_json():
-  with open("../lambdacontainer/processpdffunction/symbols_michael_smith.json", "r") as f:
+  with open("./lambdacontainer/processpdffunction/symbols_michael_smith.json", "r") as f:
     json_string = f.read()
   symbols_dicts = json.loads(json_string)
   symbols: typing.Dict[str, typing.List[pdfextracter.LTJson]] = dict()
@@ -173,6 +176,36 @@ def show_inside(y0: float, x0: float, y1: float, x1: float):
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   drawer.draw_elems(elems=results, draw_buttons=True)
   drawer.show("All")
+
+def find_symbol_elem(y0: float, x0: float, y1: float, x1: float):
+  elems, width, height = get_pdf(which=1)
+  symbols = read_symbols_from_json()
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  results = indexer.find_contains(bbox=(x0, y0, x1, y1), y_is_down=True)
+  to_find = [r for r in results if r.original_path is not None]
+  print("Num in area:", len(results), "Num curves in area:", len(to_find))
+  to_find = to_find[0]
+  results, result_inner_contents = pdfindexer.find_symbol_with_text(symbol=to_find, indexer=indexer)
+  print("Searched for:", to_find.get_zeroed_path_lines())
+  saved_to_find = symbols["door_label"][0]
+  print("Saved door symbol:", saved_to_find.get_zeroed_path_lines())
+  mismatch_dist = pdfindexer.line_set_distance(lines1=to_find.get_zeroed_path_lines(), lines2=saved_to_find.get_zeroed_path_lines(), max_dist=1000)
+  print("Mismatch dist:", mismatch_dist)
+  print("bboxes:", to_find.get_zeroed_bbox(), saved_to_find.get_zeroed_bbox())
+  elems2, w2, h2 = get_pdf(which=0)
+  indexer2 = pdfindexer.PdfIndexer(wrappers=elems2, page_width=w2, page_height=h2)
+  saved_to_find_orig = get_door_label_symbol(indexer=indexer2)
+  print(len(to_find.get_zeroed_path_lines()), len(saved_to_find.get_zeroed_path_lines()))
+  # Different lengths, to_find uses c curves. saved_to_find uses just m and l
+  # Even though they have different zeroed lines, they do draw very similarly
+  #print("To find:", to_find.original_path)
+  #print("Saved:", saved_to_find.original_path)
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  to_draw = [elem for elem in results]
+  to_draw.extend(result_inner_contents)
+  print(to_find.original_path)
+  drawer.draw_elems(elems=[to_find, saved_to_find, saved_to_find_orig[0]], draw_buttons=True, align_top_left=True)
+  drawer.show("Found")
 
 def door_labels_should_match():
   y0, x0, y1, x1 = 306, 549, 329, 579
@@ -238,6 +271,71 @@ def test_encode_decode():
     print("Checking no equal elements out of {0}".format(len(elems)))
     elems_not_equal(elems=elems)
 
+class SearchSymbol:
+  def __init__(self, elem: pdfextracter.LTJson, description: str, inside_text_regex_str: str, ) -> None:
+    self.elem = elem
+    self.description = description
+    self.inside_text_regex = re.compile(inside_text_regex_str)
+    self.inside_pixels_rule = None
+
+import scipy.spatial # type: ignore
+import re
+class SearchIndexer:
+  def __init__(self, search_items: typing.List[SearchSymbol], items_indexer: pdfindexer.PdfIndexer) -> None:
+    all_elem_shapes = [[e.elem.width, e.elem.height] for e in search_items]
+    self.find_by_shape_kdtree = scipy.spatial.KDTree(data=all_elem_shapes)
+    self.search_items = search_items
+    self.items_indexer = items_indexer
+
+  def match_distance(self, search_elem: pdfextracter.LTJson, query_radius: float):
+    search_shape = [search_elem.width, search_elem.height]
+    result_idxes: typing.List[int] = self.find_by_shape_kdtree.query_ball_point(x=search_shape, r=query_radius) # type: ignore
+    shape_results = [self.search_items[idx] for idx in result_idxes]
+    results: typing.List[SearchSymbol] = []
+    for result in shape_results:
+      if result.inside_text_regex is not None:
+        contents_inside = self.items_indexer.find_contains(bbox=search_elem.bbox)
+        chars_inside = [ c for c in contents_inside if c.size is not None ]
+        chars_inside.sort(key=lambda c: c.bbox[0])
+        text = "".join([c.text for c in chars_inside if c.text is not None])
+        regex_match = result.inside_text_regex.search(text)
+        if regex_match is not None:
+          print("Text:", text)
+          results.append(result)
+    return results
+
+
+def find_by_bbox_and_content():
+  symbols = read_symbols_from_json()
+  search_symbols = {
+    "window_label": SearchSymbol(elem=symbols["window_label"][0], description="window_label", inside_text_regex_str="[a-zA-Z]\\d\\d"),
+    "door_label": SearchSymbol(elem=symbols["door_label"][0], description="door_label", inside_text_regex_str="\\d\\d\\d")
+  }
+
+  elems, width, height = get_pdf(which=1)
+  items_indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  search_indexer = SearchIndexer(search_items=list(search_symbols.values()), items_indexer=items_indexer)
+
+  found_results: typing.Dict[str, typing.List[pdfextracter.LTJson]] = {
+    "window_label": [],
+    "door_label": []
+  }
+  for elem in elems:
+    recognized_symbols = search_indexer.match_distance(search_elem=elem, query_radius=1)
+    if len(recognized_symbols) > 1:
+      print("==== Matched Both ====")
+    for rec in recognized_symbols:
+      found_results[rec.description].append(elem)
+  for symbol_name, symbol_matches in found_results.items():
+    print(symbol_name, ":", len(symbol_matches))
+
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  to_draw: typing.List[pdfextracter.LTJson] = []
+  for val in found_results.values():
+    to_draw.extend(val)
+  drawer.draw_elems(elems=to_draw, draw_buttons=True, align_top_left=False)
+  drawer.show("Found")
+
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--getall", dest="getall", default=False, action="store_true")
@@ -248,6 +346,7 @@ def parse_args():
   parser.add_argument("--upload", dest="upload", default=False, action="store_true")
   parser.add_argument("--find", dest="find", default=False, action="store_true")
   parser.add_argument("--showall", dest="showall", default=False, action="store_true")
+  parser.add_argument("--findbbox", dest="findbbox", default=False, action="store_true")
   parser.add_argument("--x0", dest="x0", type=int, required=False)
   parser.add_argument("--y0", dest="y0", type=int, required=False)
   parser.add_argument("--x1", dest="x1", type=int, required=False)
@@ -258,13 +357,18 @@ def main():
   args = parse_args()
   if args.test:
     test_encode_decode()
-  elif args.find:
-    find_symbol()
   elif args.showall:
     showall()
   elif args.x0 is not None and args.y0 is not None and args.x1 is not None and args.y1 is not None:
     # python3 michaelsmithsymbols.py --y0 306 --x0 549 --y1 329 --x1 579
-    show_inside(y0=args.y0, x0=args.x0, y1=args.y1, x1=args.x1)
+    if args.find:
+      find_symbol_elem(y0=args.y0, x0=args.x0, y1=args.y1, x1=args.x1)
+    else:
+      show_inside(y0=args.y0, x0=args.x0, y1=args.y1, x1=args.x1)
+  elif args.find:
+    find_symbol()
+  elif args.findbbox:
+    find_by_bbox_and_content()
   elif args.getall:
     get_all_symbols(save=args.save)
   else:
@@ -272,4 +376,5 @@ def main():
 
 
 if __name__ == "__main__":
+  # python3 -m pdfextract.michaelsmithsymbols --find
   main()

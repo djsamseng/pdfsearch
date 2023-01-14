@@ -14,6 +14,29 @@ def get_pdf_num_pages(pdfdata_io: io.BytesIO):
   num_pages = pdfminer.pdftypes.resolve1(document.catalog["Pages"])["Count"]
   return num_pages
 
+# Recognizer is the opposite of searching in terms of datastructures
+# Recognizer is good for classifying areas
+# Recognizer easily misses things
+# Searching is good for pulling together what I recognized
+# Searching easily finds things that don't count
+# 1. Take a quick look and recognize areas
+# 2. This gives me a good idea of what to search for on this page and where
+class ArchitectRecognizer:
+  def __init__(self) -> None:
+    pass
+
+class SymbolRecognizer:
+  def __init__(self, ) -> None:
+    pass
+
+class TableRecognizer:
+  def __init__(self) -> None:
+    pass
+
+class PageProcessor:
+  def __init__(self) -> None:
+    self.architect_vote = []
+
 class PdfProcessor:
   def __init__(self, pages_gen: typing.Iterator[pdfminer.layout.LTPage]) -> None:
     self.pages_gen = pages_gen
@@ -24,6 +47,7 @@ class PdfProcessor:
       height = page.height
       elems = pdfextracter.get_underlying_parent_links(elems=page)
       indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+      # Given the information I'm looking at, who is it relevant to? Give them that information and they update their votes
       print("Indexer:", indexer)
       yield
 

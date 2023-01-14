@@ -42,6 +42,7 @@ class LTJson:
     # Prive unserialized
     self.__path_lines = None
     self.__zeroed_path_lines: typing.Union[typing.List[path_utils.LinePointsType], None] = None
+    self.__zeroed_bbox: typing.Union[BboxType, None] = None
 
     if elem is not None:
       self.bbox = elem.bbox
@@ -165,6 +166,15 @@ class LTJson:
     for (x0, y0), (x1, y1) in path_lines:
       self.__zeroed_path_lines.append(((x0-xmin, y0-ymin), (x1-xmin, y1-ymin)))
     return self.__zeroed_path_lines
+
+  def get_zeroed_bbox(self):
+    if self.__zeroed_bbox is not None:
+      return self.__zeroed_bbox
+    x0, y0, x1, y1 = self.bbox
+    minx = min(x0, x1)
+    miny = min(y0, y1)
+    self.__zeroed_bbox = (x0-minx, y0-miny, x1-minx, y1-miny)
+    return self.__zeroed_bbox
 
   def as_dict(self):
     out: typing.Dict[str, typing.Any] = dict()
