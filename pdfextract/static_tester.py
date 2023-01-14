@@ -10,6 +10,7 @@ import scipy.spatial # type: ignore
 from . import pdfelemtransforms
 from . import pdfindexer
 from . import pdftkdrawer
+from .ltjson import LTJson
 
 def text_is_window_key(text: str):
   if len(text) == 3 and text[0].isalpha() and text[1:].isdigit():
@@ -18,7 +19,7 @@ def text_is_window_key(text: str):
 
 def find_similar(
   indexer: pdfindexer.PdfIndexer,
-  search_shape: pdfelemtransforms.LTJson,
+  search_shape: LTJson,
   inner_text_matcher: typing.Callable[[str], bool]
 ):
   # all elements with similar shaped bbox
@@ -41,7 +42,7 @@ def extract_window_key(args: typing.Any):
     height = int(height)
 
   elem_wrappers = pdfelemtransforms.get_underlying_parent_links(elems=page_elems)
-  found_by_text: typing.List[pdfelemtransforms.LTJson] = []
+  found_by_text: typing.List[LTJson] = []
   for wrapper in elem_wrappers:
     if wrapper.text is not None:
       text = wrapper.text[:-1]
@@ -49,7 +50,7 @@ def extract_window_key(args: typing.Any):
         # LTTextBoxHorizontal contains a LTTextLineHorizontal both with the same text
         found_by_text.append(wrapper)
 
-  def index_insertion_generator(elems: typing.List[pdfelemtransforms.LTJson]):
+  def index_insertion_generator(elems: typing.List[LTJson]):
     for i, wrapper in enumerate(elems):
       x0, y0, x1, y1 = wrapper.bbox
       yield (i, (x0, height-y1, x1, height-y0), i)
@@ -67,7 +68,7 @@ def extract_window_key(args: typing.Any):
   neighbor_idxes: typing.List[int] = kdtree_index.query_ball_point(x=search_elem_shape, r=1) # type: ignore
   neighbor_wrappers = [elem_wrappers[idx] for idx in neighbor_idxes]
   # TODO: Change draw_elems to highlight_elems, draw everything
-  draw_wrappers: typing.List[pdfelemtransforms.LTJson] = []
+  draw_wrappers: typing.List[LTJson] = []
   for wrapper in neighbor_wrappers:
     # elem = thing of similar shape
     # TODO: Further filter elements that are the same type and path
