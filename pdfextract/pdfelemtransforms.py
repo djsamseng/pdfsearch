@@ -76,4 +76,3 @@ def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: Bbox
       old_idx_to_new_idx[old_idx] = len(out) - 1
 
   return out
-

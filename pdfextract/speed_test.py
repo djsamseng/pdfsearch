@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level
 
-from . import pdfextracter
+from . import pdfelemtransforms
 from . import pdftkdrawer
 from .ltjson import LTJson
 
@@ -60,7 +60,7 @@ def extract_window_key(args: typing.Any):
     width = int(width)
     height = int(height)
 
-  elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page_elems)
+  elem_wrappers = pdfelemtransforms.get_underlying_parent_links(elems=page_elems)
   found_by_text: typing.List[LTJson] = []
   for wrapper in elem_wrappers:
     if wrapper.text is not None:
@@ -138,7 +138,7 @@ def brute_force_find_contents(
   for wrapper in elem_wrappers:
     bbox = wrapper.bbox
     for search_box in bboxes:
-      if pdfextracter.box_contains(outer=search_box, inner=bbox):
+      if pdfelemtransforms.box_contains(outer=search_box, inner=bbox):
         out.append(wrapper) # TODO: multiple boxes
   return out
 
@@ -196,7 +196,7 @@ def load_elems():
     width = int(width)
     height = int(height)
 
-  elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page_elems)
+  elem_wrappers = pdfelemtransforms.get_underlying_parent_links(elems=page_elems)
   return elem_wrappers, width, height
 
 def rtree_vs_brute_force():

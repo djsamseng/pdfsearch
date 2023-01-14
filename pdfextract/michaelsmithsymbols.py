@@ -8,10 +8,10 @@ import numpy as np
 import pdfminer.high_level
 
 from . import debug_utils
-from . import pdfextracter
+from . import pdfelemtransforms
 from . import pdfindexer
 from . import pdftkdrawer
-from .ltjson import LTJsonResponse
+from .ltjson import LTJson, LTJsonResponse, LTJsonEncoder
 
 def find_contains_with_room(
   indexer: pdfindexer.PdfIndexer,
@@ -81,7 +81,7 @@ def get_pdf(which:int = 0):
   page = pages[0]
   width = int(page.width)
   height = int(page.height)
-  elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page)
+  elem_wrappers = pdfelemtransforms.get_underlying_parent_links(elems=page)
   return elem_wrappers, width, height
 
 def get_all_symbols(save: bool):
@@ -96,7 +96,7 @@ def get_all_symbols(save: bool):
   sink_symbol = get_sink_symbol(indexer=indexer)
   toilet_symbol = get_toilet_symbol(indexer=indexer)
 
-  all_symbols: typing.Dict[str, typing.List[pdfextracter.LTJson]] = {
+  all_symbols: typing.Dict[str, typing.List[LTJson]] = {
     "notes_circle": notes_circle,
     "window_label": window_label,
     "window_symbol": window_symbol,
@@ -106,7 +106,7 @@ def get_all_symbols(save: bool):
     "toilet_symbol": toilet_symbol,
   }
   if save:
-    encoder = pdfextracter.LTJsonEncoder()
+    encoder = LTJsonEncoder()
     json_string = encoder.encode(all_symbols)
     with open("./lambdacontainer/processpdffunction/symbols_michael_smith.json", "w") as f:
       f.write(json_string)
@@ -120,11 +120,11 @@ def read_symbols_from_json():
   with open("./lambdacontainer/processpdffunction/symbols_michael_smith.json", "r") as f:
     json_string = f.read()
   symbols_dicts = json.loads(json_string)
-  symbols: typing.Dict[str, typing.List[pdfextracter.LTJson]] = dict()
+  symbols: typing.Dict[str, typing.List[LTJson]] = dict()
   for key, serialized_elems in symbols_dicts.items():
-    elems: typing.List[pdfextracter.LTJson] = []
+    elems: typing.List[LTJson] = []
     for serialized_json in serialized_elems:
-      elems.append(pdfextracter.LTJson(serialized_json=serialized_json))
+      elems.append(LTJson(serialized_json=serialized_json))
     symbols[key] = elems
   return symbols
 
@@ -156,7 +156,7 @@ def find_symbol():
 
   response_obj["page9"] = page_response_obj
   simple_response_obj["page9"] = simple_page_response_obj
-  encoder = pdfextracter.LTJsonEncoder()
+  encoder = LTJsonEncoder()
   json_string = encoder.encode(response_obj)
   compressed_string = gzip.compress(bytes(json_string, "utf-8"))
   simple_json_string = encoder.encode(simple_response_obj)
@@ -239,7 +239,7 @@ def showall():
   drawer.draw_elems(elems=elems, draw_buttons=False)
   drawer.show("All")
 
-def elems_not_equal(elems: typing.List[pdfextracter.LTJson]):
+def elems_not_equal(elems: typing.List[LTJson]):
   for idx1 in range(len(elems)):
     if idx1 == 16449 or idx1 == 20620:
       continue
@@ -255,12 +255,12 @@ def elems_not_equal(elems: typing.List[pdfextracter.LTJson]):
 def test_encode_decode():
   debug_utils.is_debug = True
   elem_wrappers, _, _ = get_pdf()
-  encoder = pdfextracter.LTJsonEncoder()
+  encoder = LTJsonEncoder()
   json_string = encoder.encode(elem_wrappers)
 
   elem_dicts = json.loads(json_string)
   np.testing.assert_allclose(len(elem_dicts), len(elem_wrappers))
-  elems = [pdfextracter.LTJson(serialized_json=elem) for elem in elem_dicts]
+  elems = [LTJson(serialized_json=elem) for elem in elem_dicts]
   for idx in range(len(elems)):
     if elems[idx] != elem_wrappers[idx]:
       print("Not equal:", elems[idx], elem_wrappers[idx])
@@ -284,7 +284,7 @@ def find_by_bbox_and_content():
   items_indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
   search_indexer = pdfindexer.SearchIndexer(search_items=list(search_symbols.values()), items_indexer=items_indexer)
 
-  found_results: typing.Dict[str, typing.List[pdfextracter.LTJson]] = {
+  found_results: typing.Dict[str, typing.List[LTJson]] = {
     "window_label": [],
     "door_label": []
   }
@@ -298,7 +298,7 @@ def find_by_bbox_and_content():
     print(symbol_name, ":", len(symbol_matches))
 
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-  to_draw: typing.List[pdfextracter.LTJson] = []
+  to_draw: typing.List[LTJson] = []
   for val in found_results.values():
     to_draw.extend(val)
   drawer.draw_elems(elems=to_draw, draw_buttons=True, align_top_left=False)

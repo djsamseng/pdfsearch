@@ -7,7 +7,7 @@ import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 import rtree
 import scipy.spatial # type: ignore
 
-from . import pdfextracter
+from . import pdfelemtransforms
 from . import pdfindexer
 from . import pdftkdrawer
 
@@ -18,7 +18,7 @@ def text_is_window_key(text: str):
 
 def find_similar(
   indexer: pdfindexer.PdfIndexer,
-  search_shape: pdfextracter.LTJson,
+  search_shape: pdfelemtransforms.LTJson,
   inner_text_matcher: typing.Callable[[str], bool]
 ):
   # all elements with similar shaped bbox
@@ -40,8 +40,8 @@ def extract_window_key(args: typing.Any):
     width = int(width)
     height = int(height)
 
-  elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page_elems)
-  found_by_text: typing.List[pdfextracter.LTJson] = []
+  elem_wrappers = pdfelemtransforms.get_underlying_parent_links(elems=page_elems)
+  found_by_text: typing.List[pdfelemtransforms.LTJson] = []
   for wrapper in elem_wrappers:
     if wrapper.text is not None:
       text = wrapper.text[:-1]
@@ -49,7 +49,7 @@ def extract_window_key(args: typing.Any):
         # LTTextBoxHorizontal contains a LTTextLineHorizontal both with the same text
         found_by_text.append(wrapper)
 
-  def index_insertion_generator(elems: typing.List[pdfextracter.LTJson]):
+  def index_insertion_generator(elems: typing.List[pdfelemtransforms.LTJson]):
     for i, wrapper in enumerate(elems):
       x0, y0, x1, y1 = wrapper.bbox
       yield (i, (x0, height-y1, x1, height-y0), i)
@@ -67,7 +67,7 @@ def extract_window_key(args: typing.Any):
   neighbor_idxes: typing.List[int] = kdtree_index.query_ball_point(x=search_elem_shape, r=1) # type: ignore
   neighbor_wrappers = [elem_wrappers[idx] for idx in neighbor_idxes]
   # TODO: Change draw_elems to highlight_elems, draw everything
-  draw_wrappers: typing.List[pdfextracter.LTJson] = []
+  draw_wrappers: typing.List[pdfelemtransforms.LTJson] = []
   for wrapper in neighbor_wrappers:
     # elem = thing of similar shape
     # TODO: Further filter elements that are the same type and path
@@ -118,7 +118,7 @@ def extract_first_floor():
   page_gen = pdfminer.high_level.extract_pages(pdf_file="plan.pdf", page_numbers=[6,7,8,9])
   for _, page in enumerate(page_gen):
     tp0 = time.time()
-    elems = pdfextracter.get_underlying_parent_links(elems=page)
+    elems = pdfelemtransforms.get_underlying_parent_links(elems=page)
     tp1 = time.time()
 
     # extracting the page in enumerate(page_gen) takes the most time
@@ -129,7 +129,7 @@ def extract_first_floor():
 
   y0 = height - y1a
   y1 = height - y0a
-  results = pdfextracter.filter_contains_bbox_hierarchical(elems=elems, bbox=(x0,y0,x1,y1))
+  results = pdfelemtransforms.filter_contains_bbox_hierarchical(elems=elems, bbox=(x0,y0,x1,y1))
   char_results = [r for r in results if r.size is not None]
   containers = [r for r in results if r.is_container]
   for parent in containers:

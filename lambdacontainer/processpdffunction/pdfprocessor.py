@@ -6,7 +6,7 @@ import pdfminer, pdfminer.pdfparser, pdfminer.pdfdocument, pdfminer.pdftypes, pd
 
 import dataprovider
 import debugutils
-from pdfextract import pdfindexer, pdfextracter
+from pdfextract import pdfindexer, pdfelemtransforms
 
 def get_pdf_num_pages(pdfdata_io: io.BytesIO):
   parser = pdfminer.pdfparser.PDFParser(pdfdata_io)
@@ -45,7 +45,7 @@ class PdfProcessor:
     for page in self.pages_gen:
       width = page.width
       height = page.height
-      elems = pdfextracter.get_underlying_parent_links(elems=page)
+      elems = pdfelemtransforms.get_underlying_parent_links(elems=page)
       indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
       # Given the information I'm looking at, who is it relevant to? Give them that information and they update their votes
       print("Indexer:", indexer)

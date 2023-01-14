@@ -7,7 +7,7 @@ from tkinter import ttk
 import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
-from . import pdfextracter
+from . import pdfelemtransforms
 from .ltjson import LTJson, ElemListType
 
 
@@ -409,7 +409,7 @@ def get_awindows_key(window_schedule_elems: typing.Iterable[LTJson], page_width:
   y0, x0 = 1027, 971
   y1, x1 = 1043, 994
   bbox = (x0, page_height-y1, x1, page_height-y0)
-  key_elems = pdfextracter.filter_contains_bbox_hierarchical(elems=window_schedule_elems, bbox=bbox)
+  key_elems = pdfelemtransforms.filter_contains_bbox_hierarchical(elems=window_schedule_elems, bbox=bbox)
   return key_elems
 
 def test_drawer():
@@ -419,12 +419,12 @@ def test_drawer():
     width = int(width)
     height = int(height)
 
-  window_schedule_wrappers = pdfextracter.get_underlying_parent_links(elems=window_schedule_elems)
+  window_schedule_wrappers = pdfelemtransforms.get_underlying_parent_links(elems=window_schedule_elems)
 
   drawer = TkDrawer(width=width, height=height)
   awindows_key = get_awindows_key(window_schedule_elems=window_schedule_wrappers, page_width=width, page_height=height)
   # debug_utils.print_elem_tree(elems=awindows_key)
-  underlying = pdfextracter.get_underlying_parent_links(window_schedule_elems)
+  underlying = pdfelemtransforms.get_underlying_parent_links(window_schedule_elems)
   drawer.draw_elems(elems=underlying)
   drawer.show("A Windows Key")
 
