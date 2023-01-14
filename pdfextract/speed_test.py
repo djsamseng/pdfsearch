@@ -5,8 +5,9 @@ import time
 import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level
 
-import pdfextracter
-import pdftkdrawer
+from . import pdfextracter
+from . import pdftkdrawer
+from .ltjson import LTJson
 
 import scipy.spatial # type: ignore
 import rtree
@@ -23,11 +24,11 @@ class PdfIndexer:
   find_by_shape_kdtree: scipy.spatial.KDTree
   def __init__(
     self,
-    wrappers: typing.List[pdfextracter.LTJson],
+    wrappers: typing.List[LTJson],
     page_width: int,
     page_height: int,
   ) -> None:
-    def index_insertion_generator(elems: typing.List[pdfextracter.LTJson]):
+    def index_insertion_generator(elems: typing.List[LTJson]):
       for i, wrapper in enumerate(elems):
         x0, y0, x1, y1 = wrapper.bbox
         yield (i, (x0, page_height-y1, x1, page_height-y0), i)
@@ -38,7 +39,7 @@ class PdfIndexer:
 
 def find_similar(
   indexer: PdfIndexer,
-  search_shape: pdfextracter.LTJson,
+  search_shape: LTJson,
   inner_text_matcher: typing.Callable[[str], bool]
 ):
   # all elements with similar shaped bbox
@@ -53,14 +54,14 @@ def find_similar(
 
 def extract_window_key(args: typing.Any):
   show_ui = True
-  with np.load("../flaskapi/first_floor_construction.npz", allow_pickle=True) as f:
+  with np.load("./flaskapi/first_floor_construction.npz", allow_pickle=True) as f:
     page_elems, width, height = f["elems"], f["width"], f["height"]
     page_elems: typing.List[pdfminer.layout.LTComponent] = page_elems
     width = int(width)
     height = int(height)
 
   elem_wrappers = pdfextracter.get_underlying_parent_links(elems=page_elems)
-  found_by_text: typing.List[pdfextracter.LTJson] = []
+  found_by_text: typing.List[LTJson] = []
   for wrapper in elem_wrappers:
     if wrapper.text is not None:
       text = wrapper.text[:-1]
@@ -68,7 +69,7 @@ def extract_window_key(args: typing.Any):
         # LTTextBoxHorizontal contains a LTTextLineHorizontal both with the same text
         found_by_text.append(wrapper)
 
-  def index_insertion_generator(elems: typing.List[pdfextracter.LTJson]):
+  def index_insertion_generator(elems: typing.List[LTJson]):
     for i, wrapper in enumerate(elems):
       x0, y0, x1, y1 = wrapper.bbox
       yield (i, (x0, height-y1, x1, height-y0), i)
@@ -86,7 +87,7 @@ def extract_window_key(args: typing.Any):
   neighbor_idxes: typing.List[int] = kdtree_index.query_ball_point(x=search_elem_shape, r=1) # type: ignore
   neighbor_wrappers = [elem_wrappers[idx] for idx in neighbor_idxes]
   # TODO: Change draw_elems to highlight_elems, draw everything
-  draw_wrappers: typing.List[pdfextracter.LTJson] = []
+  draw_wrappers: typing.List[LTJson] = []
   for wrapper in neighbor_wrappers:
     # elem = thing of similar shape
     # TODO: Further filter elements that are the same type and path
@@ -130,10 +131,10 @@ def extract_window_key(args: typing.Any):
     drawer.show("First floor construction plan")
 
 def brute_force_find_contents(
-  elem_wrappers: typing.List[pdfextracter.LTJson],
+  elem_wrappers: typing.List[LTJson],
   bboxes: typing.List[typing.Tuple[float,float,float,float]],
 ):
-  out: typing.List[pdfextracter.LTJson] = []
+  out: typing.List[LTJson] = []
   for wrapper in elem_wrappers:
     bbox = wrapper.bbox
     for search_box in bboxes:
@@ -142,10 +143,10 @@ def brute_force_find_contents(
   return out
 
 def brute_force_find_shape(
-  elem_wrappers: typing.List[pdfextracter.LTJson],
+  elem_wrappers: typing.List[LTJson],
   shapes_hw: typing.List[typing.Tuple[float, float]],
 ):
-  out: typing.List[pdfextracter.LTJson] = []
+  out: typing.List[LTJson] = []
   for wrapper in elem_wrappers:
     for height, width in shapes_hw:
       diff = np.abs(height - wrapper.height) + np.abs(width - wrapper.width)
@@ -189,7 +190,7 @@ def kdtree_vs_brute_force():
       break
 
 def load_elems():
-  with np.load("../flaskapi/first_floor_construction.npz", allow_pickle=True) as f:
+  with np.load("./flaskapi/first_floor_construction.npz", allow_pickle=True) as f:
     page_elems, width, height = f["elems"], f["width"], f["height"]
     page_elems: typing.List[pdfminer.layout.LTComponent] = page_elems
     width = int(width)

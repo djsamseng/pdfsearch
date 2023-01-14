@@ -116,22 +116,13 @@ def extract_window_key(args: typing.Any):
 def extract_first_floor():
   import time
   page_gen = pdfminer.high_level.extract_pages(pdf_file="plan.pdf", page_numbers=[6,7,8,9])
-  for page_number, page in enumerate(page_gen):
+  for _, page in enumerate(page_gen):
     tp0 = time.time()
     elems = pdfextracter.get_underlying_parent_links(elems=page)
     tp1 = time.time()
-    t0 = time.time()
-    page_ops = pdfextracter.extract_page_operations(page_elems=elems)
-    t1 = time.time()
-    print("===== Page {0} =====".format(page_number+6))
-    floor_name = ""
-    for p in page_ops:
-      if p.floor_name != floor_name:
-        floor_name = p.floor_name
-        print(p)
 
     # extracting the page in enumerate(page_gen) takes the most time
-    print("Took:", tp1-tp0, t1-t0, time.time()-tp0)
+    print("Took:", tp1-tp0, time.time()-tp0)
   return
   y0a, x0 = 1873, 2772
   y1a, x1 = 2113, 2977

@@ -11,6 +11,7 @@ from . import debug_utils
 from . import pdfextracter
 from . import pdfindexer
 from . import pdftkdrawer
+from .ltjson import LTJsonResponse
 
 def find_contains_with_room(
   indexer: pdfindexer.PdfIndexer,
@@ -131,15 +132,15 @@ def find_symbol():
   symbols = read_symbols_from_json()
   elems, width, height = get_pdf()
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  response_obj: typing.Dict[str, typing.Dict[str, typing.List[pdfextracter.LTJsonResponse]]] = {}
+  response_obj: typing.Dict[str, typing.Dict[str, typing.List[LTJsonResponse]]] = {}
   simple_response_obj: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
-  page_response_obj: typing.Dict[str, typing.List[pdfextracter.LTJsonResponse]] = {}
+  page_response_obj: typing.Dict[str, typing.List[LTJsonResponse]] = {}
   simple_page_response_obj: typing.Dict[str, typing.Any] = {}
   for symbol_key in ["door_label", "window_label"]:
     # notes_circle, door_label fails because of "c" curves
     to_find = symbols[symbol_key][0]
     results, result_inner_contents = pdfindexer.find_symbol_with_text(symbol=to_find, indexer=indexer)
-    result_response = [pdfextracter.LTJsonResponse(elem=elem) for elem in results]
+    result_response = [LTJsonResponse(elem=elem) for elem in results]
     page_response_obj[symbol_key] = result_response
     labels = [elem.label for elem in result_response]
     simple_page_response_obj[symbol_key] = len(labels)
@@ -271,50 +272,17 @@ def test_encode_decode():
     print("Checking no equal elements out of {0}".format(len(elems)))
     elems_not_equal(elems=elems)
 
-class SearchSymbol:
-  def __init__(self, elem: pdfextracter.LTJson, description: str, inside_text_regex_str: str, ) -> None:
-    self.elem = elem
-    self.description = description
-    self.inside_text_regex = re.compile(inside_text_regex_str)
-    self.inside_pixels_rule = None
-
-import scipy.spatial # type: ignore
-import re
-class SearchIndexer:
-  def __init__(self, search_items: typing.List[SearchSymbol], items_indexer: pdfindexer.PdfIndexer) -> None:
-    all_elem_shapes = [[e.elem.width, e.elem.height] for e in search_items]
-    self.find_by_shape_kdtree = scipy.spatial.KDTree(data=all_elem_shapes)
-    self.search_items = search_items
-    self.items_indexer = items_indexer
-
-  def match_distance(self, search_elem: pdfextracter.LTJson, query_radius: float):
-    search_shape = [search_elem.width, search_elem.height]
-    result_idxes: typing.List[int] = self.find_by_shape_kdtree.query_ball_point(x=search_shape, r=query_radius) # type: ignore
-    shape_results = [self.search_items[idx] for idx in result_idxes]
-    results: typing.List[SearchSymbol] = []
-    for result in shape_results:
-      if result.inside_text_regex is not None:
-        contents_inside = self.items_indexer.find_contains(bbox=search_elem.bbox)
-        chars_inside = [ c for c in contents_inside if c.size is not None ]
-        chars_inside.sort(key=lambda c: c.bbox[0])
-        text = "".join([c.text for c in chars_inside if c.text is not None])
-        regex_match = result.inside_text_regex.search(text)
-        if regex_match is not None:
-          print("Text:", text)
-          results.append(result)
-    return results
-
 
 def find_by_bbox_and_content():
   symbols = read_symbols_from_json()
   search_symbols = {
-    "window_label": SearchSymbol(elem=symbols["window_label"][0], description="window_label", inside_text_regex_str="[a-zA-Z]\\d\\d"),
-    "door_label": SearchSymbol(elem=symbols["door_label"][0], description="door_label", inside_text_regex_str="\\d\\d\\d")
+    "window_label": pdfindexer.SearchSymbol(elem=symbols["window_label"][0], description="window_label", inside_text_regex_str="[a-zA-Z]\\d\\d"),
+    "door_label": pdfindexer.SearchSymbol(elem=symbols["door_label"][0], description="door_label", inside_text_regex_str="\\d\\d\\d")
   }
 
   elems, width, height = get_pdf(which=1)
   items_indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  search_indexer = SearchIndexer(search_items=list(search_symbols.values()), items_indexer=items_indexer)
+  search_indexer = pdfindexer.SearchIndexer(search_items=list(search_symbols.values()), items_indexer=items_indexer)
 
   found_results: typing.Dict[str, typing.List[pdfextracter.LTJson]] = {
     "window_label": [],

@@ -8,7 +8,8 @@ import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
 from . import pdfextracter
-from . import debug_utils
+from .ltjson import LTJson, ElemListType
+
 
 
 class AutoScrollbar(ttk.Scrollbar):
@@ -77,7 +78,7 @@ class ZoomCanvas(ttk.Frame):
 
   def draw_path(
     self,
-    wrapper: pdfextracter.LTJson,
+    wrapper: LTJson,
     color: str,
     xmin: int,
     ymin: int
@@ -290,7 +291,7 @@ class TkDrawerMainWindow(ttk.Frame):
     if event.keycode in [9]: # Esc
       self.master.destroy()
 
-def pdfminer_class_name(elem: pdfextracter.LTJson):
+def pdfminer_class_name(elem: LTJson):
   if elem.is_container:
     return "Container"
   if elem.original_path is not None:
@@ -307,7 +308,7 @@ class TkDrawer:
     self.app = TkDrawerMainWindow(root=root, window_width=1200, window_height=800, page_width=width, page_height=height)
   def insert_container(
     self,
-    elem: pdfextracter.LTJson,
+    elem: LTJson,
     parent_idx: typing.Union[int, None],
     xmin: int,
     ymin: int,
@@ -332,7 +333,7 @@ class TkDrawer:
       )
   def draw_path(
     self,
-    wrapper: pdfextracter.LTJson,
+    wrapper: LTJson,
     parent_idx: typing.Union[int, None],
     xmin: int,
     ymin: int,
@@ -347,7 +348,7 @@ class TkDrawer:
         callback=on_press)
   def insert_text(
     self,
-    elem: pdfextracter.LTJson,
+    elem: LTJson,
     parent_idx: typing.Union[int, None],
     xmin: int,
     ymin: int,
@@ -369,7 +370,7 @@ class TkDrawer:
     self.app.controlPanel.finish_draw()
     self.app.mainloop()
 
-  def draw_elems(self, elems: typing.Iterable[pdfextracter.LTJson], align_top_left: bool=False, draw_buttons: bool=True):
+  def draw_elems(self, elems: typing.Iterable[LTJson], align_top_left: bool=False, draw_buttons: bool=True):
     # Want to accept the hierarchy
     # If we get a container, we want to present the container in the control panel with its inner text
     # however when we draw we draw the underlying LTChar
@@ -393,7 +394,7 @@ class TkDrawer:
         print("Unhandled draw", wrapper)
         #assert False, "Unhandled draw" + str(elem)
 
-  def get_minx_miny(self, wrappers: typing.Iterable[pdfextracter.LTJson]):
+  def get_minx_miny(self, wrappers: typing.Iterable[LTJson]):
     xmin = self.page_width
     ymax = 0
     for wrapper in wrappers:
@@ -404,7 +405,7 @@ class TkDrawer:
     return int(xmin), self.page_height - int(ymax)
 
 
-def get_awindows_key(window_schedule_elems: typing.Iterable[pdfextracter.LTJson], page_width: int, page_height: int):
+def get_awindows_key(window_schedule_elems: typing.Iterable[LTJson], page_width: int, page_height: int):
   y0, x0 = 1027, 971
   y1, x1 = 1043, 994
   bbox = (x0, page_height-y1, x1, page_height-y0)
@@ -412,9 +413,9 @@ def get_awindows_key(window_schedule_elems: typing.Iterable[pdfextracter.LTJson]
   return key_elems
 
 def test_drawer():
-  with np.load("../flaskapi/window_schedule_hierarchy.npz", allow_pickle=True) as f:
+  with np.load("./flaskapi/window_schedule_hierarchy.npz", allow_pickle=True) as f:
     window_schedule_elems, width, height = f["elems"], f["width"], f["height"]
-    window_schedule_elems: pdfextracter.ElemListType = window_schedule_elems
+    window_schedule_elems: ElemListType = window_schedule_elems
     width = int(width)
     height = int(height)
 
