@@ -275,16 +275,20 @@ def test_encode_decode():
 
 
 def find_by_bbox_and_content():
+  import time
+  t0 = time.time()
   symbols = read_symbols_from_json()
+  t1 = time.time()
   search_symbols = {
     "window_label": pdfindexer.SearchSymbol(elem=symbols["window_label"][0], description="window_label", inside_text_regex_str="[a-zA-Z]\\d\\d"),
     "door_label": pdfindexer.SearchSymbol(elem=symbols["door_label"][0], description="door_label", inside_text_regex_str="\\d\\d\\d")
   }
-
+  t2 = time.time()
   elems, width, height = get_pdf(which=1)
+  t3a = time.time()
   items_indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
   search_indexer = pdfindexer.SearchIndexer(search_items=list(search_symbols.values()), items_indexer=items_indexer)
-
+  t3b = time.time()
   found_results: typing.Dict[str, typing.List[LTJson]] = {
     "window_label": [],
     "door_label": []
@@ -295,16 +299,22 @@ def find_by_bbox_and_content():
       print("==== Matched Both ====")
     for rec in recognized_symbols:
       found_results[rec.description].append(elem)
+  t4 = time.time()
   for symbol_name, symbol_matches in found_results.items():
     print(symbol_name, ":", len(symbol_matches))
 
+  t5 = time.time()
   print(pdfextracter.extract_page_name(indexer=items_indexer))
-
+  t6 = time.time()
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   to_draw: typing.List[LTJson] = []
   for val in found_results.values():
     to_draw.extend(val)
   drawer.draw_elems(elems=to_draw, draw_buttons=True, align_top_left=False)
+  t7 = time.time()
+  print("read:", t1-t0, "symbol creation:", t2-t1, "getpdf:", t3a-t2, "indexer creation:", t3b-t3a,
+    "distance match:", t4-t3b, "page name extraction:", t6-t5, "drawing:", t7-t6
+  )
   drawer.show("Found")
 
 def findpagename():

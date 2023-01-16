@@ -1,3 +1,6 @@
+
+import re
+import time
 import typing
 
 import numpy as np
@@ -6,6 +9,8 @@ import scipy.spatial # type: ignore
 
 from . import path_utils
 from .ltjson import LTJson
+
+LOG_TIME = True
 
 class PdfIndexer:
   # To find contents inside shapes
@@ -18,6 +23,7 @@ class PdfIndexer:
     page_width: float,
     page_height: float,
   ) -> None:
+    tb = time.time()
     self.page_width = page_width
     self.page_height = page_height
     self.wrappers = wrappers
@@ -25,9 +31,15 @@ class PdfIndexer:
       for i, wrapper in enumerate(elems):
         yield (i, wrapper.bbox, i)
 
+    t0 = time.time()
     self.find_by_position_rtree = rtree.index.Index(index_insertion_generator(elems=wrappers))
+    t1 = time.time()
     all_elem_shapes = [[wrapper.width, wrapper.height] for wrapper in wrappers]
+    t2 = time.time()
     self.find_by_shape_kdtree = scipy.spatial.KDTree(data=all_elem_shapes)
+    t3 = time.time()
+    if LOG_TIME:
+      print("pdfindexer rtree:", t1-t0, "kdtree:", t3-t2, "total:", t3-tb)
 
   def find_contains(
     self,
@@ -62,13 +74,20 @@ class PdfIndexer:
     wrapper_to_find: LTJson,
     query_radius: float,
   ) -> typing.List[LTJson]:
+    t0 = time.time()
     similar_height_width = self.find_similar_height_width(
       width=wrapper_to_find.width,
       height=wrapper_to_find.height,
       query_radius=query_radius
     )
+    t1 = time.time()
     if wrapper_to_find.original_path is not None:
-      return find_similar_curves(wrapper_to_find=wrapper_to_find, wrappers_to_search=similar_height_width, max_dist=query_radius)
+      t2 = time.time()
+      ret = find_similar_curves(wrapper_to_find=wrapper_to_find, wrappers_to_search=similar_height_width, max_dist=query_radius)
+      t3 = time.time()
+      if LOG_TIME:
+        print("find_similar_shapes kdtree:", t1-t0, "loop reduce:", t3-t2)
+      return ret
     return []
 
 
@@ -79,14 +98,18 @@ class SearchSymbol:
     self.inside_text_regex = re.compile(inside_text_regex_str)
     self.inside_pixels_rule = None
 
-import scipy.spatial # type: ignore
-import re
 class SearchIndexer:
   def __init__(self, search_items: typing.List[SearchSymbol], items_indexer: PdfIndexer) -> None:
+    tb = time.time()
     all_elem_shapes = [[e.elem.width, e.elem.height] for e in search_items]
+    t0 = time.time()
     self.find_by_shape_kdtree = scipy.spatial.KDTree(data=all_elem_shapes)
+    t1 = time.time()
+
     self.search_items = search_items
     self.items_indexer = items_indexer
+    if LOG_TIME:
+      print("searchindexer kdtree:", t1-t0, "total:", time.time()-tb)
 
   def match_distance(self, search_elem: LTJson, query_radius: float):
     search_shape = [search_elem.width, search_elem.height]
