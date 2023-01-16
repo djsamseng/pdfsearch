@@ -319,15 +319,15 @@ class TkDrawer:
     ids = self.app.canvas.draw_rect(box=box)
     self.app.canvas.set_item_visibility(ids, visibility=False)
     text = ""
-    if isinstance(elem, pdfminer.layout.LTText):
-      text += " " + elem.get_text()
+    if elem.text is not None:
+      text += elem.text.replace("\n", " ")
     if draw_buttons:
       def on_enter():
         self.app.canvas.set_item_visibility(ids, visibility=True)
       def on_leave():
         self.app.canvas.set_item_visibility(ids, visibility=False)
       self.app.controlPanel.add_button(
-        text="{0} {1} {2}".format(pdfminer_class_name(elem), box, text),
+        text="{0} {1} {2}".format(text, pdfminer_class_name(elem), box),
         on_enter_cb=on_enter,
         on_leave_cb=on_leave
       )
@@ -339,12 +339,22 @@ class TkDrawer:
     ymin: int,
     draw_buttons: bool,
   ):
+
     ids = self.app.canvas.draw_path(wrapper=wrapper, color="black", xmin=xmin, ymin=ymin)
+    text = ""
+    text_idx = None
+    if wrapper.text is not None:
+      text += wrapper.text.replace("\n", " ")
+      x0, y0, x1, y1 = wrapper.bbox
+      font_size = 11
+      text_ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size))
     if draw_buttons:
       def on_press():
         self.app.canvas.set_item_visibility(ids)
+        if text_ids is not None:
+          self.app.canvas.set_item_visibility(text_ids)
       self.app.controlPanel.add_button(
-        text="{0} {1}".format(pdfminer_class_name(wrapper), wrapper.original_path),
+        text="{0} {1} {2}".format(text, pdfminer_class_name(wrapper), wrapper.original_path),
         callback=on_press)
   def insert_text(
     self,
@@ -384,11 +394,12 @@ class TkDrawer:
       if wrapper.is_container:
         # Children always come immediately after container so indentation will be underneath parent
         self.insert_container(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
-      elif wrapper.text is not None:
-        self.insert_text(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
       elif wrapper.original_path is not None and wrapper.linewidth is not None:
         if wrapper.linewidth > 0:
           self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+      elif wrapper.text is not None:
+        self.insert_text(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+
       else:
         #pass
         print("Unhandled draw", wrapper)

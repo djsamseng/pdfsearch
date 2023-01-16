@@ -1,4 +1,6 @@
 
+import collections
+import time
 import typing
 import argparse
 import json
@@ -12,6 +14,7 @@ from . import pdfelemtransforms
 from . import pdfextracter
 from . import pdfindexer
 from . import pdftkdrawer
+from . import votesearch
 from .ltjson import LTJson, LTJsonResponse, LTJsonEncoder
 
 def find_contains_with_room(
@@ -273,6 +276,44 @@ def test_encode_decode():
     print("Checking no equal elements out of {0}".format(len(elems)))
     elems_not_equal(elems=elems)
 
+def find_by_bbox_and_content_search_rule():
+
+  t0 = time.time()
+  symbols = read_symbols_from_json()
+  search_results: typing.List[votesearch.SearchRule] = [
+    votesearch.MultiWindowSearchRule(shape_matches=[
+      symbols["window_label"][0],
+    ], description="windows", regex="(?P<window_class>[a-zA-Z])(?P<window_id>\\d\\d)")
+  ]
+  t1 = time.time()
+  elems, width, height = get_pdf(which=0)
+  t2 = time.time()
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  vote_searcher = votesearch.VoteSearcher(search_rules=search_results, indexer=indexer)
+
+  vote_searcher.process(page_number=2, elems=elems)
+  vote_searcher.refine()
+  results = vote_searcher.get_results()
+  t3 = time.time()
+  def print_indent(d: votesearch.MergeDict, level: int = 0):
+    for key, val in d.items():
+      if isinstance(val, (dict, collections.defaultdict)):
+        print(key.rjust(level))
+        print_indent(d=typing.cast(votesearch.MergeDict, val), level=level+1)
+      elif isinstance(val, list):
+        val = typing.cast(typing.List[LTJson], val)
+        print(key.ljust(level), ":", [v.text for v in val])
+  print_indent(results)
+  all_found = []
+  for pg, val in results.items():
+    for wt, valwt in val.items():
+      for wid, valwid in valwt.items():
+        all_found.extend(valwid)
+  print("Took:", t3-t2 + t1-t0)
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  weird = results["2"]["F"]["01"]
+  drawer.draw_elems(elems=all_found, draw_buttons=True, align_top_left=False)
+  drawer.show("")
 
 def find_by_bbox_and_content():
   import time
@@ -280,8 +321,16 @@ def find_by_bbox_and_content():
   symbols = read_symbols_from_json()
   t1 = time.time()
   search_symbols = {
-    "window_label": pdfindexer.SearchSymbol(elem=symbols["window_label"][0], description="window_label", inside_text_regex_str="[a-zA-Z]\\d\\d"),
-    "door_label": pdfindexer.SearchSymbol(elem=symbols["door_label"][0], description="door_label", inside_text_regex_str="\\d\\d\\d")
+    "window_label": pdfindexer.SearchSymbol(
+      elem=symbols["window_label"][0],
+      description="window_label",
+      inside_text_regex_str="[a-zA-Z]\\d\\d"
+    ),
+    "door_label": pdfindexer.SearchSymbol(
+      elem=symbols["door_label"][0],
+      description="door_label",
+      inside_text_regex_str="\\d\\d\\d"
+    )
   }
   t2 = time.time()
   elems, width, height = get_pdf(which=1)
@@ -356,7 +405,7 @@ def main():
   elif args.find:
     find_symbol()
   elif args.findbbox:
-    find_by_bbox_and_content()
+    find_by_bbox_and_content_search_rule()
   elif args.getall:
     get_all_symbols(save=args.save)
   elif args.findpagename:

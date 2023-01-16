@@ -127,6 +127,9 @@ class LTJson:
         out.append(elem)
     return out
 
+  def __repr__(self) -> str:
+    return self.__str__()
+
   def __str__(self) -> str:
     return json.dumps(self.as_dict())
 

@@ -9,13 +9,20 @@ from .ltjson import LTJson, BboxType, LTJsonEncoder
 def get_underlying_parent_links_impl(
   out: typing.List[LTJson],
   elem: pdfminer.layout.LTComponent,
-  elem_parent_idx: typing.Union[None, int]
+  elem_parent_idx: typing.Union[None, int],
 ):
   if isinstance(elem, pdfminer.layout.LTContainer):
-    out.append(LTJson(elem=typing.cast(pdfminer.layout.LTComponent, elem), parent_idx=elem_parent_idx)) # Add the container
+    # Add the container
+    out.append(
+      LTJson(
+        elem=typing.cast(pdfminer.layout.LTComponent, elem),
+        parent_idx=elem_parent_idx
+      )
+    )
     if isinstance(elem, pdfminer.layout.LTText):
       # takes 20ms out of 150ms
-      out[-1].text = elem.get_text()
+      text = elem.get_text()
+      out[-1].text = text
     child_parent_idx = len(out) - 1 # Get the container's idx
     for child in typing.cast(typing.Iterable[pdfminer.layout.LTComponent], elem):
       # Add the first child
