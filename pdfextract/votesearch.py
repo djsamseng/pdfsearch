@@ -102,9 +102,10 @@ class MultiClassSearchRule(SearchRule):
       elem.bbox[2] + self.radius,
       elem.bbox[3] + self.radius,
     )
+
     around_elems = indexer.find_contains(bbox=around_bbox)
     for shape in self.shape_matches:
-      matching_curves = pdfindexer.find_similar_curves(wrapper_to_find=shape, wrappers_to_search=around_elems, max_dist=1.)
+      matching_curves = pdfindexer.find_similar_curves(wrapper_to_find=shape, wrappers_to_search=around_elems, max_dist=2.)
       # matching_shape = self.__find_outer_shape(around_elems)
       if len(matching_curves) > 0: #matching_shape is not None:
         matching_shape = LTJson(serialized_json=matching_curves[0].as_dict())

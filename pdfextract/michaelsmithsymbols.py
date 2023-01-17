@@ -213,20 +213,33 @@ def find_symbol_elem(y0: float, x0: float, y1: float, x1: float):
   drawer.show("Found")
 
 def door_labels_should_match():
-  y0, x0, y1, x1 = 306, 549, 329, 579
-  elems, width, height = get_pdf()
+  match_window_circle_lines_only = False
+  if match_window_circle_lines_only:
+    y0, x0, y1, x1 = 306, 549, 329, 579
+  else:
+    y0, x0, y1, x1 = 870, 611, 896, 646
+  elems, width, height = get_pdf(which=1)
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
   results = indexer.find_contains(bbox=(x0, y0, x1, y1), y_is_down=True)
   symbols = read_symbols_from_json()
   curve = symbols["door_label"][0]
   path = curve.original_path
-  curve2 = results[0]
+  if match_window_circle_lines_only:
+    curve2 = results[0]
+  else:
+    curve2 = results[-1]
   path2 = curve2.original_path
+  print("=== Path 1 ===")
   print(path)
+  print("=== Path 2 ===")
   print(path2)
+  print("=== Lines 1 ===")
+  print(curve.get_zeroed_path_lines())
+  print("=== Lines 2 ===")
+  print(curve2.get_zeroed_path_lines())
 
-  matches = pdfindexer.find_similar_curves(wrapper_to_find=curve, wrappers_to_search=[curve2], max_dist=1)
-  print(len(matches))
+  matches = pdfindexer.find_similar_curves(wrapper_to_find=curve, wrappers_to_search=[curve2], max_dist=2)
+  print("Matches:", len(matches))
   return
 
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
@@ -276,11 +289,20 @@ def test_encode_decode():
     print("Checking no equal elements out of {0}".format(len(elems)))
     elems_not_equal(elems=elems)
 
+def print_indent(d: votesearch.MergeDict, level: int = 0):
+  for key, val in d.items():
+    if isinstance(val, (dict, collections.defaultdict)):
+      print(" " * level + key)
+      print_indent(d=typing.cast(votesearch.MergeDict, val), level=level+1)
+    elif isinstance(val, list):
+      val = typing.cast(typing.List[LTJson], val)
+      print(" " * level + key, ":", [v.text for v in val])
+
 def find_by_bbox_and_content_search_rule():
 
   t0 = time.time()
   symbols = read_symbols_from_json()
-  search_results: typing.List[votesearch.SearchRule] = [
+  search_rules: typing.List[votesearch.SearchRule] = [
     votesearch.MultiClassSearchRule(shape_matches=[
       symbols["window_label"][0],
     ], description="windows", regex="(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"),
@@ -292,28 +314,19 @@ def find_by_bbox_and_content_search_rule():
   elems, width, height = get_pdf(which=1)
   t2 = time.time()
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  vote_searcher = votesearch.VoteSearcher(search_rules=search_results, indexer=indexer)
+  vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, indexer=indexer)
 
   vote_searcher.process(page_number=2, elems=elems)
   vote_searcher.refine()
   all_results = vote_searcher.get_results()
-  results = all_results["windows"]
   t3 = time.time()
-  def print_indent(d: votesearch.MergeDict, level: int = 0):
-    for key, val in d.items():
-      if isinstance(val, (dict, collections.defaultdict)):
-        print(" " * level + key)
-        print_indent(d=typing.cast(votesearch.MergeDict, val), level=level+1)
-      elif isinstance(val, list):
-        val = typing.cast(typing.List[LTJson], val)
-        print(" " * level + key, ":", [v.text for v in val])
-  print("Windows")
-  print_indent(results, level=2)
-  print("Doors")
-  print_indent(all_results["doors"], level=1)
+  for key, results in all_results.items():
+    print(key)
+    print_indent(results, level=1)
+
   print("Took:", t3-t2 + t1-t0)
 
-  def draw_results(results):
+  def draw_results(results: typing.Dict[str, typing.Any]):
     all_found = []
     for pg, val in results.items():
       for wt, valwt in val.items():
@@ -323,9 +336,10 @@ def find_by_bbox_and_content_search_rule():
     drawer.draw_elems(elems=all_found, draw_buttons=True, align_top_left=False)
     drawer.show("")
 
+  for results in all_results.values():
+    draw_results(results)
+
   # weird = all_results["windows"]["Page 2"]["F"]["01"]
-  draw_results(results=all_results["windows"])
-  draw_results(results=all_results["doors"])
 
 
 def find_by_bbox_and_content():

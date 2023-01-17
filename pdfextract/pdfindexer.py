@@ -55,6 +55,7 @@ class PdfIndexer:
     result_idxes = self.find_by_position_rtree.contains(bbox)
     if result_idxes is None:
       return []
+    result_idxes = list(result_idxes)
     results = [self.wrappers[idx] for idx in result_idxes]
     return results
 
@@ -112,6 +113,7 @@ class SearchIndexer:
       print("searchindexer kdtree:", t1-t0, "total:", time.time()-tb)
 
   def match_distance(self, search_elem: LTJson, query_radius: float):
+    print("TODO: match_distance only looks at width, height")
     search_shape = [search_elem.width, search_elem.height]
     result_idxes: typing.List[int] = self.find_by_shape_kdtree.query_ball_point(x=search_shape, r=query_radius) # type: ignore
     shape_results = [self.search_items[idx] for idx in result_idxes]
@@ -152,7 +154,7 @@ def line_set_distance(
     for lineb in lines2:
       dist = line_distance(linea=linea, lineb=lineb)
       best_dist = min(best_dist, dist)
-    total_dist += best_dist / len(lines2)
+    total_dist += best_dist / max(len(lines1), len(lines2))
     if max_dist >= 0 and total_dist > max_dist:
       # Return early
       return total_dist
@@ -173,9 +175,8 @@ def find_similar_curves(
     potential_lines = wrapper.get_zeroed_path_lines()
     if len(potential_lines) == 0:
       continue
-    if len(potential_lines) != len(lines_to_find):
-      # TODO: Are they visually equivalent?
-      continue
+    # TODO: line distance by area drawn instead of just start/stop
+    # TODO: size agnostic
     dist = line_set_distance(lines1=lines_to_find, lines2=potential_lines, max_dist=max_dist)
     if dist < max_dist:
       results.append(wrapper)
