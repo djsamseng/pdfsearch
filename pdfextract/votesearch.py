@@ -21,18 +21,34 @@ def merge(
     else:
       dest[key] = val
 
+def item_is_multiline_text(item: LTJson):
+  if item.text is not None:
+    item_newline = item.text.find("\n")
+    item_multiline = item_newline >= 0 and \
+      item_newline - 1 < len(item.text)
+    return item_multiline
+  return False
+
 def remove_duplicate_bbox(items: typing.List[LTJson]):
   bbox_indexer = rtree.index.Index()
   idx = 0
   radius = 0
   out: typing.List[LTJson] = []
+  should_swap_out: typing.List[bool] = []
   for item in items:
     results = bbox_indexer.intersection(item.bbox)
+    if results is not None:
+      results = list(results)
+    if results is not None and len(results) == 1:
+      idx = results[0]
+      if should_swap_out[idx]:
+        out[idx] = item
     if results is None or len(list(results)) == 0:
       x0, y0, x1, y1 = item.bbox
       bbox = (x0-radius, y0-radius, x1+radius, y1+radius)
       bbox_indexer.insert(idx, bbox)
       out.append(item)
+      should_swap_out.append(item_is_multiline_text(item=item))
   return out
 
 class SearchRule(metaclass=ABCMeta):
@@ -44,17 +60,17 @@ class SearchRule(metaclass=ABCMeta):
   def get_results(self) -> typing.Dict[str, typing.Any]:
     pass
 
-MultiWindowSearchRuleResults = typing.DefaultDict[
+MultiClassSearchRuleResults = typing.DefaultDict[
   str, # page_number
   typing.DefaultDict[
-    str, # window_class
+    str, # class_name
     typing.DefaultDict[
-      str, # window_id
+      str, # elem_type
       typing.List[LTJson]
     ]
   ]
 ]
-class MultiWindowSearchRule(SearchRule):
+class MultiClassSearchRule(SearchRule):
   def __init__(self, shape_matches: typing.List[LTJson], description: str, regex: str) -> None:
     '''
     regex extracts the window types. the remaining text is the id
@@ -62,9 +78,9 @@ class MultiWindowSearchRule(SearchRule):
     self.shape_matches = shape_matches
     self.description = description
     self.regex = re.compile(regex) # (?P<window_class>[a-zA-Z])(?P<window_id>\\d\\d)
-    self.results: MultiWindowSearchRuleResults = collections.defaultdict( # page_number
-      lambda: collections.defaultdict( # window_class
-        lambda: collections.defaultdict( # window_id
+    self.results: MultiClassSearchRuleResults = collections.defaultdict( # page_number
+      lambda: collections.defaultdict( # class_name
+        lambda: collections.defaultdict( # elem_type
           list
         )
       )
@@ -78,8 +94,8 @@ class MultiWindowSearchRule(SearchRule):
     if match is None:
       return
     groups = match.groupdict()
-    window_class = groups["window_class"]
-    window_id = groups["window_id"]
+    class_name = groups["class_name"]
+    elem_type = groups["elem_type"]
     around_bbox = (
       elem.bbox[0] - self.radius,
       elem.bbox[1] - self.radius,
@@ -87,12 +103,13 @@ class MultiWindowSearchRule(SearchRule):
       elem.bbox[3] + self.radius,
     )
     around_elems = indexer.find_contains(bbox=around_bbox)
-    matching_shape = self.__find_outer_shape(around_elems)
-    if matching_shape is not None:
-      #matching_shape.text = elem.text
-      matching_shape = LTJson(serialized_json=matching_shape.as_dict())
-      matching_shape.text = elem.text
-      self.results[str(page_number)][window_class][window_id].append(matching_shape)
+    for shape in self.shape_matches:
+      matching_curves = pdfindexer.find_similar_curves(wrapper_to_find=shape, wrappers_to_search=around_elems, max_dist=1.)
+      # matching_shape = self.__find_outer_shape(around_elems)
+      if len(matching_curves) > 0: #matching_shape is not None:
+        matching_shape = LTJson(serialized_json=matching_curves[0].as_dict())
+        matching_shape.text = elem.text
+        self.results["Page {0}".format(page_number)][class_name][elem_type].append(matching_shape)
 
   def __find_outer_shape(self, around_elems: typing.List[LTJson]):
     for shape in self.shape_matches:
@@ -108,11 +125,13 @@ class MultiWindowSearchRule(SearchRule):
     for pg in self.results.values():
       for wc in pg.values():
         for wid_key, wid_list in wc.items():
-          wc[wid_key] = remove_duplicate_bbox(items=wid_list)
+          wc[wid_key] = remove_duplicate_bbox(items=wc[wid_key])
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     self.__refine()
-    return self.results
+    return {
+      self.description: self.results
+    }
 
 class VoteSearcher:
   def __init__(self,
