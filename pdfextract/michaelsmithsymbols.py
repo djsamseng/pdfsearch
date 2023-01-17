@@ -1,5 +1,6 @@
 
 import collections
+import os
 import time
 import typing
 import argparse
@@ -112,7 +113,7 @@ def get_all_symbols(save: bool):
   if save:
     encoder = LTJsonEncoder()
     json_string = encoder.encode(all_symbols)
-    with open("./lambdacontainer/processpdffunction/symbols_michael_smith.json", "w") as f:
+    with open("./lambdacontainer/processpdffunction/symbols_michael_smith.json", "w", encoding="utf-8") as f:
       f.write(json_string)
   else:
     for key, symbol in all_symbols.items():
@@ -120,8 +121,8 @@ def get_all_symbols(save: bool):
       drawer.draw_elems(elems=symbol, align_top_left=True)
       drawer.show(key)
 
-def read_symbols_from_json():
-  with open("./lambdacontainer/processpdffunction/symbols_michael_smith.json", "r") as f:
+def read_symbols_from_json(dirpath:str="./lambdacontainer/processpdffunction/"):
+  with open(os.path.join(dirpath, "symbols_michael_smith.json"), "r", encoding="utf-8") as f:
     json_string = f.read()
   symbols_dicts = json.loads(json_string)
   symbols: typing.Dict[str, typing.List[LTJson]] = dict()
@@ -314,9 +315,9 @@ def find_by_bbox_and_content_search_rule():
   elems, width, height = get_pdf(which=1)
   t2 = time.time()
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, indexer=indexer)
+  vote_searcher = votesearch.VoteSearcher(search_rules=search_rules)
 
-  vote_searcher.process(page_number=2, elems=elems)
+  vote_searcher.process(page_number=2, elems=elems, indexer=indexer)
   vote_searcher.refine()
   all_results = vote_searcher.get_results()
   t3 = time.time()

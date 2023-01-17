@@ -13,6 +13,7 @@ import debugutils
 
 supabase_url = os.environ.get("SUPABASE_URL") or ""
 supabase_key = os.environ.get("SUPABASE_KEY") or ""
+print(supabase_url, supabase_key)
 db_client: supabase.client.Client = supabase.client.create_client(supabase_url=supabase_url, supabase_key=supabase_key)
 if debugutils.is_dev():
   s3_client: typing.Any = None

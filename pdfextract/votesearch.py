@@ -57,7 +57,7 @@ class SearchRule(metaclass=ABCMeta):
     pass
 
   @abstractmethod
-  def get_results(self) -> typing.Dict[str, typing.Any]:
+  def get_results(self, simple: bool) -> typing.Dict[str, typing.Any]:
     pass
 
 MultiClassSearchRuleResults = typing.DefaultDict[
@@ -78,14 +78,17 @@ class MultiClassSearchRule(SearchRule):
     self.shape_matches = shape_matches
     self.description = description
     self.regex = re.compile(regex) # (?P<window_class>[a-zA-Z])(?P<window_id>\\d\\d)
-    self.results: MultiClassSearchRuleResults = collections.defaultdict( # page_number
+    self.results: MultiClassSearchRuleResults = self.__create_results_dict()
+    self.radius = max([max(s.width, s.height) for s in shape_matches])
+
+  def __create_results_dict(self) -> MultiClassSearchRuleResults:
+    return collections.defaultdict( # page_number
       lambda: collections.defaultdict( # class_name
         lambda: collections.defaultdict( # elem_type
           list
         )
       )
     )
-    self.radius = max([max(s.width, s.height) for s in shape_matches])
 
   def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
     if elem.text is None:
@@ -105,42 +108,42 @@ class MultiClassSearchRule(SearchRule):
 
     around_elems = indexer.find_contains(bbox=around_bbox)
     for shape in self.shape_matches:
-      matching_curves = pdfindexer.find_similar_curves(wrapper_to_find=shape, wrappers_to_search=around_elems, max_dist=2.)
+      matching_curves = pdfindexer.find_similar_curves(
+        wrapper_to_find=shape,
+        wrappers_to_search=around_elems,
+        max_dist=2.
+      )
       # matching_shape = self.__find_outer_shape(around_elems)
       if len(matching_curves) > 0: #matching_shape is not None:
         matching_shape = LTJson(serialized_json=matching_curves[0].as_dict())
         matching_shape.text = elem.text
         self.results["Page {0}".format(page_number)][class_name][elem_type].append(matching_shape)
 
-  def __find_outer_shape(self, around_elems: typing.List[LTJson]):
-    for shape in self.shape_matches:
-      for around_elem in around_elems:
-        dw = abs(shape.width - around_elem.width)
-        dh = abs(shape.height - around_elem.height)
-        # TODO: Match shape instead of size. J01 is matching the wrong shape
-        if around_elem.original_path is not None and dw + dh < 10:
-          return around_elem
-    return None
-
   def __refine(self):
     for pg in self.results.values():
       for wc in pg.values():
-        for wid_key, wid_list in wc.items():
+        for wid_key in wc.keys():
           wc[wid_key] = remove_duplicate_bbox(items=wc[wid_key])
 
-  def get_results(self) -> typing.Dict[str, typing.Any]:
+  def __get_simple_results(self):
+    out: typing.Any = self.__create_results_dict()
+    for pg_name, pgr in self.results.items():
+      for class_name, class_results in pgr.items():
+        for elem_type_name, elem_type_results in class_results.items():
+          out[pg_name][class_name][elem_type_name] = [(e.text, e.bbox) for e in elem_type_results]
+    return out
+
+  def get_results(self, simple:bool) -> typing.Dict[str, typing.Any]:
     self.__refine()
     return {
-      self.description: self.results
+      self.description: self.__get_simple_results() if simple else self.results
     }
 
 class VoteSearcher:
   def __init__(self,
     search_rules: typing.List[SearchRule],
-    indexer: pdfindexer.PdfIndexer
   ) -> None:
     self.search_rules = search_rules
-    self.indexer = indexer
     self.votes: typing.Dict[str, typing.Any] = {
       "by_page_number": collections.defaultdict(dict),
       # house names found and probability -> sort by probability
@@ -148,17 +151,22 @@ class VoteSearcher:
       "architect_names": collections.defaultdict(dict),
     }
 
-  def process(self, page_number:int, elems: typing.List[LTJson]) -> None:
+  def process(
+    self,
+    page_number:int,
+    elems: typing.List[LTJson],
+    indexer: pdfindexer.PdfIndexer
+  ) -> None:
     for elem in elems:
       for rule in self.search_rules:
-        rule.process_elem(elem=elem, page_number=page_number, indexer=self.indexer)
+        rule.process_elem(elem=elem, page_number=page_number, indexer=indexer)
 
   def refine(self) -> None:
     return
 
-  def get_results(self):
+  def get_results(self, simple:bool):
     results: typing.Dict[str, typing.Any] = {}
     for rule in self.search_rules:
-      rule_results = rule.get_results()
+      rule_results = rule.get_results(simple=simple)
       merge(dest=results, other=rule_results)
     return results

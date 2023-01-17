@@ -2,17 +2,21 @@
 import io
 import typing
 
-import pdfminer, pdfminer.pdfparser, pdfminer.pdfdocument, pdfminer.pdftypes, pdfminer.layout, pdfminer.high_level, pdfminer.utils
+import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
+import pdfminer.pdfparser, pdfminer.pdfdocument, pdfminer.pdftypes
 
 import dataprovider
 import debugutils
-from pdfextract import pdfindexer, pdfelemtransforms
+from pdfextract import pdfindexer, pdfelemtransforms, votesearch, michaelsmithsymbols
 
 def get_pdf_num_pages(pdfdata_io: io.BytesIO):
   parser = pdfminer.pdfparser.PDFParser(pdfdata_io)
   document = pdfminer.pdfdocument.PDFDocument(parser)
   num_pages = pdfminer.pdftypes.resolve1(document.catalog["Pages"])["Count"]
   return num_pages
+
+def read_symbols_from_json():
+  return michaelsmithsymbols.read_symbols_from_json(dirpath="./")
 
 # Recognizer is the opposite of searching in terms of datastructures
 # Recognizer is good for classifying areas
@@ -40,16 +44,31 @@ class PageProcessor:
 class PdfProcessor:
   def __init__(self, pages_gen: typing.Iterator[pdfminer.layout.LTPage]) -> None:
     self.pages_gen = pages_gen
+    symbols = read_symbols_from_json()
+    search_rules: typing.List[votesearch.SearchRule] = [
+      votesearch.MultiClassSearchRule(shape_matches=[
+        symbols["window_label"][0],
+      ], description="windows", regex="(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"),
+      votesearch.MultiClassSearchRule(shape_matches=[
+        symbols["door_label"][0],
+      ], description="doors", regex="(?P<class_name>\\d)(?P<elem_type>\\d\\d)")
+    ]
+    self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules)
 
   def process_page(self):
-    for page in self.pages_gen:
+    for page_number, page in enumerate(self.pages_gen):
       width = page.width
       height = page.height
       elems = pdfelemtransforms.get_underlying_parent_links(elems=page)
       indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-      # Given the information I'm looking at, who is it relevant to? Give them that information and they update their votes
-      print("Indexer:", indexer)
+
+      self.vote_searcher.process(page_number=page_number, elems=elems, indexer=indexer)
+      self.vote_searcher.refine()
+
       yield
+
+  def get_results(self, simple: bool):
+    return self.vote_searcher.get_results(simple=simple)
 
 def process_pdf(pdfkey:str, pdfdata: bytes):
   pdfdata_io = io.BytesIO(initial_bytes=pdfdata)
@@ -63,4 +82,11 @@ def process_pdf(pdfkey:str, pdfdata: bytes):
     pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
   processor = PdfProcessor(pages_gen=pages_gen)
   for idx, _ in enumerate(processor.process_page()):
-    dataprovider.write_processpdf_progress(pdfkey=pdfkey, curr_step=idx+1, message="Processing page: {0}".format(idx+1))
+    dataprovider.write_processpdf_progress(
+      pdfkey=pdfkey,
+      curr_step=idx+1,
+      message="Processing page: {0}".format(idx+1)
+    )
+  results = processor.get_results(simple=False)
+  simple_results = processor.get_results(simple=True)
+  return simple_results
