@@ -71,8 +71,8 @@ class PdfProcessor:
 
       yield
 
-  def get_results(self, simple: bool):
-    return self.vote_searcher.get_results(simple=simple)
+  def get_results(self):
+    return self.vote_searcher.get_results()
 
 def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pdfdata: bytes):
   pdfdata_io = io.BytesIO(initial_bytes=pdfdata)
@@ -80,10 +80,7 @@ def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pd
   num_steps_total = num_pages + 1
   data_provider.write_processpdf_start(pdfkey=pdfkey, num_steps_total=num_steps_total)
 
-  if debugutils.is_dev():
-    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=[9])
-  else:
-    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
+  pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
   processor = PdfProcessor(pages_gen=pages_gen, data_provider=data_provider)
   for idx, _ in enumerate(processor.process_page()):
     data_provider.write_processpdf_progress(
@@ -91,6 +88,5 @@ def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pd
       curr_step=idx+1,
       message="Processing page: {0}".format(idx+1)
     )
-  results = processor.get_results(simple=False)
-  simple_results = processor.get_results(simple=True)
-  return simple_results
+  results = processor.get_results()
+  return results

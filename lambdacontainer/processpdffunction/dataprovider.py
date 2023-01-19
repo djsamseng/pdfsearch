@@ -24,6 +24,7 @@ if debugutils.is_dev():
 else:
   s3_client: typing.Any = boto3.resource("s3") # type: ignore
 
+# Match /website/utils/tablenames.types.ts
 class TableNames(enum.Enum):
   PDF_SUMMARY = "pdf_summary"
   PDF_ELEMENT_LOCATIONS = "pdf_element_locations"
@@ -100,6 +101,14 @@ class SupabaseDataProvider(DataProvider):
     except Exception as e:
       print(e)
     return None
+
+  def write_pdf_summary(self, results_json: str):
+    data = {
+      PdfSummaryTable.PDF_ID.value: self.pdfId,
+      PdfSummaryTable.PDF_SUMMARY.value: results_json,
+    }
+    db_client.table(TableNames.PDF_SUMMARY.value)\
+      .update(json=data).eq(PdfSummaryTable.PDF_ID.value, self.pdfId).execute() # type: ignore
 
   def write_processpdf_start(self, pdfkey: str, num_steps_total: int):
     data = {

@@ -7,7 +7,7 @@ import typing
 import rtree
 
 from . import pdfindexer
-from .ltjson import LTJson
+from .ltjson import LTJson, LTJsonResponse
 
 MergeDict = typing.Dict[str, typing.Any]
 def merge(
@@ -21,19 +21,19 @@ def merge(
     else:
       dest[key] = val
 
-def item_is_multiline_text(item: LTJson):
-  if item.text is not None:
-    item_newline = item.text.find("\n")
+def item_is_multiline_text(item: LTJsonResponse):
+  if item.label is not None:
+    item_newline = item.label.find("\n")
     item_multiline = item_newline >= 0 and \
-      item_newline - 1 < len(item.text)
+      item_newline - 1 < len(item.label)
     return item_multiline
   return False
 
-def remove_duplicate_bbox(items: typing.List[LTJson]):
+def remove_duplicate_bbox(items: typing.List[LTJsonResponse]):
   bbox_indexer = rtree.index.Index()
   idx = 0
   radius = 0
-  out: typing.List[LTJson] = []
+  out: typing.List[LTJsonResponse] = []
   should_swap_out: typing.List[bool] = []
   for item in items:
     results = bbox_indexer.intersection(item.bbox)
@@ -57,7 +57,7 @@ class SearchRule(metaclass=ABCMeta):
     pass
 
   @abstractmethod
-  def get_results(self, simple: bool) -> typing.Dict[str, typing.Any]:
+  def get_results(self) -> typing.Dict[str, typing.Any]:
     pass
 
 MultiClassSearchRuleResults = typing.DefaultDict[
@@ -66,7 +66,7 @@ MultiClassSearchRuleResults = typing.DefaultDict[
     str, # class_name
     typing.DefaultDict[
       str, # elem_type
-      typing.List[LTJson]
+      typing.List[LTJsonResponse]
     ]
   ]
 ]
@@ -115,8 +115,8 @@ class MultiClassSearchRule(SearchRule):
       )
       # matching_shape = self.__find_outer_shape(around_elems)
       if len(matching_curves) > 0: #matching_shape is not None:
-        matching_shape = LTJson(serialized_json=matching_curves[0].as_dict())
-        matching_shape.text = elem.text
+        matching_shape = LTJsonResponse(elem=matching_curves[0])
+        matching_shape.label = elem.text
         self.results["Page {0}".format(page_number)][class_name][elem_type].append(matching_shape)
 
   def __refine(self):
@@ -125,18 +125,10 @@ class MultiClassSearchRule(SearchRule):
         for wid_key in wc.keys():
           wc[wid_key] = remove_duplicate_bbox(items=wc[wid_key])
 
-  def __get_simple_results(self):
-    out: typing.Any = self.__create_results_dict()
-    for pg_name, pgr in self.results.items():
-      for class_name, class_results in pgr.items():
-        for elem_type_name, elem_type_results in class_results.items():
-          out[pg_name][class_name][elem_type_name] = [(e.text, e.bbox) for e in elem_type_results]
-    return out
-
-  def get_results(self, simple:bool) -> typing.Dict[str, typing.Any]:
+  def get_results(self) -> typing.Dict[str, typing.Any]:
     self.__refine()
     return {
-      self.description: self.__get_simple_results() if simple else self.results
+      self.description: self.results
     }
 
 class VoteSearcher:
@@ -164,9 +156,9 @@ class VoteSearcher:
   def refine(self) -> None:
     return
 
-  def get_results(self, simple:bool):
+  def get_results(self):
     results: typing.Dict[str, typing.Any] = {}
     for rule in self.search_rules:
-      rule_results = rule.get_results(simple=simple)
+      rule_results = rule.get_results()
       merge(dest=results, other=rule_results)
     return results

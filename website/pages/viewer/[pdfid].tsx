@@ -8,6 +8,8 @@ import { Database } from "../../utils/database.types";
 import { useEffect, useState } from "react";
 import { DatabaseTableNames } from "../../utils/tablenames.types";
 import { lambdaTriggerPdfProcessing } from "../../components/AwsConnector";
+import { RealtimeChannel } from "@supabase/supabase-js";
+import PdfSummaryView from "../../components/PdfSummaryView";
 
 type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
 type PdfProcessingProgress = Database["public"]["Tables"]["pdf_processing_progress"]["Row"]
@@ -36,27 +38,27 @@ export default function PdfIdViewer() {
     success: null,
     total_steps: 1,
   });
+  const [ pdfSummary, setPdfSummary ] = useState<PdfSummary | null>(null);
 
-  async function checkIfPdfAlreadyProcessed({
+  async function getPdfSummaryIfProcessed({
     pdfId,
   }: {
     pdfId: string,
   }) {
     const { data, error, status } = await supabase
       .from(DatabaseTableNames.PDF_SUMMARY)
-      .select("*", { count: "exact", head: true })
+      .select()
       .eq("pdf_id", pdfId)
-      .neq("pdf_summary", null)
       .single();
     if (error && status !== 406) {
       console.error("Failed to check if pdf already processed:", error, status);
       return false;
     }
-    if (data) {
-      console.log("Already processed:", data);
-      return true;
+    if (data && data.pdf_summary !== null) {
+      console.log("pdf summary not null:", data);
+      return data;
     }
-    console.log("406 error no rows", error);
+    console.log("406 error no rows - already processed", error);
     return false;
   }
 
@@ -104,16 +106,26 @@ export default function PdfIdViewer() {
   }
 
   async function onLoad({
+    channel,
     pdfId,
     pdfName,
   }: {
+    channel: RealtimeChannel,
     pdfId: string,
     pdfName: string,
   }) {
-    const alreadyProcessed = await checkIfPdfAlreadyProcessed({ pdfId, });
-    if (!alreadyProcessed) {
-      console.log("Waiting for db changes", pdfId, DatabaseTableNames.PDF_PROCESSING_PROGRESS);
-      const channel = supabase.channel("db-changes");
+    const fetchedPdfSummary = await getPdfSummaryIfProcessed({ pdfId, });
+    if (fetchedPdfSummary) {
+      setPdfProcessingProgress({
+        curr_step: 0,
+        msg: "Already processed",
+        pdf_id: pdfId,
+        success: true,
+        total_steps: 1,
+      });
+      setPdfSummary(fetchedPdfSummary);
+    }
+    else {
       channel.on(
         "postgres_changes",
         {
@@ -130,6 +142,7 @@ export default function PdfIdViewer() {
         });
       channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
+          console.log("Waiting for db changes", pdfId, DatabaseTableNames.PDF_PROCESSING_PROGRESS);
           const processingTriggered = await triggerPdfProcessing({ pdfId, pdfName });
         }
       });
@@ -137,34 +150,18 @@ export default function PdfIdViewer() {
   }
 
   useEffect(() => {
+    const channel = supabase.channel("db-changes");
     onLoad({
+      channel,
       pdfId,
       pdfName,
     });
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [pdfId, pdfName]);
 
-  async function getPdfSummary({
-    pdfId,
-  }: {
-    pdfId: string,
-  }): Promise<PdfSummary | boolean> {
-    const { data, error, status } = await supabase
-      .from("pdf_summary")
-      .select()
-      .eq("pdf_id", pdfId)
-      .single();
-    if (error && status !== 406) {
-      console.error("Failed to get pdf summary already processed:", error, status);
-      return false;
-    }
-    if (data) {
-      return data;
-    }
-    console.log("406 error no rows", error);
-    return false;
-  }
-
-  // TODO: PdfProgressingView https://supabase.com/docs/guides/realtime/quickstart#insert-and-receive-persisted-messages
   const progressView = (
     <div>
       { (pdfProcessingProgress.curr_step * 100 / pdfProcessingProgress.total_steps).toFixed(0) } %
@@ -176,7 +173,9 @@ export default function PdfIdViewer() {
         { JSON.stringify(router.query) }
       </div>
       <div>
-        { !pdfProcessingProgress.success && progressView}
+        { pdfProcessingProgress.success === null && progressView}
+        { pdfProcessingProgress.success === true && pdfSummary && <PdfSummaryView pdfSummary={pdfSummary} /> }
+        { pdfProcessingProgress.success === false && <></>}
       </div>
       <div>
         Success: { String(pdfProcessingProgress.success) }

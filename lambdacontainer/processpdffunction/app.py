@@ -1,5 +1,4 @@
 
-import json
 import typing
 
 import dataprovider
@@ -11,7 +10,7 @@ def process_pdf(pdfId: str):
   data_provider = dataprovider.SupabaseDataProvider(pdfId=pdfId)
   pdfdata = data_provider.get_pdf_for_key(pdfkey=pdfId)
   success = True
-  results: typing.Dict[str, typing.Any] = {}
+  results_json = ""
   if pdfdata is None:
     success = False
     data_provider.write_processpdf_error(
@@ -20,16 +19,19 @@ def process_pdf(pdfId: str):
     )
   else:
     results = pdfprocessor.process_pdf(data_provider=data_provider, pdfkey=pdfId, pdfdata=pdfdata)
+    encoder = ltjson.LTJsonEncoder()
+    results_json = encoder.encode(results)
+    data_provider.write_pdf_summary(results_json=results_json)
   data_provider.write_processpdf_done(pdfkey=pdfId, success=success)
-  return results
+
+  return results_json
 
 
 def handler(event: typing.Any, context: typing.Any
 ) -> typing.Union[None, str]:
   pdfId = event["pdfId"]
-  results = process_pdf(pdfId=pdfId)
-  encoder = ltjson.LTJsonEncoder()
-  results_json = encoder.encode(results)
+  results_json = process_pdf(pdfId=pdfId)
+
   if debugutils.is_dev():
     return results_json
   return None

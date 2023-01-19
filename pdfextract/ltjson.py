@@ -205,3 +205,4 @@ class LTJsonEncoder(json.JSONEncoder):
       return o.as_dict()
     if isinstance(o, LTJsonResponse):
       return o.as_dict()
+    return None
