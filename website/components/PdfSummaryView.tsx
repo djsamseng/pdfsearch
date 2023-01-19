@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { Database } from "../utils/database.types";
+
+import PdfView from "./PdfView";
+
 type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
 
 type PdfSummaryViewProps = {
@@ -20,7 +23,7 @@ export default function PdfSummaryView(props: PdfSummaryViewProps) {
   const summaryButtonStyle = `${sharedButtonStyle} ${selectedSummaryViewMode ? selectedStyle : unselectedStyle} border rounded-l-lg`;
   const viewPdfButtonStyle = `${sharedButtonStyle} ${!selectedSummaryViewMode ? selectedStyle : unselectedStyle} border-y border-r rounded-r-lg`;
   return (
-    <div>
+    <div className="flex flex-col items-center">
       <div className="inline-flex roundeed-md text-sm shadow-sm" role="group">
         <button type="button"
           className={summaryButtonStyle}
@@ -33,6 +36,7 @@ export default function PdfSummaryView(props: PdfSummaryViewProps) {
           View PDF
         </button>
       </div>
+      { !selectedSummaryViewMode && <PdfView />}
     </div>
   )
 }
