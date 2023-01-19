@@ -1,4 +1,5 @@
 
+import abc
 import argparse
 import enum
 import os
@@ -14,7 +15,10 @@ import debugutils
 supabase_url = os.environ.get("SUPABASE_URL") or ""
 supabase_key = os.environ.get("SUPABASE_KEY") or ""
 print(supabase_url, supabase_key)
-db_client: supabase.client.Client = supabase.client.create_client(supabase_url=supabase_url, supabase_key=supabase_key)
+db_client: supabase.client.Client = supabase.client.create_client(
+  supabase_url=supabase_url,
+  supabase_key=supabase_key
+)
 if debugutils.is_dev():
   s3_client: typing.Any = None
 else:
@@ -37,68 +41,99 @@ class PdfSummaryTable(enum.Enum):
   PDF_SUMMARY = "pdf_summary"
   PDF_NAME = "pdf_name"
 
-def get_pdf_for_key(pdfkey: str) -> typing.Union[None, bytes]:
-  if s3_client is None:
-    if os.path.exists(pdfkey):
-      with open(file=pdfkey, mode="rb") as f:
-        binary_str = f.read()
-        return binary_str
-    try:
-      storage_client: storage3.SyncStorageClient = typing.cast(storage3.SyncStorageClient, db_client.storage())
-      bytes = storage_client.from_("pdfs").download("public/" + pdfkey + ".pdf")
-      return bytes
-    except Exception as e:
-      print("DEV_LOCAL: {0} not found", pdfkey, e)
-    return None
-  try:
-    resp = s3_client.get_object(
-      Bucket="",
-      Key=pdfkey,
-    )
-    return resp["Body"].read()
-  except botocore.exceptions.NoSuchKey as e: # type: ignore
-    e = typing.cast(typing.Any, e)
-    print(e)
-  except botocore.exceptions.InvalidObjectState as e: # type: ignore
-    e = typing.cast(typing.Any, e)
-    print(e)
-  except Exception as e:
-    print(e)
-  return None
-
 UpdateType = typing.Dict[str, typing.Dict[str, typing.Dict[str, typing.Union[str, int, bool]]]]
 KeyType = typing.Dict[str, typing.Dict[str, typing.Union[str, int, bool]]]
 
+class DataProvider(metaclass=abc.ABCMeta):
+  @abc.abstractmethod
+  def get_pdf_for_key(self, pdfkey: str) -> typing.Union[None, bytes]:
+    pass
 
-def write_processpdf_start(pdfkey: str, num_steps_total: int):
-  data = {
-    StreamingProgressTable.PDF_ID.value: pdfkey,
-    StreamingProgressTable.TOTAL_STEPS.value: num_steps_total,
-  }
-  db_client.table(TableNames.STREAMING_PROGRESS.value).update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+  @abc.abstractmethod
+  def write_processpdf_start(self, pdfkey: str, num_steps_total: int):
+    pass
 
-def write_processpdf_progress(pdfkey: str, curr_step: int, message: str):
-  data = {
-    StreamingProgressTable.PDF_ID.value: pdfkey,
-    StreamingProgressTable.CURR_STEP.value: curr_step,
-    StreamingProgressTable.MSG.value: message
-  }
-  db_client.table(TableNames.STREAMING_PROGRESS.value).update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+  @abc.abstractmethod
+  def write_processpdf_progress(self, pdfkey: str, curr_step: int, message: str):
+    pass
 
-def write_processpdf_error(pdfkey: str, error_message: str):
-  # Could occur before start
-  data = {
-    StreamingProgressTable.PDF_ID.value: pdfkey,
-    StreamingProgressTable.MSG.value: error_message
-  }
-  db_client.table(TableNames.STREAMING_PROGRESS.value).update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+  @abc.abstractmethod
+  def write_processpdf_error(self, pdfkey: str, error_message: str):
+    pass
 
-def write_processpdf_done(pdfkey: str, success: bool):
-  data = {
-    StreamingProgressTable.PDF_ID.value: pdfkey,
-    StreamingProgressTable.SUCCESS.value: success,
-  }
-  db_client.table(TableNames.STREAMING_PROGRESS.value).update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+  @abc.abstractmethod
+  def write_processpdf_done(self, pdfkey: str, success: bool):
+    pass
+
+class SupabaseDataProvider(DataProvider):
+  def __init__(self, pdfId: str) -> None:
+    self.pdfId = pdfId
+
+  def get_pdf_for_key(self, pdfkey: str) -> typing.Union[None, bytes]:
+    if s3_client is None:
+      if os.path.exists(pdfkey):
+        with open(file=pdfkey, mode="rb") as f:
+          binary_str = f.read()
+          return binary_str
+      try:
+        storage_client: storage3.SyncStorageClient = typing.cast(
+          storage3.SyncStorageClient,
+          db_client.storage()
+        )
+        pdf_bytes = storage_client.from_("pdfs").download("public/" + pdfkey + ".pdf")
+        return pdf_bytes
+      except Exception as e:
+        print("DEV_LOCAL: {0} not found", pdfkey, e)
+      return None
+    try:
+      resp = s3_client.get_object(
+        Bucket="",
+        Key=pdfkey,
+      )
+      return resp["Body"].read()
+    except botocore.exceptions.NoSuchKey as e: # type: ignore pylint:disable=no-member
+      e = typing.cast(typing.Any, e)
+      print(e)
+    except botocore.exceptions.InvalidObjectState as e: # type: ignore pylint:disable=no-member
+      e = typing.cast(typing.Any, e)
+      print(e)
+    except Exception as e:
+      print(e)
+    return None
+
+  def write_processpdf_start(self, pdfkey: str, num_steps_total: int):
+    data = {
+      StreamingProgressTable.PDF_ID.value: pdfkey,
+      StreamingProgressTable.TOTAL_STEPS.value: num_steps_total,
+    }
+    db_client.table(TableNames.STREAMING_PROGRESS.value)\
+      .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+
+  def write_processpdf_progress(self, pdfkey: str, curr_step: int, message: str):
+    data = {
+      StreamingProgressTable.PDF_ID.value: pdfkey,
+      StreamingProgressTable.CURR_STEP.value: curr_step,
+      StreamingProgressTable.MSG.value: message
+    }
+    db_client.table(TableNames.STREAMING_PROGRESS.value)\
+      .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+
+  def write_processpdf_error(self, pdfkey: str, error_message: str):
+    # Could occur before start
+    data = {
+      StreamingProgressTable.PDF_ID.value: pdfkey,
+      StreamingProgressTable.MSG.value: error_message
+    }
+    db_client.table(TableNames.STREAMING_PROGRESS.value)\
+      .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+
+  def write_processpdf_done(self, pdfkey: str, success: bool):
+    data = {
+      StreamingProgressTable.PDF_ID.value: pdfkey,
+      StreamingProgressTable.SUCCESS.value: success,
+    }
+    db_client.table(TableNames.STREAMING_PROGRESS.value)\
+      .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
 
 def parse_args():
   parser = argparse.ArgumentParser()

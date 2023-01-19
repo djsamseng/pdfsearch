@@ -9,6 +9,7 @@ import PdfSelected from "./pdfselected";
 import { ClientDrawPath } from "../utils/sharedtypes";
 import { SelectInPdfResponse } from "../utils/requestresponsetypes";
 import { Database } from "../utils/database.types";
+import { DatabaseTableNames } from "../utils/tablenames.types";
 import { lambdaTriggerPdfProcessing } from "./AwsConnector";
 import { useRouter } from "next/router";
 
@@ -58,11 +59,7 @@ export default function PdfUpload() {
         if (!alreadyUploaded) {
           const uploadSuccess = await uploadPdf({ pdfId, bytes });
         }
-        const alreadyProcessed = await checkIfPdfAlreadyProcessed({ pdfId, });
-        if (!alreadyProcessed) {
-          const processingTriggered = await triggerPdfProcessing({ pdfId, pdfName });
-        }
-        router.push(`/viewer/${pdfId}`);
+        router.push(`/viewer/${pdfId}?pdfname=${pdfName}`);
         // to to /viewer/pdfId
       }
     }
@@ -103,72 +100,6 @@ export default function PdfUpload() {
       console.error("Failed to upload pdf:", uploadError);
       return false;
     }
-  }
-
-  async function insertPdfName({
-    pdfId,
-    pdfName,
-  }: {
-    pdfId: string,
-    pdfName: string
-  }) {
-    const { error: insertError } = await supabase
-      .from("pdf_summary")
-      .upsert({
-        pdf_id: pdfId,
-        pdf_name: pdfName,
-      })
-    if (insertError) {
-      console.error("Failed to insert pdf_summary", insertError);
-    }
-    console.log("Uploaded pdf");
-    return true;
-  }
-
-  async function checkIfPdfAlreadyProcessed({
-    pdfId,
-  }: {
-    pdfId: string,
-  }) {
-    const { data, error, status } = await supabase
-      .from("pdf_summary")
-      .select("*", { count: "exact", head: true })
-      .eq("pdf_id", pdfId)
-      .neq("pdf_summary", null)
-      .single();
-    if (error && status !== 406) {
-      console.error("Failed to check if pdf already processed:", error, status);
-      return false;
-    }
-    if (data) {
-      console.log("Already processed:", data);
-      return true;
-    }
-    console.log("406 error no rows", error);
-    return false;
-  }
-
-  async function triggerPdfProcessing({
-    pdfId,
-    pdfName,
-  }: {
-    pdfId: string,
-    pdfName: string,
-  }) {
-    await insertPdfName({ pdfId, pdfName });
-    const { error: insertError } = await supabase
-      .from("pdf_processing_progress")
-      .upsert({
-        pdf_id: pdfId,
-        total_steps: 1,
-        curr_step: 0,
-        success: null,
-      })
-    if (insertError) {
-      console.error("Failed to write to pdf_processing_progress", insertError);
-    }
-    const lambdaTriggered = await lambdaTriggerPdfProcessing(pdfId);
-    return lambdaTriggered;
   }
 
   async function getContentFromDrawPaths(drawPaths: Array<ClientDrawPath>, page: number) {
