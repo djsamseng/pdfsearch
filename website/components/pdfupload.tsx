@@ -10,9 +10,7 @@ import { ClientDrawPath } from "../utils/sharedtypes";
 import { SelectInPdfResponse } from "../utils/requestresponsetypes";
 import { Database } from "../utils/database.types";
 import { lambdaTriggerPdfProcessing } from "./AwsConnector";
-
-type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
-type PdfProcessingProgress = Database["public"]["Tables"]["pdf_processing_progress"]["Row"]
+import { useRouter } from "next/router";
 
 async function sha256(message: string) {
   // encode as UTF-8
@@ -36,6 +34,7 @@ export default function PdfUpload() {
   const [ pdfFileObj, setPdfFileObj ] = useState<File | null>(null);
   const [ pdfHash, setPdfHash ] = useState<string | null>(null);
   const [ pdfSelectedObjects, setPdfSelectedObjects ] = useState<PdfElements>([]);
+  const router = useRouter();
   function onPdfFileChange(evt: ChangeEvent<HTMLInputElement>) {
     const fileObj = evt.target.files && evt.target.files[0];
     console.log(fileObj);
@@ -55,21 +54,26 @@ export default function PdfUpload() {
         const pdfName = fileObj.name;
         setPdfFileObj(fileObj);
         setPdfDocumentUrl(url);
-        const alreadyUploaded = await checkIfPdfAlreadyUploaded(pdfId);
+        const alreadyUploaded = await checkIfPdfAlreadyUploaded({ pdfId });
         if (!alreadyUploaded) {
-          const uploadSuccess = await uploadPdf(pdfId, pdfName, bytes);
+          const uploadSuccess = await uploadPdf({ pdfId, bytes });
         }
-        const alreadyProcessed = await checkIfPdfAlreadyProcessed(pdfId);
+        const alreadyProcessed = await checkIfPdfAlreadyProcessed({ pdfId, });
         if (!alreadyProcessed) {
-          // First write to pdf_processing_progress
-          const processingTriggered = await triggerPdfProcessing(pdfId);
+          const processingTriggered = await triggerPdfProcessing({ pdfId, pdfName });
         }
+        router.push(`/viewer/${pdfId}`);
+        // to to /viewer/pdfId
       }
     }
     reader.readAsArrayBuffer(fileObj);
   }
 
-  async function checkIfPdfAlreadyUploaded(pdfId: string) {
+  async function checkIfPdfAlreadyUploaded({
+    pdfId,
+  }: {
+    pdfId: string
+  }) {
     const { data, error } = await supabase.storage
       .from("pdfs")
       .list("public", {
@@ -85,7 +89,13 @@ export default function PdfUpload() {
     return data.length > 0;
   }
 
-  async function uploadPdf(pdfId: string, pdfName: string, bytes: ArrayBuffer) {
+  async function uploadPdf({
+    pdfId,
+    bytes,
+  }: {
+    pdfId: string,
+    bytes: ArrayBuffer
+  }) {
     const { error: uploadError } = await supabase.storage
       .from("pdfs")
       .upload(`public/${pdfId}.pdf`, bytes, { upsert: true });
@@ -93,6 +103,15 @@ export default function PdfUpload() {
       console.error("Failed to upload pdf:", uploadError);
       return false;
     }
+  }
+
+  async function insertPdfName({
+    pdfId,
+    pdfName,
+  }: {
+    pdfId: string,
+    pdfName: string
+  }) {
     const { error: insertError } = await supabase
       .from("pdf_summary")
       .upsert({
@@ -106,7 +125,11 @@ export default function PdfUpload() {
     return true;
   }
 
-  async function checkIfPdfAlreadyProcessed(pdfId: string) {
+  async function checkIfPdfAlreadyProcessed({
+    pdfId,
+  }: {
+    pdfId: string,
+  }) {
     const { data, error, status } = await supabase
       .from("pdf_summary")
       .select("*", { count: "exact", head: true })
@@ -125,7 +148,14 @@ export default function PdfUpload() {
     return false;
   }
 
-  async function triggerPdfProcessing(pdfId: string) {
+  async function triggerPdfProcessing({
+    pdfId,
+    pdfName,
+  }: {
+    pdfId: string,
+    pdfName: string,
+  }) {
+    await insertPdfName({ pdfId, pdfName });
     const { error: insertError } = await supabase
       .from("pdf_processing_progress")
       .upsert({

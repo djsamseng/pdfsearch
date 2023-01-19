@@ -27,7 +27,8 @@ def handler(event: typing.Any, context: typing.Any
 ) -> typing.Union[None, str]:
   pdfId = event["pdfId"]
   results = process_pdf(pdfkey=pdfId)
+  encoder = ltjson.LTJsonEncoder()
+  results_json = encoder.encode(results)
   if debugutils.is_dev():
-    encoder = ltjson.LTJsonEncoder()
-    return encoder.encode(results)
+    return results_json
   return None

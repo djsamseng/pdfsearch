@@ -32,6 +32,11 @@ class StreamingProgressTable(enum.Enum):
   MSG = "msg"
   SUCCESS = "success"
 
+class PdfSummaryTable(enum.Enum):
+  PDF_ID = "pdf_id"
+  PDF_SUMMARY = "pdf_summary"
+  PDF_NAME = "pdf_name"
+
 def get_pdf_for_key(pdfkey: str) -> typing.Union[None, bytes]:
   if s3_client is None:
     if os.path.exists(pdfkey):

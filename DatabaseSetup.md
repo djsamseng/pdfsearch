@@ -26,6 +26,20 @@ CREATE TABLE IF NOT EXISTS pdf_processing_progress (
 );
 ```
 
+### Realtime Database Updates
+```sql
+begin;
+  -- remove the supabase_realtime publication
+  drop publication if exists supabase_realtime;
+
+  -- re-create the supabase_realtime publication with no tables and only for update
+  create publication supabase_realtime with (publish = 'update');
+commit;
+
+-- add a table to the publication
+alter publication supabase_realtime add table pdf_processing_progress;
+```
+
 ### Storage
 - Click storage in the dashboard
 - Create a public bucket (if going to production with supabase storage instead of S3 make it private and use createSignedUrl to send to lambda)
