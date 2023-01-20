@@ -13,7 +13,7 @@ export default function Layout({ children }: { children: React.ReactNode}) {
       <div className="px-8">
         <Header />
         <Navbar />
-        <main className="min-h-screen py-16 flex flex-col justify-center items-center">
+        <main className="min-h-screen container mx-auto py-16 flex flex-col justify-center items-center">
           <h1 className="m-0 text-6xl text-center">
             Welcome <span className="text-blue-600 hover:underline hover:cursor-grab">Sam!</span>
           </h1>

@@ -15,7 +15,7 @@ export default function PdfSummaryView(props: PdfSummaryViewProps) {
 
   const [ selectedSummaryViewMode, setSelectedSummaryViewMode ] = useState(true);
 
-  const color = "blue-500"
+  // https://flowbite.com/docs/getting-started/introduction/
   const sharedButtonStyle = "px-4 py-2 border-blue-600 hover:ring-2";
   const selectedStyle = "bg-blue-600 text-white";
   const unselectedStyle = "text-blue-600 ";

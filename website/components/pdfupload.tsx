@@ -10,7 +10,6 @@ import { ClientDrawPath } from "../utils/sharedtypes";
 import { SelectInPdfResponse } from "../utils/requestresponsetypes";
 import { Database } from "../utils/database.types";
 import { DatabaseTableNames } from "../utils/tablenames.types";
-import { lambdaTriggerPdfProcessing } from "./AwsConnector";
 import { useRouter } from "next/router";
 
 async function sha256(message: string) {
