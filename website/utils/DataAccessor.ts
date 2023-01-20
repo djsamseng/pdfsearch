@@ -1,6 +1,7 @@
 
 import SupabaseClient from "@supabase/auth-helpers-react";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
+import { supabase } from "@supabase/auth-ui-react/dist/esm/common/theming";
 
 import useSWR, { mutate, } from "swr";
 
@@ -131,5 +132,27 @@ export class DataAccessor {
     if (insertError) {
       console.error("Failed to write to pdf_processing_progress", insertError);
     }
+  }
+
+  public async getPdfBytes({
+    supabase,
+    pdfId,
+  }: {
+    supabase: SupabaseClient.SupabaseClient<Database>;
+    pdfId: string;
+  }) {
+    const url = `public/${pdfId}.pdf`;
+    console.log("Getting pdf:", url);
+    const { data, error } = await supabase.storage
+      .from("pdfs")
+      .download(url);
+    if (error) {
+      console.error("Failed to getPdfBytes:", error);
+      throw(error);
+    }
+    if (!data) {
+      throw new Error("Test");
+    }
+    return data.arrayBuffer();
   }
 }

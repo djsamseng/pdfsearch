@@ -7,11 +7,11 @@ import PdfView from "./PdfView";
 
 type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
 
-type PdfSummaryViewProps = {
-  pdfSummary: PdfSummary,
-};
-
-export default function PdfSummaryView(props: PdfSummaryViewProps) {
+export default function PdfSummaryView({
+  pdfSummary,
+}: {
+  pdfSummary: PdfSummary;
+}) {
 
   const [ selectedSummaryViewMode, setSelectedSummaryViewMode ] = useState(true);
 
@@ -36,7 +36,7 @@ export default function PdfSummaryView(props: PdfSummaryViewProps) {
           View PDF
         </button>
       </div>
-      { !selectedSummaryViewMode && <PdfView />}
+      { !selectedSummaryViewMode && <PdfView pdfSummary={pdfSummary} />}
     </div>
   )
 }

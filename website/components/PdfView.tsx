@@ -1,9 +1,11 @@
 
-import { useRef, useState, MouseEvent } from "react";
-import { usePdf } from "@mikecousins/react-pdf";
+import { useRef, useState, MouseEvent, useEffect } from "react";
+import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import * as PdfJS  from "pdfjs-dist/build/pdf"
 
-import { ClientDrawPath } from "../utils/sharedtypes";
+import { DataAccessor } from "../utils/DataAccessor";
+import { usePdf } from "../utils/UsePdf";
+import { Database } from "../utils/database.types";
 
 enum CanvasMouseEvents {
   MOVE = "MOVE",
@@ -12,7 +14,13 @@ enum CanvasMouseEvents {
   OUT = "OUT",
 }
 
-export default function PdfView() {
+type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
+
+function PdfViewer({
+  pdfData,
+}: {
+  pdfData: ArrayBuffer;
+}) {
   // TODO: https://github.com/mozilla/pdf.js/blob/master/examples/learning/helloworld64.html#L42
   // And replace https://github.com/mikecousins/react-pdf-js/blob/9b0be61ea478042727f11328ca1b27ecd8b4e411/packages/react-pdf-js/src/index.tsx#L92
   const canvasRef = useRef(null)
@@ -20,7 +28,16 @@ export default function PdfView() {
   const [ scale, setScale ] = useState(0.4);
   const flag = useRef(false);
 
-  const pdfDocument: any = null;
+  const { pdfDocument, pdfPage } = usePdf({
+    pdfData,
+    page,
+    canvasRef,
+    scale,
+    onPageRenderSuccess: async (page) => {
+      console.log("Rendered pdf");
+    },
+  })
+
   function increaseZoom() {
     setScale(scale * 1.1);
   }
@@ -94,5 +111,36 @@ export default function PdfView() {
           onMouseOut={(evt) => onCanvasMouse(CanvasMouseEvents.OUT, evt)} />
       </div>
     </div>
+  )
+}
+
+export default function PdfView({
+  pdfSummary,
+}: {
+  pdfSummary: PdfSummary;
+}) {
+  const supabase = useSupabaseClient<Database>();
+  const [ pdfData, setPdfData ] = useState<ArrayBuffer | null>(null);
+
+  useEffect(() => {
+    async function getPdfBytes() {
+      try {
+        const fetchedPdfData = await DataAccessor.instance.getPdfBytes({
+          supabase,
+          pdfId: pdfSummary.pdf_id,
+        });
+        setPdfData(fetchedPdfData);
+        console.log("Got pdfData:", fetchedPdfData);
+      }
+      catch (error) {
+        console.error("Failed to getPdfBytes:", error);
+      }
+    }
+    getPdfBytes();
+  }, [ supabase, setPdfData ])
+  return (
+    <>{ pdfData && (
+      <PdfViewer pdfData={pdfData} />
+    ) }</>
   )
 }

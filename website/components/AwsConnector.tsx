@@ -20,7 +20,7 @@ export async function lambdaTriggerPdfProcessing(pdfId: string) {
     const payload = utf8Encode.encode(JSON.stringify({
       pdfId: pdfId,
     }))
-    console.log("Invoking lambda");
+    console.log("=== Invoking lambda ===");
     const command = new InvokeCommand({
       FunctionName: "function",
       Payload: payload,

@@ -16,22 +16,15 @@ import Link from "next/link";
 type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
 type PdfProcessingProgress = Database["public"]["Tables"]["pdf_processing_progress"]["Row"]
 
-export default function PdfIdViewer() {
-  const router = useRouter();
-  const supabase = useSupabaseClient<Database>();
+function PdfIdViewer({
+  pdfId,
+  pdfName,
+}: {
+  pdfId: string,
+  pdfName: string,
+}) {
 
-  const {
-    pdfid: pdfId,
-    pdfname: pdfName,
-  } = router.query;
-  if (!(pdfId && typeof pdfId === "string" && pdfId.length > 0) ||
-      !(pdfName && typeof pdfName === "string" && pdfName.length > 0)) {
-    return (
-      <div>
-        Unknown pdf { pdfId } { pdfName }
-      </div>
-    )
-  }
+  const supabase = useSupabaseClient<Database>();
 
   const [ pdfProcessingProgress, setPdfProcessingProgress ] = useState<PdfProcessingProgress>({
     curr_step: 0,
@@ -55,31 +48,34 @@ export default function PdfIdViewer() {
     return lambdaTriggered;
   }
 
-  const loadExistingSummaryIfProcessed = useCallback(async ({
-    pdfId,
-  }: {
-    pdfId: string,
-  }) => {
-    const fetchedPdfSummary = await DataAccessor.instance.getPdfSummaryIfProcessed({ supabase, pdfId, });
-    if (fetchedPdfSummary) {
-      setPdfProcessingProgress({
-        curr_step: 0,
-        msg: "Already processed",
-        pdf_id: pdfId,
-        success: true,
-        total_steps: 1,
-      });
-      setPdfSummary(fetchedPdfSummary);
-      return true;
-    }
-    else {
-      return false;
-    }
-  }, []);
-
   useEffect(() => {
     console.log("Created channel");
     const channel = supabase.channel("db-changes");
+    function cleanupSubscription() {
+      taskListener?.unsubscribe();
+      supabase.removeChannel(channel);
+    }
+    async function loadExistingSummaryIfProcessed({
+      pdfId,
+    }: {
+      pdfId: string,
+    }) {
+      const fetchedPdfSummary = await DataAccessor.instance.getPdfSummaryIfProcessed({ supabase, pdfId, });
+      if (fetchedPdfSummary) {
+        setPdfProcessingProgress({
+          curr_step: 0,
+          msg: "Already processed",
+          pdf_id: pdfId,
+          success: true,
+          total_steps: 1,
+        });
+        setPdfSummary(fetchedPdfSummary);
+        return true;
+      }
+      else {
+        return false;
+      }
+    }
     channel.on(
       "postgres_changes",
       {
@@ -92,8 +88,7 @@ export default function PdfIdViewer() {
         const newStatus = payload.new as PdfProcessingProgress;
         setPdfProcessingProgress(newStatus);
         if (newStatus.success !== null) {
-          taskListener.unsubscribe();
-          supabase.removeChannel(channel);
+
           DataAccessor.instance.mutateAllPdfSummary();
           try {
             const loaded = await loadExistingSummaryIfProcessed({ pdfId });
@@ -111,35 +106,27 @@ export default function PdfIdViewer() {
       if (status === "SUBSCRIBED") {
         console.log("Waiting for db changes", pdfId, DatabaseTableNames.PDF_PROCESSING_PROGRESS);
         try {
-          const res = await triggerPdfProcessing({ pdfId, pdfName });
-          console.log("lambda response:", res);
+          const alreadyProcessedPdf = await loadExistingSummaryIfProcessed({
+            pdfId,
+          });
+          if (!alreadyProcessedPdf) {
+            const res = await triggerPdfProcessing({ pdfId, pdfName });
+            console.log("lambda response:", res);
+          }
         }
         catch (error) {
           console.error("lambda error:", error);
         }
+        finally {
+          cleanupSubscription();
+        }
       }
-    });
-    loadExistingSummaryIfProcessed({
-      pdfId,
-    })
-    .then((handled) => {
-      console.log("loadExistingSummaryIfProcessed complete handled:", handled);
-      if (handled) {
-        taskListener.unsubscribe();
-        supabase.removeChannel(channel);
-      }
-    })
-    .catch(error => {
-      console.error("onLoad error:", error);
-      // Let it leak in case it fixes itself through upload processing
     });
 
     return () => {
-      console.log("Destroying channel");
-      taskListener.unsubscribe();
-      supabase.removeChannel(channel);
+      cleanupSubscription();
     }
-  }, [pdfId, pdfName, loadExistingSummaryIfProcessed]);
+  }, [pdfId, pdfName]);
 
   const progressView = (
     <div>
@@ -176,4 +163,23 @@ export default function PdfIdViewer() {
     </Layout>
   )
 
+}
+
+export default function PdfId() {
+  const router = useRouter();
+  const {
+    pdfid: pdfId,
+    pdfname: pdfName,
+  } = router.query;
+  if (!(pdfId && typeof pdfId === "string" && pdfId.length > 0) ||
+      !(pdfName && typeof pdfName === "string" && pdfName.length > 0)) {
+    return (
+      <div>
+        Unknown pdf { pdfId } { pdfName }
+      </div>
+    )
+  }
+  return (
+    <PdfIdViewer pdfId={pdfId} pdfName={pdfName} />
+  );
 }
