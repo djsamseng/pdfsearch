@@ -61,13 +61,10 @@ class SearchRule(metaclass=ABCMeta):
     pass
 
 MultiClassSearchRuleResults = typing.DefaultDict[
-  str, # page_number
+  str, # class_name
   typing.DefaultDict[
-    str, # class_name
-    typing.DefaultDict[
-      str, # elem_type
-      typing.List[LTJsonResponse]
-    ]
+    str, # elem_type
+    typing.List[LTJsonResponse]
   ]
 ]
 class MultiClassSearchRule(SearchRule):
@@ -82,11 +79,9 @@ class MultiClassSearchRule(SearchRule):
     self.radius = max([max(s.width, s.height) for s in shape_matches])
 
   def __create_results_dict(self) -> MultiClassSearchRuleResults:
-    return collections.defaultdict( # page_number
-      lambda: collections.defaultdict( # class_name
-        lambda: collections.defaultdict( # elem_type
-          list
-        )
+    return collections.defaultdict( # class_name
+      lambda: collections.defaultdict( # elem_type
+        list
       )
     )
 
@@ -105,8 +100,9 @@ class MultiClassSearchRule(SearchRule):
       elem.bbox[2] + self.radius,
       elem.bbox[3] + self.radius,
     )
-
+    # 1.6s
     around_elems = indexer.find_contains(bbox=around_bbox)
+    # 2.2s
     for shape in self.shape_matches:
       matching_curves = pdfindexer.find_similar_curves(
         wrapper_to_find=shape,
@@ -115,21 +111,51 @@ class MultiClassSearchRule(SearchRule):
       )
       # matching_shape = self.__find_outer_shape(around_elems)
       if len(matching_curves) > 0: #matching_shape is not None:
-        matching_shape = LTJsonResponse(elem=matching_curves[0])
+        matching_shape = LTJsonResponse(elem=matching_curves[0], page_idx=page_number)
         matching_shape.label = elem.text
-        self.results["Page {0}".format(page_number)][class_name][elem_type].append(matching_shape)
+        print(elem.text, elem.bbox)
+        self.results[class_name][elem_type].append(matching_shape)
 
   def __refine(self):
-    for pg in self.results.values():
-      for wc in pg.values():
-        for wid_key in wc.keys():
-          wc[wid_key] = remove_duplicate_bbox(items=wc[wid_key])
+    for wc in self.results.values():
+      for wid_key in wc.keys():
+        wc[wid_key] = remove_duplicate_bbox(items=wc[wid_key])
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     self.__refine()
     return {
       self.description: self.results
     }
+
+class HouseNameSearchRule(SearchRule):
+  def __init__(self) -> None:
+    pass
+
+  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    pass
+
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    return {}
+
+class ArchitectNameSearchRule(SearchRule):
+  def __init__(self) -> None:
+    pass
+
+  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    pass
+
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    return {}
+
+class PageNameSearchRule(SearchRule):
+  def __init__(self) -> None:
+    pass
+
+  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    pass
+
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    return {}
 
 class VoteSearcher:
   def __init__(self,

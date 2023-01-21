@@ -45,10 +45,10 @@ export class DataAccessor {
       return false;
     }
     if (data && data.pdf_summary !== null) {
-      console.log("pdf summary not null:", data);
+      console.log("pdf_summary not null:", data);
       return data;
     }
-    console.log("406 error no rows - already processed", error);
+    console.log("pdf_summary resp:", !!data, "pdf_summary json:", data && !!data.pdf_summary);
     return false;
   }
 

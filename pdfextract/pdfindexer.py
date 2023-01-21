@@ -167,11 +167,19 @@ def find_similar_curves(
   max_dist: float,
 ) -> typing.List[LTJson]:
   lines_to_find = wrapper_to_find.get_zeroed_path_lines()
+  if wrapper_to_find.width <= 0.1:
+    return []
+  to_find_h_w_ratio = wrapper_to_find.height / wrapper_to_find.width
   if len(lines_to_find) == 0:
     return []
 
   results: typing.List[LTJson] = []
   for wrapper in wrappers_to_search:
+    if wrapper.width <= 0.1:
+      continue
+    potential_h_w_ratio = wrapper.height / wrapper.width
+    if abs(to_find_h_w_ratio - potential_h_w_ratio) > 0.1:
+      continue
     potential_lines = wrapper.get_zeroed_path_lines()
     if len(potential_lines) == 0:
       continue

@@ -1,12 +1,12 @@
 
 import io
 import typing
+import time
 
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 import pdfminer.pdfparser, pdfminer.pdfdocument, pdfminer.pdftypes
 
 import dataprovider
-import debugutils
 from pdfextract import pdfindexer, pdfelemtransforms, votesearch, michaelsmithsymbols
 
 def get_pdf_num_pages(pdfdata_io: io.BytesIO):
@@ -52,15 +52,17 @@ class PdfProcessor:
     search_rules: typing.List[votesearch.SearchRule] = [
       votesearch.MultiClassSearchRule(shape_matches=[
         symbols["window_label"][0],
-      ], description="windows", regex="(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"),
+      ], description="windows", regex="^(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"),
       votesearch.MultiClassSearchRule(shape_matches=[
         symbols["door_label"][0],
-      ], description="doors", regex="(?P<class_name>\\d)(?P<elem_type>\\d\\d)")
+      ], description="doors", regex="^(?P<class_name>\\d)(?P<elem_type>\\d\\d)")
     ]
     self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules)
+    self.processing_time = 0.
 
   def process_page(self):
     for page_number, page in enumerate(self.pages_gen):
+      t0 = time.time()
       width = page.width
       height = page.height
       elems = pdfelemtransforms.get_underlying_parent_links(elems=page)
@@ -68,7 +70,8 @@ class PdfProcessor:
 
       self.vote_searcher.process(page_number=page_number, elems=elems, indexer=indexer)
       self.vote_searcher.refine()
-
+      t1 = time.time()
+      self.processing_time += t1 - t0
       yield
 
   def get_results(self):
@@ -82,11 +85,22 @@ def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pd
 
   pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
   processor = PdfProcessor(pages_gen=pages_gen, data_provider=data_provider)
+  t0 = time.time()
+  t_writing = 0.
   for idx, _ in enumerate(processor.process_page()):
+    td0 = time.time()
     data_provider.write_processpdf_progress(
       pdfkey=pdfkey,
       curr_step=idx+1,
       message="Processing page: {0}".format(idx+1)
     )
+    td1 = time.time()
+    t_writing += td1 - td0
+  t1 = time.time()
+  print(
+    "loop took:", t1-t0,
+    "elem processing took:", processor.processing_time,
+    "Writing progress took:", t_writing
+  )
   results = processor.get_results()
   return results
