@@ -4,13 +4,12 @@ import { useState } from "react";
 import { Database } from "../utils/database.types";
 
 import PdfView from "./PdfView";
-
-type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
+import { CompletePdfSummary } from "../utils/requestresponsetypes";
 
 export default function PdfSummaryView({
   pdfSummary,
 }: {
-  pdfSummary: PdfSummary;
+  pdfSummary: CompletePdfSummary;
 }) {
 
   const [ selectedSummaryViewMode, setSelectedSummaryViewMode ] = useState(true);

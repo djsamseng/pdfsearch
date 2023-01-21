@@ -158,7 +158,18 @@ class HouseNameSearchRule(SearchRule):
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     return {
-      "houseName": self.house_name
+      self.description: self.house_name
+    }
+class ArchitectNameSearchRule(SearchRule):
+  def __init__(self, description: str) -> None:
+    self.description = description
+
+  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    pass
+
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    return {
+      self.description: "Michael Smith"
     }
 
 class ScheduleBoxSearchRule(SearchRule):

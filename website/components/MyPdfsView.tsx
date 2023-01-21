@@ -21,7 +21,6 @@ export default function MyPdfsView() {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
     });
-  const pdfSummaryList = data ? data : [];
   const myPdfList = data || [];
   const pdfLinks = myPdfList.map((myPdf, idx) => {
     return (
@@ -31,7 +30,7 @@ export default function MyPdfsView() {
           <div className="grid grid-cols-3 gap-4 place-content-stretch">
             <span className="p-2">{ myPdf.pdfName }</span>
             <span className="p-2">{ myPdf.pdfSummary.houseName }</span>
-            <span className="p-2">{ "Architect" }</span>
+            <span className="p-2">{ myPdf.pdfSummary.architectName }</span>
           </div>
         </Link>
       </li>

@@ -20,6 +20,7 @@ export type PdfSummaryJson = {
   windows: Record<string, Record<string, PdfJsonResponse[]>>;
   doors: Record<string, Record<string, PdfJsonResponse[]>>;
   houseName: string;
+  architectName: string;
   pageNames: Record<number, string>;
 }
 

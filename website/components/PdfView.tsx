@@ -6,6 +6,7 @@ import * as PdfJS  from "pdfjs-dist/build/pdf"
 import { DataAccessor } from "../utils/DataAccessor";
 import { usePdf } from "../utils/UsePdf";
 import { Database } from "../utils/database.types";
+import { CompletePdfSummary } from "../utils/requestresponsetypes";
 
 enum CanvasMouseEvents {
   MOVE = "MOVE",
@@ -13,8 +14,6 @@ enum CanvasMouseEvents {
   UP = "UP",
   OUT = "OUT",
 }
-
-type PdfSummaryTable = Database["public"]["Tables"]["pdf_summary"]["Row"]
 
 function PdfViewer({
   pdfData,
@@ -117,9 +116,10 @@ function PdfViewer({
 export default function PdfView({
   pdfSummary,
 }: {
-  pdfSummary: PdfSummaryTable;
+  pdfSummary: CompletePdfSummary;
 }) {
   const supabase = useSupabaseClient<Database>();
+  // TODO: useSWR instead of state, show loading icon for isLoading
   const [ pdfData, setPdfData ] = useState<ArrayBuffer | null>(null);
 
   useEffect(() => {
@@ -127,7 +127,7 @@ export default function PdfView({
       try {
         const fetchedPdfData = await DataAccessor.instance.getPdfBytes({
           supabase,
-          pdfId: pdfSummary.pdf_id,
+          pdfId: pdfSummary.pdfId,
         });
         setPdfData(fetchedPdfData);
         console.log("Got pdfData:", fetchedPdfData);
