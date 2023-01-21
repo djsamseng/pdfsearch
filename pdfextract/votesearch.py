@@ -125,7 +125,7 @@ class MultiClassSearchRule(SearchRule):
       )
       # matching_shape = self.__find_outer_shape(around_elems)
       if len(matching_curves) > 0: #matching_shape is not None:
-        matching_shape = LTJsonResponse(elem=matching_curves[0], page_idx=page_number)
+        matching_shape = LTJsonResponse(elem=matching_curves[0])
         matching_shape.label = elem.text
         self.results[page_number][class_name][elem_type].append(matching_shape)
 
@@ -142,9 +142,10 @@ class MultiClassSearchRule(SearchRule):
     }
 
 class HouseNameSearchRule(SearchRule):
-  def __init__(self) -> None:
+  def __init__(self, description: str) -> None:
     self.regex = re.compile("^project name.{0,2}")
     self.house_name = ""
+    self.description = description
 
   def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
     potential_house_name = pdfextracter.extract_house_name(
@@ -171,8 +172,9 @@ class ScheduleBoxSearchRule(SearchRule):
     return {}
 
 class PageNameSearchRule(PageRecognizerRule):
-  def __init__(self) -> None:
+  def __init__(self, description: str) -> None:
     self.page_names: typing.Dict[int, str] = {}
+    self.description = description
 
   def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
     page_name = pdfextracter.extract_page_name(indexer=indexer)
@@ -180,7 +182,7 @@ class PageNameSearchRule(PageRecognizerRule):
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     return {
-      "pageNames": self.page_names
+      self.description: self.page_names
     }
 
 class VoteSearcher:

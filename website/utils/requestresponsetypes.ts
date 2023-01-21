@@ -10,3 +10,21 @@ export type SelectInPdfResponse = {
   selectedPaths: PdfElements;
   searchRequestData: PdfElements;
 }
+
+export type PdfJsonResponse = {
+  label: string | null;
+  bbox: [number, number, number, number];
+}
+
+export type PdfSummaryJson = {
+  windows: Record<string, Record<string, PdfJsonResponse[]>>;
+  doors: Record<string, Record<string, PdfJsonResponse[]>>;
+  houseName: string;
+  pageNames: Record<number, string>;
+}
+
+export type CompletePdfSummary = {
+  pdfId: string;
+  pdfName: string;
+  pdfSummary: PdfSummaryJson;
+}

@@ -7,12 +7,9 @@ import useSWR, { mutate, } from "swr";
 
 import { Database } from "./database.types";
 import { DatabaseTableNames } from "./tablenames.types";
+import { CompletePdfSummary } from "./requestresponsetypes";
 
-
-type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
-type PdfProcessingProgress = Database["public"]["Tables"]["pdf_processing_progress"]["Row"]
-
-enum SWRKeys {
+export enum SWRKeys {
   GET_PDF_SUMMARY_LIST = "GET_ALL_PDF_SUMMARY_LIST"
 }
 
@@ -57,37 +54,33 @@ export class DataAccessor {
   }: {
     supabase: SupabaseClient.SupabaseClient<Database>;
   }) {
-    const getPdfSummaryListFetcher = async (supabase: SupabaseClient.SupabaseClient<Database>) => {
-      const { data, error, status } = await supabase
-          .from(DatabaseTableNames.PDF_SUMMARY)
-          .select()
-          .not("pdf_summary", "is", "null");
-        if (error && status !== 406) {
-          console.error("Failed to getAllPdfSummary", error, status);
-          return [];
-        }
-        if (data && data.length > 0) {
-          console.log("num pdf summary not null:", data.length);
-          return data;
-        }
-        console.log("getAllPdfSummary no results", error);
-        return [];
+    const { data, error, status } = await supabase
+      .from(DatabaseTableNames.PDF_SUMMARY)
+      .select()
+      .not("pdf_summary", "is", "null");
+    if (error && status !== 406) {
+      console.error("Failed to getAllPdfSummary", error, status);
+      return [];
     }
-    const { data, error, } = useSWR(
-      SWRKeys.GET_PDF_SUMMARY_LIST,
-      () => getPdfSummaryListFetcher(supabase),
-      {
-        revalidateOnFocus: false,
-        revalidateOnReconnect: false,
-      });
-    if (error) {
-      throw error;
+    if (data && data.length > 0) {
+      console.log("num pdf summary not null:", data.length);
+      const completeSummary: CompletePdfSummary[] = data
+        .filter(elem => {
+          return typeof elem.pdf_summary === "string";
+        })
+        .map(elem => {
+          return {
+            pdfId: elem.pdf_id,
+            pdfName: elem.pdf_name,
+            pdfSummary: JSON.parse(elem.pdf_summary as string),
+          }
+        })
+      return completeSummary;
     }
-    if (!data) {
-      throw new Error("No data from getPdfSummaryList")
-    }
-    return data;
+    console.log("getAllPdfSummary no results", error);
+    return [];
   }
+
   public mutateAllPdfSummary() {
     mutate(SWRKeys.GET_PDF_SUMMARY_LIST);
   }

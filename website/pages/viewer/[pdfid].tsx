@@ -12,8 +12,8 @@ import { lambdaTriggerPdfProcessing } from "../../components/AwsConnector";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import PdfSummaryView from "../../components/PdfSummaryView";
 import Link from "next/link";
+import { CompletePdfSummary } from "../../utils/requestresponsetypes";
 
-type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
 type PdfProcessingProgress = Database["public"]["Tables"]["pdf_processing_progress"]["Row"]
 
 function PdfIdViewer({
@@ -33,20 +33,7 @@ function PdfIdViewer({
     success: null,
     total_steps: 1,
   });
-  const [ pdfSummary, setPdfSummary ] = useState<PdfSummary | null>(null);
-
-  async function triggerPdfProcessing({
-    pdfId,
-    pdfName,
-  }: {
-    pdfId: string,
-    pdfName: string,
-  }) {
-    await DataAccessor.instance.insertPdfName({ supabase, pdfId, pdfName });
-    await DataAccessor.instance.createPdfProccessing({ supabase, pdfId, });
-    const lambdaTriggered = await lambdaTriggerPdfProcessing(pdfId);
-    return lambdaTriggered;
-  }
+  const [ pdfSummary, setPdfSummary ] = useState<CompletePdfSummary | null>(null);
 
   useEffect(() => {
     console.log("Created channel");
@@ -56,13 +43,28 @@ function PdfIdViewer({
       taskListener?.unsubscribe();
       supabase.removeChannel(channel);
     }
+    async function triggerPdfProcessing({
+      pdfId,
+      pdfName,
+    }: {
+      pdfId: string,
+      pdfName: string,
+    }) {
+      await DataAccessor.instance.insertPdfName({ supabase, pdfId, pdfName });
+      await DataAccessor.instance.createPdfProccessing({ supabase, pdfId, });
+      const lambdaTriggered = await lambdaTriggerPdfProcessing(pdfId);
+      return lambdaTriggered;
+    }
     async function loadExistingSummaryIfProcessed({
       pdfId,
     }: {
       pdfId: string,
     }) {
-      const fetchedPdfSummary = await DataAccessor.instance.getPdfSummaryIfProcessed({ supabase, pdfId, });
-      if (fetchedPdfSummary) {
+      const fetchedPdfSummary = await DataAccessor.instance.getPdfSummaryIfProcessed({
+        supabase,
+        pdfId,
+      });
+      if (fetchedPdfSummary && typeof fetchedPdfSummary.pdf_summary === "string") {
         setPdfProcessingProgress({
           curr_step: 0,
           msg: "Already processed",
@@ -70,7 +72,12 @@ function PdfIdViewer({
           success: true,
           total_steps: 1,
         });
-        setPdfSummary(fetchedPdfSummary);
+        const completePdfSummary: CompletePdfSummary = {
+          pdfId: fetchedPdfSummary.pdf_id,
+          pdfName: fetchedPdfSummary.pdf_name,
+          pdfSummary: JSON.parse(fetchedPdfSummary.pdf_summary as string),
+        }
+        setPdfSummary(completePdfSummary);
         return true;
       }
       else {
@@ -172,8 +179,6 @@ function PdfIdViewer({
         { pdfProcessingProgress.success === true && pdfSummary && <PdfSummaryView pdfSummary={pdfSummary} /> }
         { pdfProcessingProgress.success === false && <></>}
       </div>
-
-
     </Layout>
   )
 

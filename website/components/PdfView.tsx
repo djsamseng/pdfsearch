@@ -14,7 +14,7 @@ enum CanvasMouseEvents {
   OUT = "OUT",
 }
 
-type PdfSummary = Database["public"]["Tables"]["pdf_summary"]["Row"]
+type PdfSummaryTable = Database["public"]["Tables"]["pdf_summary"]["Row"]
 
 function PdfViewer({
   pdfData,
@@ -117,7 +117,7 @@ function PdfViewer({
 export default function PdfView({
   pdfSummary,
 }: {
-  pdfSummary: PdfSummary;
+  pdfSummary: PdfSummaryTable;
 }) {
   const supabase = useSupabaseClient<Database>();
   const [ pdfData, setPdfData ] = useState<ArrayBuffer | null>(null);

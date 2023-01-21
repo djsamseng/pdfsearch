@@ -57,9 +57,11 @@ class PdfProcessor:
       votesearch.MultiClassSearchRule(shape_matches=[
         symbols["door_label"][0],
       ], description="doors", regex="^(?P<class_name>\\d)(?P<elem_type>\\d\\d)"),
-      votesearch.HouseNameSearchRule()
+      votesearch.HouseNameSearchRule(description="houseName"),
     ]
-    page_rules = []
+    page_rules = [
+      votesearch.PageNameSearchRule(description="pageNames")
+    ]
     self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=page_rules)
     self.processing_time = 0.
 
