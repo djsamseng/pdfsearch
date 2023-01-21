@@ -6,7 +6,7 @@ import typing
 
 import rtree
 
-from . import pdfindexer
+from . import pdfindexer, pdfextracter
 from .ltjson import LTJson, LTJsonResponse
 
 MergeDict = typing.Dict[str, typing.Any]
@@ -60,11 +60,23 @@ class SearchRule(metaclass=ABCMeta):
   def get_results(self) -> typing.Dict[str, typing.Any]:
     pass
 
+class PageRecognizerRule(metaclass=ABCMeta):
+  @abstractmethod
+  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    pass
+
+  @abstractmethod
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    pass
+
 MultiClassSearchRuleResults = typing.DefaultDict[
-  str, # class_name
+  int, # page_number
   typing.DefaultDict[
-    str, # elem_type
-    typing.List[LTJsonResponse]
+    str, # class_name
+    typing.DefaultDict[
+      str, # elem_type
+      typing.List[LTJsonResponse]
+    ]
   ]
 ]
 class MultiClassSearchRule(SearchRule):
@@ -79,9 +91,11 @@ class MultiClassSearchRule(SearchRule):
     self.radius = max([max(s.width, s.height) for s in shape_matches])
 
   def __create_results_dict(self) -> MultiClassSearchRuleResults:
-    return collections.defaultdict( # class_name
-      lambda: collections.defaultdict( # elem_type
-        list
+    return collections.defaultdict( # page_number
+      lambda: collections.defaultdict( # class_name
+        lambda: collections.defaultdict( # elem_type
+          list
+        )
       )
     )
 
@@ -113,13 +127,13 @@ class MultiClassSearchRule(SearchRule):
       if len(matching_curves) > 0: #matching_shape is not None:
         matching_shape = LTJsonResponse(elem=matching_curves[0], page_idx=page_number)
         matching_shape.label = elem.text
-        print(elem.text, elem.bbox)
-        self.results[class_name][elem_type].append(matching_shape)
+        self.results[page_number][class_name][elem_type].append(matching_shape)
 
   def __refine(self):
-    for wc in self.results.values():
-      for wid_key in wc.keys():
-        wc[wid_key] = remove_duplicate_bbox(items=wc[wid_key])
+    for pg in self.results.values():
+      for wc in pg.values():
+        for wid_key in wc.keys():
+          wc[wid_key] = remove_duplicate_bbox(items=wc[wid_key])
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     self.__refine()
@@ -129,15 +143,24 @@ class MultiClassSearchRule(SearchRule):
 
 class HouseNameSearchRule(SearchRule):
   def __init__(self) -> None:
-    pass
+    self.regex = re.compile("^project name.{0,2}")
+    self.house_name = ""
 
   def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    pass
+    potential_house_name = pdfextracter.extract_house_name(
+      regex=self.regex,
+      elem=elem,
+      indexer=indexer
+    )
+    if potential_house_name is not None:
+      self.house_name = potential_house_name
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
-    return {}
+    return {
+      "houseName": self.house_name
+    }
 
-class ArchitectNameSearchRule(SearchRule):
+class ScheduleBoxSearchRule(SearchRule):
   def __init__(self) -> None:
     pass
 
@@ -147,34 +170,35 @@ class ArchitectNameSearchRule(SearchRule):
   def get_results(self) -> typing.Dict[str, typing.Any]:
     return {}
 
-class PageNameSearchRule(SearchRule):
+class PageNameSearchRule(PageRecognizerRule):
   def __init__(self) -> None:
-    pass
+    self.page_names: typing.Dict[int, str] = {}
 
-  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    pass
+  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    page_name = pdfextracter.extract_page_name(indexer=indexer)
+    self.page_names[page_number] = page_name
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
-    return {}
+    return {
+      "pageNames": self.page_names
+    }
 
 class VoteSearcher:
   def __init__(self,
     search_rules: typing.List[SearchRule],
+    page_rules: typing.List[PageRecognizerRule],
   ) -> None:
     self.search_rules = search_rules
-    self.votes: typing.Dict[str, typing.Any] = {
-      "by_page_number": collections.defaultdict(dict),
-      # house names found and probability -> sort by probability
-      "house_names": collections.defaultdict(dict),
-      "architect_names": collections.defaultdict(dict),
-    }
+    self.page_rules = page_rules
 
-  def process(
+  def process_page(
     self,
-    page_number:int,
+    page_number: int,
     elems: typing.List[LTJson],
     indexer: pdfindexer.PdfIndexer
-  ) -> None:
+  ):
+    for rule in self.page_rules:
+      rule.process_page(page_number=page_number, indexer=indexer)
     for elem in elems:
       for rule in self.search_rules:
         rule.process_elem(elem=elem, page_number=page_number, indexer=indexer)
@@ -184,7 +208,7 @@ class VoteSearcher:
 
   def get_results(self):
     results: typing.Dict[str, typing.Any] = {}
-    for rule in self.search_rules:
+    for rule in self.search_rules + self.page_rules:
       rule_results = rule.get_results()
       merge(dest=results, other=rule_results)
     return results

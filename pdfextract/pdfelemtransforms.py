@@ -43,6 +43,8 @@ def get_underlying_parent_links_impl(
   elif isinstance(elem, pdfminer.layout.LTFigure):
     # Not Added
     print("Unhandled figure", elem)
+  elif isinstance(elem, pdfminer.layout.LTImage):
+    # TODO: Notify user pdf images not searched
     pass
   else:
     print("Unhandled elem:", elem)

@@ -6,6 +6,7 @@ import typing
 import argparse
 import json
 import gzip
+import re
 
 import numpy as np
 import pdfminer.high_level
@@ -394,11 +395,21 @@ def find_by_bbox_and_content():
   )
   drawer.show("Found")
 
-def findpagename():
+def findmeta():
   elems, width, height = get_pdf(which=1)
   items_indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
   page_name = pdfextracter.extract_page_name(indexer=items_indexer)
+  house_name = None
+  for elem in elems:
+    potential_house_name = pdfextracter.extract_house_name(
+      regex=re.compile("^project name.{0,2}"),
+      elem=elem,
+      indexer=items_indexer
+    )
+    if potential_house_name is not None:
+      house_name = potential_house_name
   print("Found page name: '{0}'".format(page_name))
+  print("Found house name: '{0}'".format(house_name))
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -411,7 +422,7 @@ def parse_args():
   parser.add_argument("--find", dest="find", default=False, action="store_true")
   parser.add_argument("--showall", dest="showall", default=False, action="store_true")
   parser.add_argument("--findbbox", dest="findbbox", default=False, action="store_true")
-  parser.add_argument("--findpagename", dest="findpagename", default=False, action="store_true")
+  parser.add_argument("--findmeta", dest="findmeta", default=False, action="store_true")
   parser.add_argument("--x0", dest="x0", type=int, required=False)
   parser.add_argument("--y0", dest="y0", type=int, required=False)
   parser.add_argument("--x1", dest="x1", type=int, required=False)
@@ -436,8 +447,8 @@ def main():
     find_by_bbox_and_content_search_rule()
   elif args.getall:
     get_all_symbols(save=args.save)
-  elif args.findpagename:
-    findpagename()
+  elif args.findmeta:
+    findmeta()
   else:
     door_labels_should_match()
 

@@ -7,6 +7,7 @@ import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 import pdfminer.pdfparser, pdfminer.pdfdocument, pdfminer.pdftypes
 
 import dataprovider
+import debugutils
 from pdfextract import pdfindexer, pdfelemtransforms, votesearch, michaelsmithsymbols
 
 def get_pdf_num_pages(pdfdata_io: io.BytesIO):
@@ -55,9 +56,11 @@ class PdfProcessor:
       ], description="windows", regex="^(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"),
       votesearch.MultiClassSearchRule(shape_matches=[
         symbols["door_label"][0],
-      ], description="doors", regex="^(?P<class_name>\\d)(?P<elem_type>\\d\\d)")
+      ], description="doors", regex="^(?P<class_name>\\d)(?P<elem_type>\\d\\d)"),
+      votesearch.HouseNameSearchRule()
     ]
-    self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules)
+    page_rules = []
+    self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=page_rules)
     self.processing_time = 0.
 
   def process_page(self):
@@ -68,7 +71,7 @@ class PdfProcessor:
       elems = pdfelemtransforms.get_underlying_parent_links(elems=page)
       indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
 
-      self.vote_searcher.process(page_number=page_number, elems=elems, indexer=indexer)
+      self.vote_searcher.process_page(page_number=page_number, elems=elems, indexer=indexer)
       self.vote_searcher.refine()
       t1 = time.time()
       self.processing_time += t1 - t0
@@ -83,7 +86,10 @@ def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pd
   num_steps_total = num_pages + 1
   data_provider.write_processpdf_start(pdfkey=pdfkey, num_steps_total=num_steps_total)
 
-  pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
+  if debugutils.is_dev():
+    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=[9])
+  else:
+    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
   processor = PdfProcessor(pages_gen=pages_gen, data_provider=data_provider)
   t0 = time.time()
   t_writing = 0.
