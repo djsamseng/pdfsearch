@@ -134,6 +134,24 @@ export class DataAccessor {
     }
   }
 
+  public async getPdfProcessingProgress({
+    supabase,
+    pdfId,
+  }: {
+    supabase: SupabaseClient.SupabaseClient<Database>;
+    pdfId: string;
+  }) {
+    const { data, error } = await supabase
+      .from(DatabaseTableNames.PDF_PROCESSING_PROGRESS)
+      .select()
+      .eq("pdf_id", pdfId)
+      .single();
+    if (error) {
+      console.error("Failed to get pdf processing progress:", error);
+    }
+    return data;
+  }
+
   public async getPdfBytes({
     supabase,
     pdfId,

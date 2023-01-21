@@ -52,6 +52,7 @@ function PdfIdViewer({
     console.log("Created channel");
     const channel = supabase.channel("db-changes");
     function cleanupSubscription() {
+      console.log("Cleaning up subscription:", !!taskListener);
       taskListener?.unsubscribe();
       supabase.removeChannel(channel);
     }
@@ -88,7 +89,6 @@ function PdfIdViewer({
         const newStatus = payload.new as PdfProcessingProgress;
         setPdfProcessingProgress(newStatus);
         if (newStatus.success !== null) {
-
           DataAccessor.instance.mutateAllPdfSummary();
           try {
             const loaded = await loadExistingSummaryIfProcessed({ pdfId });
@@ -109,16 +109,30 @@ function PdfIdViewer({
           const alreadyProcessedPdf = await loadExistingSummaryIfProcessed({
             pdfId,
           });
-          if (!alreadyProcessedPdf) {
-            const res = await triggerPdfProcessing({ pdfId, pdfName });
-            console.log("lambda response:", res);
+          if (alreadyProcessedPdf) {
+            console.log("Already processed pdf and has summary");
+            // Cleanup
+            cleanupSubscription();
+          }
+          else {
+            const alreadyProcessing =  await DataAccessor.instance.getPdfProcessingProgress({
+              supabase,
+              pdfId,
+            });
+            if (alreadyProcessing) {
+              console.log("Already processing pdf. Waiting");
+              setPdfProcessingProgress(alreadyProcessing);
+              // Don't cleanup
+            }
+            else {
+              const res = await triggerPdfProcessing({ pdfId, pdfName });
+              console.log("triggerPdfProccesing res:", res);
+              // Don't cleanup
+            }
           }
         }
         catch (error) {
           console.error("lambda error:", error);
-        }
-        finally {
-          cleanupSubscription();
         }
       }
     });
