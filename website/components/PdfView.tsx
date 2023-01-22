@@ -75,7 +75,7 @@ function PdfViewer({
     }
   }
 
-  const buttonStyle = "rounded px-2 py-1";
+  const buttonStyle = "rounded px-2 py-2 rounded-none first:rounded-l last:rounded-r border-r last:border-r-0 hover:bg-gray-200 first:hover:bg-gray-300";
   const buttonStyleActive = "bg-blue-100 border-2 rounded px-2 py-1";
   const canvasElem = (
     <canvas ref={canvasRef} className={"cursor-grab" }
@@ -88,24 +88,24 @@ function PdfViewer({
     <div className="">
       {Boolean(pdfDocument && pdfDocument.numPages > 0) && (
         <nav>
-          <ul className="flex justify-center">
-            <li>
-              <button disabled={page === 1} onClick={() => setPage(page - 1)} className={buttonStyle}>
-                Previous
+          <ul className="grid grid-cols-4 justify-center bg-white border border-gray-200 my-2 rounded-lg text-gray-900 max-w-fit mx-auto text-center">
+            <li className={buttonStyle + (page === 1 ? " bg-gray-300 hover:bg-gray-200" : "")}>
+              <button disabled={page === 1} onClick={() => setPage(page - 1)}>
+                Previous Page
               </button>
             </li>
-            <li>
-              <button disabled={page === pdfDocument!.numPages} onClick={() => setPage(page + 1)} className={buttonStyle}>
-                Next
+            <li className={buttonStyle}>
+              <button disabled={page === pdfDocument!.numPages} onClick={() => setPage(page + 1)}>
+                Next Page
               </button>
             </li>
-            <li>
-              <button onClick={() => increaseZoom()} className={buttonStyle}>
+            <li className={buttonStyle}>
+              <button onClick={() => increaseZoom()}>
                 Zoom +
               </button>
             </li>
-            <li>
-              <button onClick={() => decreaseZoom()} className={buttonStyle}>
+            <li className={buttonStyle}>
+              <button onClick={() => decreaseZoom()}>
                 Zoom -
               </button>
             </li>
