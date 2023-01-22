@@ -18,8 +18,10 @@ enum CanvasMouseEvents {
 
 function PdfViewer({
   pdfData,
+  smallCanvas,
 }: {
   pdfData: ArrayBuffer;
+  smallCanvas: boolean;
 }) {
   // TODO: https://github.com/mozilla/pdf.js/blob/master/examples/learning/helloworld64.html#L42
   // And replace https://github.com/mikecousins/react-pdf-js/blob/9b0be61ea478042727f11328ca1b27ecd8b4e411/packages/react-pdf-js/src/index.tsx#L92
@@ -75,6 +77,13 @@ function PdfViewer({
 
   const buttonStyle = "rounded px-2 py-1";
   const buttonStyleActive = "bg-blue-100 border-2 rounded px-2 py-1";
+  const canvasElem = (
+    <canvas ref={canvasRef} className={"cursor-grab" }
+          onMouseMove={(evt) => onCanvasMouse(CanvasMouseEvents.MOVE, evt)}
+          onMouseDown={(evt) => onCanvasMouse(CanvasMouseEvents.DOWN, evt)}
+          onMouseUp={(evt) => onCanvasMouse(CanvasMouseEvents.UP, evt)}
+          onMouseOut={(evt) => onCanvasMouse(CanvasMouseEvents.OUT, evt)} />
+  );
   return (
     <div className="">
       {Boolean(pdfDocument && pdfDocument.numPages > 0) && (
@@ -103,21 +112,26 @@ function PdfViewer({
           </ul>
         </nav>
       )}
-      <div className="h-[75vh] w-[75vw] overflow-scroll mx-auto p-5 border-black border-2">
-        <canvas ref={canvasRef} className={"cursor-grab" }
-          onMouseMove={(evt) => onCanvasMouse(CanvasMouseEvents.MOVE, evt)}
-          onMouseDown={(evt) => onCanvasMouse(CanvasMouseEvents.DOWN, evt)}
-          onMouseUp={(evt) => onCanvasMouse(CanvasMouseEvents.UP, evt)}
-          onMouseOut={(evt) => onCanvasMouse(CanvasMouseEvents.OUT, evt)} />
-      </div>
+      { smallCanvas && (
+        <div className="w-full overflow-scroll mx-auto p-5 border-black border-2">
+          { canvasElem }
+        </div>
+      )}
+      { !smallCanvas && (
+        <div className="w-full max-h-[75vh] max-w-[75vw] overflow-scroll mx-auto p-5 border-black border-2">
+          { canvasElem }
+        </div>
+      )}
     </div>
   )
 }
 
 export default function PdfView({
   pdfSummary,
+  smallCanvas,
 }: {
   pdfSummary: CompletePdfSummary;
+  smallCanvas: boolean;
 }) {
   const supabase = useSupabaseClient<Database>();
   // TODO: useSWR instead of state, show loading icon for isLoading
@@ -135,7 +149,7 @@ export default function PdfView({
   )
   if (pdfData) {
     return (
-      <PdfViewer pdfData={pdfData} />
+      <PdfViewer pdfData={pdfData} smallCanvas={smallCanvas} />
     );
   }
   else if (isLoading) {

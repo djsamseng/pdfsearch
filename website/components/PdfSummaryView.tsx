@@ -35,7 +35,20 @@ export default function PdfSummaryView({
           View PDF
         </button>
       </div>
-      { !selectedSummaryViewMode && <PdfView pdfSummary={pdfSummary} />}
+      <div className="">
+        { selectedSummaryViewMode && (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="">
+              Test
+            </div>
+            <PdfView pdfSummary={pdfSummary} smallCanvas={selectedSummaryViewMode} />
+          </div>
+        )}
+        { !selectedSummaryViewMode && (
+          <PdfView pdfSummary={pdfSummary} smallCanvas={selectedSummaryViewMode} />
+        )}
+      </div>
+
     </div>
   )
 }
