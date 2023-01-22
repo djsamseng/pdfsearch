@@ -4,12 +4,13 @@ import { useSupabaseClient } from "@supabase/auth-helpers-react";
 
 import Layout from "../../components/Layout";
 import { Database } from "../../utils/database.types";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DatabaseTableNames } from "../../utils/tablenames.types";
 import { DataAccessor } from "../../utils/DataAccessor";
 import { lambdaTriggerPdfProcessing } from "../../components/AwsConnector";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import PdfSummaryView from "../../components/PdfSummaryView";
+import NavBreadcrumb from "../../components/NavBreadcrumb";
 import Link from "next/link";
 import { CompletePdfSummary } from "../../utils/requestresponsetypes";
 
@@ -155,16 +156,30 @@ function PdfIdViewer({
   );
   return (
     <>
-      <div className="w-full max-w-2xl">
-        <Link href="/" className="text-blue-600 flex flex-row">
-          {/* https://heroicons.com/ */}
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-          <span>Back</span>
-        </Link>
+      <div className="w-full">
+        <NavBreadcrumb links={[{
+          text: "Home",
+          href: "/",
+          icon: (
+            <svg aria-hidden="true" className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path></svg>
+          )
+        }, {
+          text: "My PDFs",
+          href: "/",
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+            </svg>
+          )
+        }, {
+          text: pdfSummary?.pdfName || "",
+          href: "",
+        }]}/>
       </div>
-      <div className="mb-3 -mt-3">
+      <h1 className="text-6xl text-center">
+        Welcome to <span className="text-blue-600 hover:underline hover:cursor-grab">TakeOff!</span>
+      </h1>
+      <div className="my-3">
         <span className="text-2xl">{ pdfName }</span>
       </div>
       { pdfProcessingProgress.success !== true && (

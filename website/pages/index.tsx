@@ -11,6 +11,9 @@ export default function Home() {
   const cardStyle = "m-4 p-6 text-left text-inherit border border-solid border-[#eaeaea] dark:border-[#222] rounded-lg transition-colors max-w-xs hover:text-[#0070f3] hover:border-[#0070f3]"
   return (
     <Layout>
+      <h1 className="text-6xl text-center">
+        Welcome to <span className="text-blue-600 hover:underline hover:cursor-grab">TakeOff!</span>
+      </h1>
       <PdfUpload />
       <div>
         <span>By using this service you agree to our </span>
