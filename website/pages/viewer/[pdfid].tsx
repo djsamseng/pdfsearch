@@ -1,5 +1,4 @@
 
-import { useCallback } from "react";
 import { useRouter } from "next/router";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 
@@ -155,7 +154,7 @@ function PdfIdViewer({
     </div>
   );
   return (
-    <Layout>
+    <>
       <div className="w-full max-w-2xl">
         <Link href="/" className="text-blue-600 flex flex-row">
           {/* https://heroicons.com/ */}
@@ -168,18 +167,23 @@ function PdfIdViewer({
       <div className="mb-3 -mt-3">
         <span className="text-2xl">{ pdfName }</span>
       </div>
-      <div>
-        Success: { String(pdfProcessingProgress.success) }
-      </div>
-      <div>
-        { pdfProcessingProgress.msg}
-      </div>
+      { pdfProcessingProgress.success !== true && (
+        <>
+          <div>
+            { pdfProcessingProgress.success === null ? "Processing PDF" : "Failed to process PDF" }
+          </div>
+          <div>
+            { pdfProcessingProgress.msg}
+          </div>
+        </>
+      )}
+
       <div>
         { pdfProcessingProgress.success === null && progressView}
         { pdfProcessingProgress.success === true && pdfSummary && <PdfSummaryView pdfSummary={pdfSummary} /> }
         { pdfProcessingProgress.success === false && <></>}
       </div>
-    </Layout>
+    </>
   )
 
 }
@@ -193,12 +197,35 @@ export default function PdfId() {
   if (!(pdfId && typeof pdfId === "string" && pdfId.length > 0) ||
       !(pdfName && typeof pdfName === "string" && pdfName.length > 0)) {
     return (
-      <div>
+      <Layout>
         Unknown pdf { pdfId } { pdfName }
-      </div>
+      </Layout>
     )
   }
   return (
-    <PdfIdViewer pdfId={pdfId} pdfName={pdfName} />
+    <Layout>
+      <PdfIdViewer pdfId={pdfId} pdfName={pdfName} />
+    </Layout>
   );
+}
+
+const fullLayout = () => {
+  return (
+    <Layout>
+      <PdfIdViewer> subscribe, loadExisting, triggerProcessing, loadExisting, unsubscribe
+        <BackIcon />
+        <PdfName />
+        <ProcessingMsg />
+        <PdfSummaryView> selectViewMode
+          Summary ViewPdf
+          <PdfView> getPdfBytes
+            <PdfViewer> canvasMouseEvents
+              Previous Next Zoom + Zoom -
+              <canvas />
+            </PdfViewer>
+          </PdfView>
+        </PdfSummaryView>
+      </PdfIdViewer>
+    </Layout>
+  )
 }
