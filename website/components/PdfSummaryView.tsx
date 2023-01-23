@@ -5,6 +5,7 @@ import { Database } from "../utils/database.types";
 
 import PdfView from "./PdfView";
 import { CompletePdfSummary } from "../utils/requestresponsetypes";
+import SummaryElementList from "./SummaryElementList";
 
 export default function PdfSummaryView({
   pdfSummary,
@@ -38,9 +39,7 @@ export default function PdfSummaryView({
       <div className="">
         { selectedSummaryViewMode && (
           <div className="grid grid-cols-2 gap-4">
-            <div className="">
-              Test
-            </div>
+            <SummaryElementList pdfSummary={pdfSummary} />
             <PdfView pdfSummary={pdfSummary} smallCanvas={selectedSummaryViewMode} />
           </div>
         )}

@@ -17,8 +17,9 @@ export type PdfJsonResponse = {
 }
 
 export type PdfSummaryJson = {
-  windows: Record<string, Record<string, PdfJsonResponse[]>>;
-  doors: Record<string, Record<string, PdfJsonResponse[]>>;
+  //             pageNumber,     class,         elemId, list
+  windows: Record<string, Record<string, Record<string, PdfJsonResponse[]>>>;
+  doors: Record<string, Record<string, Record<string, PdfJsonResponse[]>>>;
   houseName: string;
   architectName: string;
   pageNames: Record<number, string>;
