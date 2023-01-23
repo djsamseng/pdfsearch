@@ -1,7 +1,7 @@
 
 
 import { useState } from "react";
-import { CompletePdfSummary, PdfJsonResponse } from "../utils/requestresponsetypes";
+import { CompletePdfSummary, PdfJsonResponse, PdfSummaryJson } from "../utils/requestresponsetypes";
 
 function Accordion({
   id,
@@ -114,6 +114,17 @@ function mergeRecordItems(items: Record<string, Record<string, Record<string, Pd
     });
     return out;
   }, {} as Record<string, Record<string, PdfJsonResponse[]>>);
+}
+
+// A##
+function countNumPdfJSONElems(record: PdfSummaryJson["windows"]) {
+  return Object.values(record).reduce((sum, subitem) => {
+    return sum + Object.values(subitem).reduce((sum, sub2item) => {
+      return sum + Object.values(sub2item).reduce((sum, sub3item) => {
+        return sum + sub3item.length;
+      }, 0);
+    }, 0);
+  }, 0);
 }
 
 export default function SummaryElementList({

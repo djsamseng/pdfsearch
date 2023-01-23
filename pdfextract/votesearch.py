@@ -79,7 +79,15 @@ MultiClassSearchRuleResults = typing.DefaultDict[
     ]
   ]
 ]
-class MultiClassSearchRule(SearchRule):
+def create_results_dict() -> MultiClassSearchRuleResults:
+  return collections.defaultdict( # page_number
+    lambda: collections.defaultdict( # class_name
+      lambda: collections.defaultdict( # elem_type
+        list
+      )
+    )
+  )
+class RegexShapeSearchRule(SearchRule):
   def __init__(self, shape_matches: typing.List[LTJson], description: str, regex: str) -> None:
     '''
     regex extracts the window types. the remaining text is the id
@@ -87,17 +95,17 @@ class MultiClassSearchRule(SearchRule):
     self.shape_matches = shape_matches
     self.description = description
     self.regex = re.compile(regex) # (?P<window_class>[a-zA-Z])(?P<window_id>\\d\\d)
-    self.results: MultiClassSearchRuleResults = self.__create_results_dict()
+    self.results: MultiClassSearchRuleResults = create_results_dict()
     self.radius = max([max(s.width, s.height) for s in shape_matches])
-
-  def __create_results_dict(self) -> MultiClassSearchRuleResults:
-    return collections.defaultdict( # page_number
-      lambda: collections.defaultdict( # class_name
-        lambda: collections.defaultdict( # elem_type
-          list
-        )
-      )
-    )
+    def default_add_match_to_results(
+      results: MultiClassSearchRuleResults,
+      page_number: int,
+      class_name: str,
+      elem_type: str,
+      elem: LTJsonResponse
+    ):
+      results[page_number][class_name][elem_type].append(elem)
+    self.add_match_to_results = default_add_match_to_results
 
   def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
     if elem.text is None:
@@ -123,11 +131,16 @@ class MultiClassSearchRule(SearchRule):
         wrappers_to_search=around_elems,
         max_dist=2.
       )
-      # matching_shape = self.__find_outer_shape(around_elems)
-      if len(matching_curves) > 0: #matching_shape is not None:
+      if len(matching_curves) > 0:
         matching_shape = LTJsonResponse(elem=matching_curves[0])
         matching_shape.label = elem.text
-        self.results[page_number][class_name][elem_type].append(matching_shape)
+        self.add_match_to_results(
+          results=self.results,
+          page_number=page_number,
+          class_name=class_name,
+          elem_type=elem_type,
+          elem=matching_shape
+        )
 
   def __refine(self):
     for pg in self.results.values():
@@ -172,15 +185,23 @@ class ArchitectNameSearchRule(SearchRule):
       self.description: "Michael Smith"
     }
 
+# TODO: __init__ takes in window_search_rule
+# TODO: add to pdfprocessor
 class ScheduleBoxSearchRule(SearchRule):
-  def __init__(self) -> None:
-    pass
+  def __init__(self, description: str, regex: str) -> None:
+    self.description = description
+    self.regex = regex
 
   def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
     pass
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
-    return {}
+    return {
+      self.description: {
+        "heading": ["TAG##"],
+        "rows": [["001"], ["002"]]
+      }
+    }
 
 class PageNameSearchRule(PageRecognizerRule):
   def __init__(self, description: str) -> None:

@@ -17,9 +17,17 @@ export type PdfJsonResponse = {
 }
 
 export type PdfSummaryJson = {
-  //             pageNumber,     class,         elemId, list
+  //             pageNumber,     tag,         elemId, list
   windows: Record<string, Record<string, Record<string, PdfJsonResponse[]>>>;
+  windowSchedule?: {
+    heading: Array<string>;
+    rows: Array<Array<string>>;
+  };
   doors: Record<string, Record<string, Record<string, PdfJsonResponse[]>>>;
+  doorSchedule?: {
+    heading: Array<string>;
+    rows: Array<Array<string>>;
+  };
   houseName: string;
   architectName: string;
   pageNames: Record<number, string>;
