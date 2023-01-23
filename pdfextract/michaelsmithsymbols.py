@@ -78,11 +78,13 @@ def get_toilet_symbol(indexer: pdfindexer.PdfIndexer):
   matches = find_contains_with_room(indexer=indexer, x0=x0, y0=y0, x1=x1, y1=y1)
   return matches
 
-def get_pdf(which:int = 0):
+def get_pdf(which:int = 0, page_number:typing.Union[int, None]=None):
   if which == 0:
-    page_gen = pdfminer.high_level.extract_pages(pdf_file="./plan.pdf", page_numbers=[9])
+    page_number = 9 if page_number is None else page_number
+    page_gen = pdfminer.high_level.extract_pages(pdf_file="./plan.pdf", page_numbers=[page_number])
   else:
-    page_gen = pdfminer.high_level.extract_pages(pdf_file="./planMichaelSmith2.pdf", page_numbers=[1])
+    page_number = 1 if page_number is None else page_number
+    page_gen = pdfminer.high_level.extract_pages(pdf_file="./planMichaelSmith2.pdf", page_numbers=[page_number])
   pages = list(page_gen)
   page = pages[0]
   width = int(page.width)
@@ -411,6 +413,60 @@ def findmeta():
   print("Found page name: '{0}'".format(page_name))
   print("Found house name: '{0}'".format(house_name))
 
+def line_slope(elem: LTJson):
+  x0, y0, x1, y1 = elem.bbox
+  return (y1 - y0) / x1 - x0
+
+def is_line_vertical(elem: LTJson):
+  x0, y0, x1, y1 = elem.bbox
+  dx = abs(x1-x0)
+  dy = abs(y1-y0)
+  if dx <= 1 and dy/(dx+0.1) > 0.9:
+    return True
+  return False
+def is_line_horizontal(elem: LTJson):
+  x0, y0, x1, y1 = elem.bbox
+  dx = abs(x1-x0)
+  dy = abs(y1-y0)
+  if dy <= 1 and dy/(dx+0.1) < 0.1:
+    return True
+  return False
+
+def findschedule():
+  elems, width, height = get_pdf(which=1, page_number=1)
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  lookup_results = indexer.text_lookup["window schedule"]
+  assert len(lookup_results) == 2, "{0}".format(lookup_results)
+  key_elem = lookup_results[0]
+  x0, y0, x1, _ = key_elem.bbox
+  # Find the rect that contains the table
+  below = indexer.find_top_left_in(bbox=(x0-key_elem.height*2, y0-key_elem.height*2, x1, y0))
+  rects = [ b for b in below if b.is_rect ]
+  # Take the biggest rect
+  table_rect = max(rects, key=lambda x: x.width * x.height)
+  # Find everything inside the table rect
+  inside_schedule = indexer.find_contains(bbox=table_rect.bbox)
+  # Get horizontal lines that start at the left
+  def is_left_aligned(elem: LTJson):
+    return elem.bbox[0] <= table_rect.bbox[0] + 10
+  left_aligned_horizontal_lines = [
+    s for s in inside_schedule if is_left_aligned(s) and is_line_horizontal(s)
+  ]
+  # sort them vertically top down
+  left_aligned_horizontal_lines.sort(key=lambda s: -s.bbox[3])
+  header_line = left_aligned_horizontal_lines[0]
+  vertical_dividers = [
+    s for s in inside_schedule if \
+      s.bbox[1] >= table_rect.bbox[1] and s.bbox[3] >= header_line.bbox[3] and \
+      is_line_vertical(s)
+  ]
+  # Follow those vertical lines down until the first one ends
+  # At this point we should see a horizontal line that reaches full width and ends the table
+
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=vertical_dividers + [header_line], draw_buttons=True, align_top_left=True)
+  drawer.show("Below")
+
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--getall", dest="getall", default=False, action="store_true")
@@ -423,6 +479,7 @@ def parse_args():
   parser.add_argument("--showall", dest="showall", default=False, action="store_true")
   parser.add_argument("--findbbox", dest="findbbox", default=False, action="store_true")
   parser.add_argument("--findmeta", dest="findmeta", default=False, action="store_true")
+  parser.add_argument("--findschedule", dest="findschedule", default=False, action="store_true")
   parser.add_argument("--x0", dest="x0", type=int, required=False)
   parser.add_argument("--y0", dest="y0", type=int, required=False)
   parser.add_argument("--x1", dest="x1", type=int, required=False)
@@ -449,6 +506,8 @@ def main():
     get_all_symbols(save=args.save)
   elif args.findmeta:
     findmeta()
+  elif args.findschedule:
+    findschedule()
   else:
     door_labels_should_match()
 

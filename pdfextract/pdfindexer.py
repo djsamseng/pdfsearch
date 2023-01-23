@@ -1,4 +1,5 @@
 
+import collections
 import re
 import time
 import typing
@@ -38,6 +39,11 @@ class PdfIndexer:
     t2 = time.time()
     self.find_by_shape_kdtree = scipy.spatial.KDTree(data=all_elem_shapes)
     t3 = time.time()
+    self.text_lookup: typing.Dict[str, typing.List[LTJson]] = collections.defaultdict(list)
+    for elem in wrappers:
+      if elem.text is not None:
+        key_text = elem.text.replace("\n", " ").lower().strip()
+        self.text_lookup[key_text].append(elem)
     if LOG_TIME:
       print("pdfindexer rtree:", t1-t0, "kdtree:", t3-t2, "total:", t3-tb)
 
@@ -57,6 +63,22 @@ class PdfIndexer:
       return []
     result_idxes = list(result_idxes)
     results = [self.wrappers[idx] for idx in result_idxes]
+    return results
+
+  def find_top_left_in(
+    self,
+    bbox: typing.Tuple[float, float, float, float],
+  ) -> typing.List[LTJson]:
+    result_idxes = self.find_by_position_rtree.intersection(coordinates=bbox)
+    if result_idxes is None:
+      return []
+    result_idxes = list(result_idxes)
+    results = [ self.wrappers[idx] for idx in result_idxes ]
+    def starts_inside_bbox(elem: LTJson, bbox: typing.Tuple[float, float, float, float]):
+      x0, y0, x1, y1 = bbox
+      left_x, _, _, top_y = elem.bbox
+      return left_x >= x0 and left_x <= x1 and top_y >= y0 and top_y <= y1
+    results = [ r for r in results if starts_inside_bbox(elem=r, bbox=bbox)]
     return results
 
   def find_similar_height_width(

@@ -108,7 +108,8 @@ class PdfProcessor:
 
     ]
     page_rules = [
-      votesearch.PageNameSearchRule(description="pageNames")
+      votesearch.PageNameSearchRule(description="pageNames"),
+      votesearch.ScheduleBoxSearchRule(description="windowSchedule", text_key="window schedule")
     ]
     self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=page_rules)
     self.processing_time = 0.
@@ -136,8 +137,8 @@ def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pd
   num_steps_total = num_pages + 1
   data_provider.write_processpdf_start(pdfkey=pdfkey, num_steps_total=num_steps_total)
 
-  if debugutils.is_dev() and False:
-    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=[9])
+  if debugutils.is_dev():
+    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=[2])
   else:
     pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
   processor = PdfProcessor(pages_gen=pages_gen, data_provider=data_provider)

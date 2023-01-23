@@ -187,13 +187,15 @@ class ArchitectNameSearchRule(SearchRule):
 
 # TODO: __init__ takes in window_search_rule
 # TODO: add to pdfprocessor
-class ScheduleBoxSearchRule(SearchRule):
-  def __init__(self, description: str, regex: str) -> None:
+class ScheduleBoxSearchRule(PageRecognizerRule):
+  def __init__(self, description: str, text_key: str) -> None:
     self.description = description
-    self.regex = regex
+    self.text_key = text_key
 
-  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    pass
+  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    if self.text_key in indexer.text_lookup:
+      key_elem = indexer.text_lookup[self.text_key]
+      print("Found:", self.text_key, key_elem)
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     return {

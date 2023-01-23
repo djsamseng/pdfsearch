@@ -29,6 +29,8 @@ class LTJson:
     self.linewidth = None
     self.is_container = False
     self.is_annotation = False
+    self.is_line = False
+    self.is_rect = False
     self.parent_idx = None
     self.children_idxes = []
 
@@ -44,6 +46,10 @@ class LTJson:
       self.parent_idx = parent_idx
       self.children_idxes = children_idxes
       if isinstance(elem, pdfminer.layout.LTCurve):
+        if isinstance(elem, pdfminer.layout.LTRect):
+          self.is_rect = True
+        if isinstance(elem, pdfminer.layout.LTLine):
+          self.is_line = True
         self.original_path = elem.original_path
         self.linewidth = elem.linewidth
       if isinstance(elem, pdfminer.layout.LTText):
@@ -71,6 +77,8 @@ class LTJson:
         self.linewidth = serialized_json["linewidth"]
       self.is_container = serialized_json["is_container"]
       self.is_annotation = serialized_json["is_annotation"]
+      self.is_line = serialized_json["is_line"]
+      self.is_rect = serialized_json["is_rect"]
       self.parent_idx = serialized_json["parent_idx"]
       self.children_idxes = serialized_json["children_idxes"]
 
