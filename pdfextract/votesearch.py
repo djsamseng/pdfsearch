@@ -29,7 +29,7 @@ def item_is_multiline_text(item: LTJsonResponse):
     return item_multiline
   return False
 
-def remove_duplicate_bbox(items: typing.List[LTJsonResponse]):
+def remove_duplicate_bbox_orig(items: typing.List[LTJsonResponse]):
   bbox_indexer = rtree.index.Index()
   idx = 0
   radius = 0
@@ -49,6 +49,25 @@ def remove_duplicate_bbox(items: typing.List[LTJsonResponse]):
       bbox_indexer.insert(idx, bbox)
       out.append(item)
       should_swap_out.append(item_is_multiline_text(item=item))
+  return out
+
+def remove_duplicate_bbox(items: typing.List[LTJson]):
+  def item_size(item: LTJson):
+    x0, y0, x1, y1 = item.bbox
+    return (x1-x0) * (y1-y0)
+  items.sort(key=lambda x: item_size(x), reverse=True) # pylint:disable=unnecessary-lambda
+
+  bbox_indexer = rtree.index.Index()
+  out: typing.List[LTJson] = []
+  idx = 0
+  radius = 0
+  for item in items:
+    results = bbox_indexer.intersection(item.bbox)
+    if results is None or len(list(results)) == 0:
+      x0, y0, x1, y1 = item.bbox
+      bbox = (x0-radius, y0-radius, x1+radius, y1+radius)
+      bbox_indexer.insert(idx, bbox)
+      out.append(item)
   return out
 
 class SearchRule(metaclass=ABCMeta):
@@ -146,7 +165,7 @@ class RegexShapeSearchRule(SearchRule):
     for pg in self.results.values():
       for wc in pg.values():
         for wid_key in wc.keys():
-          wc[wid_key] = remove_duplicate_bbox(items=wc[wid_key])
+          wc[wid_key] = remove_duplicate_bbox_orig(items=wc[wid_key])
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     self.__refine()

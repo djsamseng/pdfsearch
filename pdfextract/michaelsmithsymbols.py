@@ -432,6 +432,48 @@ def is_line_horizontal(elem: LTJson):
     return True
   return False
 
+def extract_row(
+  table_elems: typing.List[LTJson],
+  bbox: pdfelemtransforms.BboxType,
+  vertical_dividers: typing.List[LTJson]
+):
+  # FIXME: PAINT SKYLIGHT is interpreted as a single item
+  # even though there is a line between the two
+  # TODO: Manual joining of characters into words instead of looking at the parent
+  text_elems_in_row = [
+    e for e in table_elems if \
+      pdfelemtransforms.box_contains(outer=bbox, inner=e.bbox) and e.parent_idx is None
+  ]
+  text_elems_in_row.sort(key=lambda e: e.bbox[0]) # left to right
+  vertical_divider_bboxes = [ v.bbox for v in vertical_dividers ]
+  vertical_divider_bboxes.sort(key=lambda v: v[0]) # left to right
+  vertical_divider_bboxes.append((bbox[2],bbox[1],bbox[2],bbox[3]))
+  row: typing.List[str] = []
+  # If multicolumn, join MATERIAL INT = column 0, MATERIAL EXT = column 1
+  elem_idx = 0
+  hangover_elem: typing.Union[LTJson, None] = None
+  for right_divider in vertical_divider_bboxes:
+    text_elems_in_this_box: typing.List[LTJson] = []
+    if hangover_elem:
+      text_elems_in_this_box.append(hangover_elem)
+      hangover_elem = None
+    while elem_idx < len(text_elems_in_row) and \
+      text_elems_in_row[elem_idx].bbox[0] < right_divider[0]:
+
+      add_elem = text_elems_in_row[elem_idx]
+      if add_elem.text is not None:
+        text_elems_in_this_box.append(add_elem)
+        if add_elem.bbox[2] + 5 > right_divider[2]:
+          hangover_elem = add_elem
+      elem_idx += 1
+
+    #text_elems_in_this_box = votesearch.remove_duplicate_bbox(items=text_elems_in_this_box)
+    text_elems_in_this_box.sort(key=lambda x: x.bbox[1])
+    row_text = " ".join([t.text for t in text_elems_in_this_box if t.text is not None])
+    row_text = row_text.replace("\n", " ").strip().replace("  ", " ")
+    row.append(row_text)
+  return row
+
 def findschedule():
   elems, width, height = get_pdf(which=1, page_number=1)
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
@@ -443,7 +485,7 @@ def findschedule():
   below = indexer.find_top_left_in(bbox=(x0-key_elem.height*2, y0-key_elem.height*2, x1, y0))
   rects = [ b for b in below if b.is_rect ]
   # Take the biggest rect
-  table_rect = max(rects, key=lambda x: x.width * x.height)
+  table_rect: LTJson = max(rects, key=lambda x: x.width * x.height)
   # Find everything inside the table rect
   inside_schedule = indexer.find_contains(bbox=table_rect.bbox)
   # Get horizontal lines that start at the left
@@ -453,7 +495,7 @@ def findschedule():
     s for s in inside_schedule if is_left_aligned(s) and is_line_horizontal(s)
   ]
   # sort them vertically top down
-  left_aligned_horizontal_lines.sort(key=lambda s: -s.bbox[3])
+  left_aligned_horizontal_lines.sort(key=lambda s: s.bbox[3], reverse=True)
   header_line = left_aligned_horizontal_lines[0]
   vertical_dividers = [
     s for s in inside_schedule if \
@@ -461,7 +503,29 @@ def findschedule():
       is_line_vertical(s)
   ]
   # Follow those vertical lines down until the first one ends
+  vertical_divider_bottom = max([s.bbox[1] for s in vertical_dividers])
   # At this point we should see a horizontal line that reaches full width and ends the table
+  header_row = extract_row(
+    table_elems=inside_schedule,
+    bbox=(table_rect.bbox[0], header_line.bbox[1], table_rect.bbox[2], table_rect.bbox[3]),
+    vertical_dividers=vertical_dividers
+  )
+  rows: typing.List[typing.List[str]] = []
+  for bottom_divider_idx in range(1, len(left_aligned_horizontal_lines)):
+    bottom_divider = left_aligned_horizontal_lines[bottom_divider_idx]
+    top_divider = left_aligned_horizontal_lines[bottom_divider_idx - 1]
+    if top_divider.bbox[3] <= vertical_divider_bottom:
+      break
+    row = extract_row(
+      table_elems=inside_schedule,
+      bbox=(top_divider.bbox[0], bottom_divider.bbox[1], top_divider.bbox[2], top_divider.bbox[3]),
+      vertical_dividers=vertical_dividers
+    )
+    rows.append(row)
+  print(header_row)
+  print(rows)
+  print([len(row) for row in rows], len(header_row))
+  # go row to row left to right extracting each row
 
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   drawer.draw_elems(elems=vertical_dividers + [header_line], draw_buttons=True, align_top_left=True)
