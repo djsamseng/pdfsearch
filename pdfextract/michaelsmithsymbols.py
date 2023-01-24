@@ -303,14 +303,13 @@ def print_indent(d: votesearch.MergeDict, level: int = 0):
       print(" " * level + key, ":", [v.text for v in val])
 
 def find_by_bbox_and_content_search_rule():
-
   t0 = time.time()
   symbols = read_symbols_from_json()
   search_rules: typing.List[votesearch.SearchRule] = [
-    votesearch.MultiClassSearchRule(shape_matches=[
+    votesearch.RegexShapeSearchRule(shape_matches=[
       symbols["window_label"][0],
     ], description="windows", regex="(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"),
-    votesearch.MultiClassSearchRule(shape_matches=[
+    votesearch.RegexShapeSearchRule(shape_matches=[
       symbols["door_label"][0],
     ], description="doors", regex="(?P<class_name>\\d)(?P<elem_type>\\d\\d)")
   ]
@@ -318,9 +317,9 @@ def find_by_bbox_and_content_search_rule():
   elems, width, height = get_pdf(which=1)
   t2 = time.time()
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  vote_searcher = votesearch.VoteSearcher(search_rules=search_rules)
+  vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=[])
 
-  vote_searcher.process(page_number=2, elems=elems, indexer=indexer)
+  vote_searcher.process_page(page_number=2, elems=elems, indexer=indexer)
   vote_searcher.refine()
   all_results = vote_searcher.get_results()
   t3 = time.time()
@@ -331,10 +330,10 @@ def find_by_bbox_and_content_search_rule():
   print("Took:", t3-t2 + t1-t0)
 
   def draw_results(results: typing.Dict[str, typing.Any]):
-    all_found = []
-    for pg, val in results.items():
-      for wt, valwt in val.items():
-        for wid, valwid in valwt.items():
+    all_found: typing.List[typing.Any] = []
+    for _, val in results.items():
+      for _, valwt in val.items():
+        for _, valwid in valwt.items():
           all_found.extend(valwid)
     drawer = pdftkdrawer.TkDrawer(width=width, height=height)
     drawer.draw_elems(elems=all_found, draw_buttons=True, align_top_left=False)
@@ -347,7 +346,7 @@ def find_by_bbox_and_content_search_rule():
 
 
 def find_by_bbox_and_content():
-  import time
+
   t0 = time.time()
   symbols = read_symbols_from_json()
   t1 = time.time()
@@ -403,7 +402,7 @@ def findmeta():
   page_name = pdfextracter.extract_page_name(indexer=items_indexer)
   house_name = None
   for elem in elems:
-    potential_house_name = pdfextracter.extract_house_name(
+    potential_house_name = pdfextracter.extract_house_name( # type: ignore
       regex=re.compile("^project name.{0,2}"),
       elem=elem,
       indexer=items_indexer
@@ -417,119 +416,43 @@ def line_slope(elem: LTJson):
   x0, y0, x1, y1 = elem.bbox
   return (y1 - y0) / x1 - x0
 
-def is_line_vertical(elem: LTJson):
-  x0, y0, x1, y1 = elem.bbox
-  dx = abs(x1-x0)
-  dy = abs(y1-y0)
-  if dx <= 1 and dy/(dx+0.1) > 0.9:
-    return True
-  return False
-def is_line_horizontal(elem: LTJson):
-  x0, y0, x1, y1 = elem.bbox
-  dx = abs(x1-x0)
-  dy = abs(y1-y0)
-  if dy <= 1 and dy/(dx+0.1) < 0.1:
-    return True
-  return False
-
-def extract_row(
-  table_elems: typing.List[LTJson],
-  bbox: pdfelemtransforms.BboxType,
-  vertical_dividers: typing.List[LTJson]
-):
-  # FIXME: PAINT SKYLIGHT is interpreted as a single item
-  # even though there is a line between the two
-  # TODO: Manual joining of characters into words instead of looking at the parent
-  text_elems_in_row = [
-    e for e in table_elems if \
-      pdfelemtransforms.box_contains(outer=bbox, inner=e.bbox) and e.parent_idx is None
-  ]
-  text_elems_in_row.sort(key=lambda e: e.bbox[0]) # left to right
-  vertical_divider_bboxes = [ v.bbox for v in vertical_dividers ]
-  vertical_divider_bboxes.sort(key=lambda v: v[0]) # left to right
-  vertical_divider_bboxes.append((bbox[2],bbox[1],bbox[2],bbox[3]))
-  row: typing.List[str] = []
-  # If multicolumn, join MATERIAL INT = column 0, MATERIAL EXT = column 1
-  elem_idx = 0
-  hangover_elem: typing.Union[LTJson, None] = None
-  for right_divider in vertical_divider_bboxes:
-    text_elems_in_this_box: typing.List[LTJson] = []
-    if hangover_elem:
-      text_elems_in_this_box.append(hangover_elem)
-      hangover_elem = None
-    while elem_idx < len(text_elems_in_row) and \
-      text_elems_in_row[elem_idx].bbox[0] < right_divider[0]:
-
-      add_elem = text_elems_in_row[elem_idx]
-      if add_elem.text is not None:
-        text_elems_in_this_box.append(add_elem)
-        if add_elem.bbox[2] + 5 > right_divider[2]:
-          hangover_elem = add_elem
-      elem_idx += 1
-
-    #text_elems_in_this_box = votesearch.remove_duplicate_bbox(items=text_elems_in_this_box)
-    text_elems_in_this_box.sort(key=lambda x: x.bbox[1])
-    row_text = " ".join([t.text for t in text_elems_in_this_box if t.text is not None])
-    row_text = row_text.replace("\n", " ").strip().replace("  ", " ")
-    row.append(row_text)
-  return row
-
 def findschedule():
   elems, width, height = get_pdf(which=1, page_number=1)
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  lookup_results = indexer.text_lookup["window schedule"]
-  assert len(lookup_results) == 2, "{0}".format(lookup_results)
-  key_elem = lookup_results[0]
-  x0, y0, x1, _ = key_elem.bbox
-  # Find the rect that contains the table
-  below = indexer.find_top_left_in(bbox=(x0-key_elem.height*2, y0-key_elem.height*2, x1, y0))
-  rects = [ b for b in below if b.is_rect ]
-  # Take the biggest rect
-  table_rect: LTJson = max(rects, key=lambda x: x.width * x.height)
-  # Find everything inside the table rect
-  inside_schedule = indexer.find_contains(bbox=table_rect.bbox)
-  # Get horizontal lines that start at the left
-  def is_left_aligned(elem: LTJson):
-    return elem.bbox[0] <= table_rect.bbox[0] + 10
-  left_aligned_horizontal_lines = [
-    s for s in inside_schedule if is_left_aligned(s) and is_line_horizontal(s)
-  ]
-  # sort them vertically top down
-  left_aligned_horizontal_lines.sort(key=lambda s: s.bbox[3], reverse=True)
-  header_line = left_aligned_horizontal_lines[0]
-  vertical_dividers = [
-    s for s in inside_schedule if \
-      s.bbox[1] >= table_rect.bbox[1] and s.bbox[3] >= header_line.bbox[3] and \
-      is_line_vertical(s)
-  ]
-  # Follow those vertical lines down until the first one ends
-  vertical_divider_bottom = max([s.bbox[1] for s in vertical_dividers])
-  # At this point we should see a horizontal line that reaches full width and ends the table
-  header_row = extract_row(
-    table_elems=inside_schedule,
-    bbox=(table_rect.bbox[0], header_line.bbox[1], table_rect.bbox[2], table_rect.bbox[3]),
-    vertical_dividers=vertical_dividers
+  header_row, rows = pdfextracter.extract_table(
+    indexer=indexer,
+    text_key="window schedule",
+    has_header=True,
+    header_above_table=False
   )
-  rows: typing.List[typing.List[str]] = []
-  for bottom_divider_idx in range(1, len(left_aligned_horizontal_lines)):
-    bottom_divider = left_aligned_horizontal_lines[bottom_divider_idx]
-    top_divider = left_aligned_horizontal_lines[bottom_divider_idx - 1]
-    if top_divider.bbox[3] <= vertical_divider_bottom:
-      break
-    row = extract_row(
-      table_elems=inside_schedule,
-      bbox=(top_divider.bbox[0], bottom_divider.bbox[1], top_divider.bbox[2], top_divider.bbox[3]),
-      vertical_dividers=vertical_dividers
-    )
-    rows.append(row)
+
   print(header_row)
   print(rows)
+  if header_row is None or rows is None:
+    return
   print([len(row) for row in rows], len(header_row))
   # go row to row left to right extracting each row
 
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-  drawer.draw_elems(elems=vertical_dividers + [header_line], draw_buttons=True, align_top_left=True)
+  drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=True)
   drawer.show("Below")
+
+def findlighting():
+  elems, width, height = get_pdf(which=1, page_number=2)
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  header_row, rows = pdfextracter.extract_table(
+    indexer=indexer,
+    text_key="lighting legend",
+    has_header=True,
+    header_above_table=True,
+  )
+  # RECT = top horizontal line + 3 lines in one
+  # vs RECT = window schedule = 4 lines in one
+  print(header_row)
+  print(rows)
+  if header_row is None or rows is None:
+    return
+  print([len(row) for row in rows], len(header_row))
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -544,6 +467,7 @@ def parse_args():
   parser.add_argument("--findbbox", dest="findbbox", default=False, action="store_true")
   parser.add_argument("--findmeta", dest="findmeta", default=False, action="store_true")
   parser.add_argument("--findschedule", dest="findschedule", default=False, action="store_true")
+  parser.add_argument("--findlighting", dest="findlighting", default=False, action="store_true")
   parser.add_argument("--x0", dest="x0", type=int, required=False)
   parser.add_argument("--y0", dest="y0", type=int, required=False)
   parser.add_argument("--x1", dest="x1", type=int, required=False)
@@ -572,6 +496,8 @@ def main():
     findmeta()
   elif args.findschedule:
     findschedule()
+  elif args.findlighting:
+    findlighting()
   else:
     door_labels_should_match()
 
