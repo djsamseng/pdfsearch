@@ -148,7 +148,7 @@ def find_symbol():
     # notes_circle, door_label fails because of "c" curves
     to_find = symbols[symbol_key][0]
     results, result_inner_contents = pdfindexer.find_symbol_with_text(symbol=to_find, indexer=indexer)
-    result_response = [LTJsonResponse(elem=elem) for elem in results]
+    result_response = [LTJsonResponse(elem=elem,page_number=0) for elem in results]
     page_response_obj[symbol_key] = result_response
     labels = [elem.label for elem in result_response]
     simple_page_response_obj[symbol_key] = len(labels)

@@ -102,7 +102,7 @@ def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pd
   num_steps_total = num_pages + 1
   data_provider.write_processpdf_start(pdfkey=pdfkey, num_steps_total=num_steps_total)
 
-  if debugutils.is_dev():
+  if debugutils.is_dev() and False:
     pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=[2,5,9])
   else:
     pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)

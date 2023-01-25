@@ -198,10 +198,12 @@ class LTJsonResponse:
   def __init__(
     self,
     elem: LTJson,
+    page_number: int,
   ):
     x0, y0, x1, y1 = elem.bbox
     self.bbox = (to_precision(x0), to_precision(y0), to_precision(x1), to_precision(y1))
     self.label = elem.label
+    self.page_number = page_number
 
   def as_dict(self):
     out: typing.Dict[str, typing.Any] = dict()

@@ -151,7 +151,7 @@ class RegexShapeSearchRule(SearchRule):
         max_dist=2.
       )
       if len(matching_curves) > 0:
-        matching_shape = LTJsonResponse(elem=matching_curves[0])
+        matching_shape = LTJsonResponse(elem=matching_curves[0], page_number=page_number)
         matching_shape.label = elem.text
         self.add_match_to_results(
           results=self.results,

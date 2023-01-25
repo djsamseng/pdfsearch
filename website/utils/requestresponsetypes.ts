@@ -14,6 +14,7 @@ export type SelectInPdfResponse = {
 export type PdfJsonResponse = {
   label: string | null;
   bbox: [number, number, number, number];
+  page_number: number;
 }
 
 export type PdfSummaryJson = {
