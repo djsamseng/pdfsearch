@@ -57,18 +57,6 @@ class PdfProcessor:
       description="windows",
       regex="^(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"
     )
-    def window_search_rule_add_match_to_results(
-      results: votesearch.MultiClassSearchRuleResults,
-      page_number: int,
-      class_name: str,
-      elem_type: str,
-      elem: ltjson.LTJsonResponse
-    ):
-      # TODO: comes from door schedule
-      full_id = class_name + elem_type
-      display_class_name = class_name + "##"
-      results[page_number][display_class_name][full_id].append(elem)
-    self.window_search_rule.add_match_to_results = window_search_rule_add_match_to_results
     self.door_search_rule = votesearch.RegexShapeSearchRule(
       shape_matches=[
         symbols["door_label"][0],
@@ -76,40 +64,17 @@ class PdfProcessor:
       description="doors",
       regex="^(?P<class_name>\\d)(?P<elem_type>\\d\\d)"
     )
-    def door_search_rule_add_match_to_results(
-      results: votesearch.MultiClassSearchRuleResults,
-      page_number: int,
-      class_name: str,
-      elem_type: str,
-      elem: ltjson.LTJsonResponse
-    ):
-      # TODO: Comes from window schedule
-      full_id = class_name + elem_type
-      display_class_name = "A"
-      id_to_class_name = {
-        "101": "B",
-        "102": "B",
-        "103": "A",
-        "201": "A",
-        "202": "A",
-        "203": "A",
-        "204": "C",
-        "205": "C"
-      }
-      if full_id in id_to_class_name:
-        display_class_name = id_to_class_name[full_id]
-      results[page_number][display_class_name][full_id].append(elem)
-    self.door_search_rule.add_match_to_results = door_search_rule_add_match_to_results
     search_rules: typing.List[votesearch.SearchRule] = [
       self.window_search_rule,
       self.door_search_rule,
       votesearch.HouseNameSearchRule(description="houseName"),
       votesearch.ArchitectNameSearchRule(description="architectName"),
-
     ]
     page_rules = [
       votesearch.PageNameSearchRule(description="pageNames"),
-      votesearch.ScheduleBoxSearchRule(description="windowSchedule", text_key="window schedule")
+      votesearch.WindowScheduleSearchRule(window_search_rule=self.window_search_rule),
+      votesearch.DoorScheduleSearchRule(door_search_rule=self.door_search_rule),
+      votesearch.LightingScheduleSearchRule(),
     ]
     self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=page_rules)
     self.processing_time = 0.
@@ -138,7 +103,7 @@ def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pd
   data_provider.write_processpdf_start(pdfkey=pdfkey, num_steps_total=num_steps_total)
 
   if debugutils.is_dev():
-    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=[2])
+    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=[2,5,9])
   else:
     pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
   processor = PdfProcessor(pages_gen=pages_gen, data_provider=data_provider)

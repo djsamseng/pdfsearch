@@ -77,8 +77,11 @@ class LTJson:
         self.linewidth = serialized_json["linewidth"]
       self.is_container = serialized_json["is_container"]
       self.is_annotation = serialized_json["is_annotation"]
-      self.is_line = serialized_json["is_line"]
-      self.is_rect = serialized_json["is_rect"]
+      # TODO: Regen saved json symbols and remove is_line check
+      if "is_line" in serialized_json:
+        self.is_line = serialized_json["is_line"]
+      if "is_rect" in serialized_json:
+        self.is_rect = serialized_json["is_rect"]
       self.parent_idx = serialized_json["parent_idx"]
       self.children_idxes = serialized_json["children_idxes"]
 

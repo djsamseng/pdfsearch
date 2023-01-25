@@ -206,21 +206,121 @@ class ArchitectNameSearchRule(SearchRule):
 
 # TODO: __init__ takes in window_search_rule
 # TODO: add to pdfprocessor
-class ScheduleBoxSearchRule(PageRecognizerRule):
-  def __init__(self, description: str, text_key: str) -> None:
-    self.description = description
-    self.text_key = text_key
+class WindowScheduleSearchRule(PageRecognizerRule):
+  def __init__(self, window_search_rule: RegexShapeSearchRule) -> None:
+    self.window_search_rule = window_search_rule
+    self.description = "windowSchedule"
+    self.header_row = None
+    self.rows = None
 
   def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    if self.text_key in indexer.text_lookup:
-      key_elem = indexer.text_lookup[self.text_key]
-      print("Found:", self.text_key, key_elem)
+    header_row, rows = pdfextracter.extract_table(
+      indexer=indexer,
+      text_key="window schedule",
+      has_header=True,
+      header_above_table=False
+    )
+    if header_row is not None:
+      self.header_row = header_row
+    if rows is not None:
+      self.rows = rows
+    def add_match_to_results(
+      results: MultiClassSearchRuleResults,
+      page_number: int,
+      class_name: str,
+      elem_type: str,
+      elem: LTJsonResponse
+    ):
+      full_id = class_name + elem_type
+      display_class_name = class_name + "##"
+      results[page_number][display_class_name][full_id].append(elem)
+    self.window_search_rule.add_match_to_results = add_match_to_results
+
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    if self.rows is None:
+      return {}
+    return {
+      self.description: {
+        "header": self.header_row,
+        "rows": self.rows,
+      }
+    }
+
+class DoorScheduleSearchRule(PageRecognizerRule):
+  def __init__(self, door_search_rule: RegexShapeSearchRule) -> None:
+    self.door_search_rule = door_search_rule
+    self.description = "doorSchedule"
+    self.header_row = None
+    self.rows = None
+
+  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    header_row, rows = pdfextracter.extract_table(
+      indexer=indexer,
+      text_key="door schedule",
+      has_header=True,
+      header_above_table=False
+    )
+    if header_row is not None:
+      self.header_row = header_row
+    if rows is not None:
+      self.rows = rows
+    if rows is not None and header_row is not None:
+      tag_to_class: typing.Dict[str, str] = {}
+      tag_idx = header_row.index("TAG #")
+      door_type_idx = header_row.index("TYPE")
+      if tag_idx >= 0 and door_type_idx >= 0:
+        for row in rows:
+          tag_id = row[tag_idx]
+          door_type = row[door_type_idx]
+          tag_to_class[tag_id] = door_type
+
+      def add_match_to_results(
+        results: MultiClassSearchRuleResults,
+        page_number: int,
+        class_name: str,
+        elem_type: str,
+        elem: LTJsonResponse
+      ):
+        full_id = class_name + elem_type
+        display_class_name = "A"
+        if full_id in tag_to_class:
+          display_class_name = tag_to_class[full_id]
+        results[page_number][display_class_name][full_id].append(elem)
+      self.door_search_rule.add_match_to_results = add_match_to_results
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     return {
       self.description: {
-        "heading": ["TAG##"],
-        "rows": [["001"], ["002"]]
+        "header": self.header_row,
+        "rows": self.rows,
+      }
+    }
+
+class LightingScheduleSearchRule(PageRecognizerRule):
+  def __init__(self) -> None:
+    self.description = "lightingSchedule"
+    self.header_row = None
+    self.rows = None
+
+  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    header_row, rows = pdfextracter.extract_table(
+      indexer=indexer,
+      text_key="lighting legend",
+      has_header=True,
+      header_above_table=True
+    )
+    if header_row is not None:
+      self.header_row = header_row,
+    if rows is not None:
+      self.rows = rows
+
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    if self.rows is None:
+      return {}
+    return {
+      self.description: {
+        "header": self.header_row,
+        "rows": self.rows,
       }
     }
 
