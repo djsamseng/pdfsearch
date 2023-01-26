@@ -52,63 +52,6 @@ function Accordion({
   )
 }
 
-function ItemDisplay({
-  item,
-}: {
-  item: PdfJsonResponse
-}) {
-  return (
-    <div>
-      {JSON.stringify(item)}
-    </div>
-  );
-}
-
-function NestedAccordion({
-  elems,
-  id,
-}: {
-  elems: Record<string, Record<string, PdfJsonResponse[]>> | Record<string, PdfJsonResponse[]>;
-  id: string;
-}) {
-  const keys = Object.keys(elems);
-  return (
-    <>
-      { keys.map((key, idx) => {
-        const item = elems[key];
-        const itemPath = `${id}-${key}`
-        let body;
-        if (Array.isArray(item)) {
-          if (item.length === 1) {
-            return (
-              <ItemDisplay item={item[0]} key={itemPath}/>
-            )
-          }
-          body = (
-            <>{ item.map((subitem, idx) => {
-              return (
-                <ItemDisplay item={subitem} key={`${itemPath}-${idx}`}/>
-              )
-            })}
-            </>
-          )
-        }
-        else {
-          body = (
-            <NestedAccordion elems={item} key={key} id={itemPath}/>
-          )
-        }
-        return (
-          <Accordion item={{
-            heading: key,
-            body,
-          }} id={itemPath} key={itemPath} isFirst={idx === 0} isLast={idx === keys.length - 1} />
-        )
-      })}
-    </>
-  )
-}
-
 function merge2(out: Record<string, PdfJsonResponse[]>, newItems: Record<string, PdfJsonResponse[]>) {
   Object.entries(newItems).forEach(([key, item]) => {
     for (const subitem of Object.values(item)) {
@@ -150,6 +93,172 @@ function countsForObj(record: Record<string, unknown>) {
   }, 0);
 }
 
+type TableViewData = {
+  header: string[];
+  rows: Array<{
+    row: string[];
+    matches: Record<string, PdfJsonResponse[]>;
+  }>;
+}
+
+function DropdownRadio({
+  selectId,
+  tableViewData,
+}: {
+  selectId: string;
+  tableViewData: TableViewData;
+}) {
+  // TODO: https://flowbite.com/docs/forms/radio/#radio-in-dropdown
+  return (
+    <div>
+      { tableViewData.header.map(tableHeaderItem => {
+        const inputId = `${selectId}-${tableHeaderItem}`;
+        return (
+          <div key={inputId}>
+            <input type="radio" name={inputId} value={tableHeaderItem} checked={true} onChange={() => {}} />
+            <label htmlFor={selectId}>{tableHeaderItem}</label>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+type TableData = {
+  doors?: TableViewData;
+  doorCount: number;
+  windows?: TableViewData;
+  windowCount: number;
+};
+
+function TableView({
+  tableViewData,
+  id
+}: {
+  tableViewData: TableViewData;
+  id: string;
+}) {
+  const selectId = `${id}-group-select`;
+  return (
+    <div>
+      <div className="flex flex-row">
+        <label htmlFor={selectId} className="mx-5">Group By</label>
+        <button type="button" className="mx-5">
+          Select All
+        </button>
+        <button type="button" className="mx-5">
+          Deselect All
+        </button>
+        <DropdownRadio selectId={selectId} tableViewData={tableViewData} />
+      </div>
+
+      <table className="table-auto">
+        <thead>
+          <tr>
+            <th key={`${id}-count`}></th>
+            { tableViewData.header.map(headerItem => {
+              return (
+                <th key={`${id}-${headerItem}`}>{headerItem}</th>
+              )
+            })}
+          </tr>
+
+        </thead>
+        <tbody>
+          { tableViewData.rows
+              .filter(row => {
+                return row.row.length > 0;
+              })
+              .map(row => {
+                const rowId = row.row[0];
+                const instancesOfThisRow: PdfJsonResponse[] = Array.prototype.concat.apply([], Object.values(row.matches));
+                return instancesOfThisRow.map((rowInstance, idx) => {
+                      const instanceId = `${id}-${rowId}-${idx}`;
+                      return (
+                        <tr key={instanceId}>
+                          <th key={`${instanceId}-count`}>{ idx === 0 ? instancesOfThisRow.length : ""}</th>
+                          { row.row.map((rowValue, idx) => {
+                            const columnHeader = tableViewData.header[idx];
+                            return (
+                              <th key={`${instanceId}-${columnHeader}`}>{rowValue}</th>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })
+                })
+          }
+        </tbody>
+      </table>
+    </div>
+
+  )
+}
+
+function makeTableDataRows({
+  schedule,
+  matchesAllPages,
+}: {
+  schedule: {
+    header: string[];
+    rows: string[][];
+  };
+  matchesAllPages: Record<string, Record<string, PdfJsonResponse[]>>;
+}) {
+  return {
+    header: schedule.header,
+    rows: schedule.rows
+      .filter(row => {
+        return row.length > 0 && row[0].trim().length > 0;
+      })
+      .map(row => {
+        const rowId = row[0];
+        let matches = {};
+        if (rowId in matchesAllPages) {
+          matches = matchesAllPages[rowId];
+        }
+        return {
+          row,
+          matches,
+        }
+      }),
+  }
+}
+
+
+
+function makeTableData({
+  pdfSummary,
+}: {
+  pdfSummary: CompletePdfSummary;
+}) {
+  const {
+    doors,
+    doorSchedule,
+    windows,
+    windowSchedule,
+  } = pdfSummary.pdfSummary;
+  const doorsAllPages = mergeRecordItems(doors);
+  const windowsAllPages = mergeRecordItems(windows);
+  const out: TableData = {
+    doorCount: countsForObj(doorsAllPages),
+    windowCount: countsForObj(windowsAllPages),
+  };
+  if (doorSchedule) {
+    out["doors"] = makeTableDataRows({
+      schedule: doorSchedule,
+      matchesAllPages: doorsAllPages,
+    });
+  }
+  if (windowSchedule) {
+    out["windows"] = makeTableDataRows({
+      schedule: windowSchedule,
+      matchesAllPages: windowsAllPages,
+    });
+  }
+  return out;
+}
+
 export default function SummaryElementList({
   pdfSummary,
 }: {
@@ -159,31 +268,40 @@ export default function SummaryElementList({
     doors,
     windows,
   } = pdfSummary.pdfSummary;
-  const doorsAllPages = mergeRecordItems(doors);
-  const doorsAllPagesCount = countsForObj(doorsAllPages);
-  const windowsAllPages = mergeRecordItems(windows);
-  const windowsAllPagesCount = countsForObj(windowsAllPages);
+  const tableData = makeTableData({
+    pdfSummary,
+  });
+  const doorsAllPagesCount = tableData.doorCount;
+  const windowsAllPagesCount = tableData.windowCount;
   const items = [{
     id: "Doors",
     heading: (
       <>
         <div className="overflow-clip">Doors</div>
-        <div className="overflow-clip">{doorsAllPagesCount}</div>
+        <div className="overflow-clip">x {doorsAllPagesCount}</div>
       </>
     ),
     body: (
-      <NestedAccordion elems={doorsAllPages} key="Doors" id="Doors" />
+      <>
+        { tableData.doors && (
+          <TableView id="Doors" tableViewData={tableData.doors} />
+        )}
+      </>
     )
   }, {
     id: "Windows",
     heading: (
       <>
         <div className="overflow-clip">Windows</div>
-        <div className="overflow-clip">{windowsAllPagesCount}</div>
+        <div className="overflow-clip">x {windowsAllPagesCount}</div>
       </>
     ),
     body: (
-      <NestedAccordion elems={windowsAllPages} key="Windows" id="Doors"/>
+      <>
+        { tableData.windows && (
+          <TableView id="Windows" tableViewData={tableData.windows} />
+        )}
+      </>
     )
   }];
   return (

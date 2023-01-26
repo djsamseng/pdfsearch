@@ -264,15 +264,6 @@ class DoorScheduleSearchRule(PageRecognizerRule):
       self.header_row = header_row
     if rows is not None:
       self.rows = rows
-    if rows is not None and header_row is not None:
-      tag_to_class: typing.Dict[str, str] = {}
-      tag_idx = header_row.index("TAG #")
-      door_type_idx = header_row.index("TYPE")
-      if tag_idx >= 0 and door_type_idx >= 0:
-        for row in rows:
-          tag_id = row[tag_idx]
-          door_type = row[door_type_idx]
-          tag_to_class[tag_id] = door_type
 
       def add_match_to_results(
         results: MultiClassSearchRuleResults,
@@ -282,10 +273,7 @@ class DoorScheduleSearchRule(PageRecognizerRule):
         elem: LTJsonResponse
       ):
         full_id = class_name + elem_type
-        display_class_name = "A"
-        if full_id in tag_to_class:
-          display_class_name = tag_to_class[full_id]
-        results[page_number][display_class_name][full_id].append(elem)
+        results[page_number][full_id][full_id].append(elem)
       self.door_search_rule.add_match_to_results = add_match_to_results
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
