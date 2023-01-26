@@ -85,7 +85,7 @@ function PdfViewer({
           onMouseOut={(evt) => onCanvasMouse(CanvasMouseEvents.OUT, evt)} />
   );
   return (
-    <div className="">
+    <div className="flex flex-col">
       {Boolean(pdfDocument && pdfDocument.numPages > 0) && (
         <nav>
           <ul className="grid grid-cols-4 justify-center bg-white border border-gray-200 my-2 rounded-lg text-gray-900 max-w-fit mx-auto text-center">
@@ -113,7 +113,7 @@ function PdfViewer({
         </nav>
       )}
       { smallCanvas && (
-        <div className="w-full overflow-scroll mx-auto p-5 border-black border-2">
+        <div className="max-h-screen overflow-scroll p-5 border-black border-2">
           { canvasElem }
         </div>
       )}
