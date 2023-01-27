@@ -191,15 +191,16 @@ function PdfViewer({
     },
   });
 
-  // TODO: Clear other drawings
-  React.useEffect(() => {
-    if (pdfSize !== null) {
-      drawBbox({
-        pdfWidth: pdfSize.width,
-        pdfHeight: pdfSize.height,
-      });
-    }
-  }, [bbox])
+  // TODO: Clear other drawings using a second canvas
+  // Currently the ctx of the canvas are mixed thus
+  // our drawing and usePdf drawing can draw at the same time
+  // and thus use the wrong color leftover from the other
+  if (pdfSize !== null) {
+    drawBbox({
+      pdfWidth: pdfSize.width,
+      pdfHeight: pdfSize.height,
+    });
+  }
 
   function onCanvasMouse(name: CanvasMouseEvents, evt: MouseEvent) {
     const canvas = canvasRef.current as HTMLCanvasElement | null;
