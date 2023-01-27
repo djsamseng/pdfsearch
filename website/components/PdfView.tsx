@@ -1,5 +1,5 @@
 
-import { useRef, useState, MouseEvent, useEffect } from "react";
+import React, { useRef, useState, MouseEvent, useEffect } from "react";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import * as PdfJS  from "pdfjs-dist/build/pdf"
 import useSWR from "swr";
@@ -19,14 +19,21 @@ enum CanvasMouseEvents {
 function PdfViewer({
   pdfData,
   smallCanvas,
+  page,
+  setPage,
+  bbox,
+  setBbox,
 }: {
   pdfData: ArrayBuffer;
   smallCanvas: boolean;
+  page: number;
+  setPage: React.Dispatch<React.SetStateAction<number>>;
+  bbox: [ number, number, number, number ] | null;
+  setBbox: React.Dispatch<React.SetStateAction<[ number, number, number, number ] | null>>;
 }) {
   // TODO: https://github.com/mozilla/pdf.js/blob/master/examples/learning/helloworld64.html#L42
   // And replace https://github.com/mikecousins/react-pdf-js/blob/9b0be61ea478042727f11328ca1b27ecd8b4e411/packages/react-pdf-js/src/index.tsx#L92
-  const canvasRef = useRef(null)
-  const [ page, setPage ] = useState(1);
+  const canvasRef = useRef(null);
   const [ scale, setScale ] = useState(0.4);
   const flag = useRef(false);
 
@@ -129,9 +136,17 @@ function PdfViewer({
 export default function PdfView({
   pdfSummary,
   smallCanvas,
+  page,
+  setPage,
+  bbox,
+  setBbox,
 }: {
   pdfSummary: CompletePdfSummary;
   smallCanvas: boolean;
+  page: number;
+  setPage: React.Dispatch<React.SetStateAction<number>>;
+  bbox: [ number, number, number, number ] | null;
+  setBbox: React.Dispatch<React.SetStateAction<[ number, number, number, number ] | null>>;
 }) {
   const supabase = useSupabaseClient<Database>();
   // TODO: useSWR instead of state, show loading icon for isLoading
@@ -149,7 +164,12 @@ export default function PdfView({
   )
   if (pdfData) {
     return (
-      <PdfViewer pdfData={pdfData} smallCanvas={smallCanvas} />
+      <PdfViewer pdfData={pdfData}
+        smallCanvas={smallCanvas}
+        page={page}
+        setPage={setPage}
+        bbox={bbox}
+        setBbox={setBbox} />
     );
   }
   else if (isLoading) {

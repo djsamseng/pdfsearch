@@ -20,6 +20,18 @@ export default function PdfSummaryView({
 }) {
 
   const [ summaryViewMode, setSummaryViewMode ] = useState(PdfSummaryMode.SPLIT);
+  const [ jumpToPositionEnabled, setJumpToPositionEnabled ] = useState(true);
+  function setJumpToPosition(args: {
+    page: number;
+    bbox: [number, number, number, number]
+  }) {
+    if (jumpToPositionEnabled) {
+      setPage(args.page);
+      setBbox(args.bbox);
+    }
+  }
+  const [ page, setPage ] = useState(1);
+  const [ bbox, setBbox ] = useState<[number, number, number, number] | null>(null);
 
   // https://flowbite.com/docs/getting-started/introduction/
   const sharedButtonStyle = "px-4 py-2 border-blue-600 hover:ring-2";
@@ -50,16 +62,22 @@ export default function PdfSummaryView({
       </div>
       <div className="w-full">
         { summaryViewMode === PdfSummaryMode.SUMMARY && (
-          <SummaryElementList pdfSummary={pdfSummary} />
+          <SummaryElementList pdfSummary={pdfSummary} setJumpToPosition={setJumpToPosition}/>
         )}
         { summaryViewMode === PdfSummaryMode.SPLIT && (
           <div className="grid grid-cols-2 gap-4">
-            <SummaryElementList pdfSummary={pdfSummary} />
-            <PdfView pdfSummary={pdfSummary} smallCanvas={true} />
+            <SummaryElementList pdfSummary={pdfSummary} setJumpToPosition={setJumpToPosition} />
+            <div className="text-center">
+              <div onClick={() => setJumpToPositionEnabled(!jumpToPositionEnabled)} >
+                <input id="jumpToOnHoverRadio" type="radio" checked={jumpToPositionEnabled} onChange={() => {}} />
+                <label className="mx-2">Jump To Results</label>
+              </div>
+              <PdfView pdfSummary={pdfSummary} smallCanvas={true} page={page} setPage={setPage} bbox={bbox} setBbox={setBbox} />
+            </div>
           </div>
         )}
         { summaryViewMode === PdfSummaryMode.PDF && (
-          <PdfView pdfSummary={pdfSummary} smallCanvas={false} />
+          <PdfView pdfSummary={pdfSummary} smallCanvas={false} page={page} setPage={setPage} bbox={bbox} setBbox={setBbox}/>
         )}
       </div>
 

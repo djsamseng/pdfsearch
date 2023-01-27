@@ -164,9 +164,14 @@ type TableData = {
 function TableView({
   id,
   tableViewData,
+  setJumpToPosition,
 }: {
   id: string;
   tableViewData: TableViewData;
+  setJumpToPosition: (args: {
+    page: number;
+    bbox: [number, number, number, number];
+  }) => void;
 }) {
   const selectId = `${id}-group-select`;
   const options = tableViewData.header.reduce((obj, tableHeaderItem, idx) => {
@@ -279,7 +284,10 @@ function TableView({
                   <tr key={instanceId}
                     className={`${idxInGroup === 0 ? "border-t" : ""}`}
                     onMouseEnter={() => {
-                      console.log(groupInstance.match);
+                      setJumpToPosition({
+                        page: groupInstance.match.page_number,
+                        bbox: groupInstance.match.bbox,
+                      });
                     }}>
                     <th key={`${instanceId}-count`}
                       className="font-normal">{idxInGroup === 0 ? groupValues.length : ""}</th>
@@ -371,8 +379,13 @@ function makeTableData({
 
 export default function SummaryElementList({
   pdfSummary,
+  setJumpToPosition,
 }: {
   pdfSummary: CompletePdfSummary;
+  setJumpToPosition: (args: {
+      page: number;
+      bbox: [number, number, number, number];
+  }) => void;
 }) {
   const tableData = makeTableData({
     pdfSummary,
@@ -390,7 +403,7 @@ export default function SummaryElementList({
     body: (
       <>
         { tableData.doors && (
-          <TableView id="Doors" tableViewData={tableData.doors} />
+          <TableView id="Doors" tableViewData={tableData.doors} setJumpToPosition={setJumpToPosition} />
         )}
       </>
     )
@@ -405,7 +418,7 @@ export default function SummaryElementList({
     body: (
       <>
         { tableData.windows && (
-          <TableView id="Windows" tableViewData={tableData.windows} />
+          <TableView id="Windows" tableViewData={tableData.windows} setJumpToPosition={setJumpToPosition} />
         )}
       </>
     )
