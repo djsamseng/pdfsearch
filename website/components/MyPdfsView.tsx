@@ -38,7 +38,7 @@ export default function MyPdfsView() {
   });
   return (
     <div className="w-1/2 min-w-fit mx-auto">
-      <div className="text-center mt-5 text-xl">
+      <div className="text-center mt-12 text-2xl">
         My PDFs
       </div>
       <div>

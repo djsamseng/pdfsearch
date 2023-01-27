@@ -1,12 +1,11 @@
 
+import Link from "next/link";
 
 export default function Footer() {
   return (
     <footer className="flex py-6 border-t border-solid border-[#eaeaea] dark:border-[#222] justify-center items-center">
-      <a
-        href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-        target="_blank"
-        rel="noopener noreferrer"
+      <Link
+        href="/"
         className="flex justify-center content-center items-center flex-grow"
       >
         <div className="w-[32px] h-[25px]">
@@ -21,7 +20,7 @@ export default function Footer() {
         <span className="h-4 ml-2">
           {/*<Image src="/vercel.svg" alt="Vercel Logo" width={72} height={16} />*/}
         </span>
-      </a>
+      </Link>
     </footer>
   );
 }

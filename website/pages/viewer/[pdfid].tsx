@@ -156,7 +156,7 @@ function PdfIdViewer({
   );
   return (
     <>
-      <div className="w-full">
+      <div className="w-full px-4">
         <NavBreadcrumb links={[{
           text: "Home",
           href: "/",
@@ -178,9 +178,6 @@ function PdfIdViewer({
           href: "",
         }]}/>
       </div>
-      <h1 className="text-6xl text-center">
-        Welcome to <span className="text-blue-600 hover:underline hover:cursor-grab">TakeOff!</span>
-      </h1>
       <div className="my-3">
         <span className="text-2xl">{ pdfName }</span>
       </div>

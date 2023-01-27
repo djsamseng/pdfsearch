@@ -172,6 +172,10 @@ function TableView({
     return obj;
   }, {} as Record<string, boolean>);
   const [ radioStates, setRadioStates ] = useState(options);
+  const groups: Record<string, PdfJsonResponse[]> = {};
+  // TODO: based off radio states create keys (=`${MNFCTR}-${TYPE}`) for groups
+  // Populate groups with rows that match
+  // Sort by TAG #
   return (
     <div className="overflow-x-scroll">
       <div className="flex flex-col items-end">
