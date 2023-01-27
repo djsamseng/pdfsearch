@@ -192,7 +192,7 @@ function PdfIdViewer({
         </>
       )}
 
-      <div>
+      <div className="w-full">
         { pdfProcessingProgress.success === null && progressView}
         { pdfProcessingProgress.success === true && pdfSummary && <PdfSummaryView pdfSummary={pdfSummary} /> }
         { pdfProcessingProgress.success === false && <></>}

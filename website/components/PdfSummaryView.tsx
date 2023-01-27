@@ -48,7 +48,10 @@ export default function PdfSummaryView({
           View PDF
         </button>
       </div>
-      <div className="">
+      <div className="w-full">
+        { summaryViewMode === PdfSummaryMode.SUMMARY && (
+          <SummaryElementList pdfSummary={pdfSummary} />
+        )}
         { summaryViewMode === PdfSummaryMode.SPLIT && (
           <div className="grid grid-cols-2 gap-4">
             <SummaryElementList pdfSummary={pdfSummary} />

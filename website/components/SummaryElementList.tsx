@@ -114,38 +114,40 @@ function DropdownRadio({
 }: {
   selectId: string;
   tableViewData: TableViewData;
-  radioStates: Record<string, boolean>;
-  setRadioStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  radioStates: Record<number, boolean>;
+  setRadioStates: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
 }) {
-  function toggleOption(optionName: string) {
+  function toggleOption(optionIdx: number) {
     setRadioStates({
       ...radioStates,
-      [optionName]: !radioStates[optionName],
+      [optionIdx]: !radioStates[optionIdx],
     });
   }
-  console.log("New state:", radioStates);
   return (
-    <div>
-      <div className="group">
-        <button type="button" className="border rounded-xl px-4 py-2 flex flex-row text-gray-600">
-          <span>Group By </span>
-          <div className="">
-            <ChevronDown />
+    <div className="h-[62px] w-[200px]">
+      <div className="absolute w-[200px]">
+        <div className="group flex flex-col items-end">
+          <button type="button" className="border rounded-xl px-4 py-2 flex flex-row text-gray-600">
+            <span>Group By </span>
+            <div className="">
+              <ChevronDown />
+            </div>
+          </button>
+          <div className="hidden group-hover:flex group-hover:flex-col z-10 bg-white border rounded-lg w-fit h-fit p-6 -ml-3">
+            { tableViewData.header.map((tableHeaderItem, headerItemIdx) => {
+              const inputId = `${selectId}-${tableHeaderItem}`;
+              return (
+                <div key={inputId} onClick={() => toggleOption(headerItemIdx)}>
+                  <input type="radio"
+                    name={inputId}
+                    value={tableHeaderItem}
+                    checked={radioStates[headerItemIdx]}
+                    onChange={() => {}}/>
+                  <label htmlFor={selectId}>{tableHeaderItem}</label>
+                </div>
+              );
+            })}
           </div>
-        </button>
-        <div className="hidden group-hover:flex group-hover:flex-col absolute z-10 bg-white border rounded-lg w-fit h-fit p-6 -ml-3">
-          { tableViewData.header.map(tableHeaderItem => {
-            const inputId = `${selectId}-${tableHeaderItem}`;
-            return (
-              <div key={inputId} onClick={() => toggleOption(tableHeaderItem)}>
-                <input type="radio"
-                  name={inputId}
-                  value={tableHeaderItem}
-                  checked={radioStates[tableHeaderItem]}/>
-                <label htmlFor={selectId}>{tableHeaderItem}</label>
-              </div>
-            );
-          })}
         </div>
       </div>
     </div>
@@ -160,22 +162,92 @@ type TableData = {
 };
 
 function TableView({
+  id,
   tableViewData,
-  id
 }: {
-  tableViewData: TableViewData;
   id: string;
+  tableViewData: TableViewData;
 }) {
   const selectId = `${id}-group-select`;
   const options = tableViewData.header.reduce((obj, tableHeaderItem, idx) => {
-    obj[tableHeaderItem] = idx > 0;
+    obj[idx] = idx > 0;
     return obj;
-  }, {} as Record<string, boolean>);
+  }, {} as Record<number, boolean>);
   const [ radioStates, setRadioStates ] = useState(options);
-  const groups: Record<string, PdfJsonResponse[]> = {};
-  // TODO: based off radio states create keys (=`${MNFCTR}-${TYPE}`) for groups
-  // Populate groups with rows that match
-  // Sort by TAG #
+  const groups: Record<string, {
+    header: string[];
+    match: PdfJsonResponse;
+  }[]> = {};
+  const selectedRadioStates = Object.entries(radioStates)
+    .filter(([headerIdx, radioSelected]) => {
+      return radioSelected;
+    })
+    .map(([headerIdx, radioSelected]) => {
+      return Number(headerIdx);
+    });
+  selectedRadioStates.sort((headerIdxLeft, headerIdxRight) => {
+    return headerIdxLeft - headerIdxRight;
+  })
+  tableViewData.rows
+    .filter(row => {
+      if (row.row.length === 0) {
+        return false;
+      }
+      const rowId = row.row[0];
+      return rowId.trim().length > 0;
+    })
+    .forEach(row => {
+      const instancesOfThisRow: PdfJsonResponse[] = Array.prototype.concat.apply([], Object.values(row.matches));
+      const groupId = selectedRadioStates.map((headerIdx) => {
+        return row.row[headerIdx]
+      }).join("-");
+      if (!(groupId in groups)) {
+        groups[groupId] = [];
+      }
+      instancesOfThisRow.forEach(rowInstance => {
+        groups[groupId].push({
+          header: row.row,
+          match: rowInstance,
+        });
+      });
+    });
+  const groupsArray = Object.entries(groups);
+  groupsArray.forEach(([groupId, groupValues]) => {
+    groupValues.sort((left, right) => {
+      const leftId = left.match.label || "zzz";
+      const rightId = right.match.label || "zzz";
+      if (leftId < rightId) {
+        return -1;
+      }
+      if (leftId === rightId) {
+        return 0;
+      }
+      return 1;
+    });
+  })
+  groupsArray.sort(([groupIdLeft, groupValuesLeft], [groupIdRight, groupValuesRight]) => {
+    // Put empty results at the end
+    if (groupValuesLeft.length === 0 && groupValuesRight.length > 0) {
+      return 1;
+    }
+    else if (groupValuesLeft.length === 0 && groupValuesRight.length === 0) {
+      return 0;
+    }
+    else if (groupValuesLeft.length > 0 && groupValuesRight.length === 0) {
+      return -1;
+    }
+    const leftId = groupValuesLeft[0].match.label || "zzz";
+    const rightId = groupValuesRight[0].match.label || "zzz";
+    if (leftId < rightId) {
+      return -1;
+    }
+    else if (leftId === rightId) {
+      return 0;
+    }
+    else {
+      return 1;
+    }
+  });
   return (
     <div className="overflow-x-scroll">
       <div className="flex flex-col items-end">
@@ -188,39 +260,43 @@ function TableView({
       <table className="table-auto text-sm">
         <thead>
           <tr>
-            <th key={`${id}-count`}></th>
+            <th key={`${id}-count`} className="pr-2">Counts</th>
             { tableViewData.header.map(headerItem => {
               return (
                 <th key={`${id}-${headerItem}`}
-                  className="">{headerItem}</th>
-              )
+                  className="px-2">{headerItem}</th>
+              );
             })}
           </tr>
-
         </thead>
-        <tbody>
-          { tableViewData.rows
-              .filter(row => {
-                return row.row.length > 0;
-              })
-              .map(row => {
-                const rowId = row.row[0];
-                const instancesOfThisRow: PdfJsonResponse[] = Array.prototype.concat.apply([], Object.values(row.matches));
-                return instancesOfThisRow.map((rowInstance, idx) => {
-                  const instanceId = `${id}-${rowId}-${idx}`;
-                  return (
-                    <tr key={instanceId}>
-                      <th key={`${instanceId}-count`}>{ idx === 0 ? instancesOfThisRow.length : ""}</th>
-                      { row.row.map((rowValue, idx) => {
-                        const columnHeader = tableViewData.header[idx];
-                        return (
-                          <th key={`${instanceId}-${columnHeader}`}>{idx === 0 ? rowInstance.label : rowValue}</th>
-                        );
-                      })}
-                    </tr>
-                  );
-                })
-              })
+        <tbody className="">
+          { groupsArray
+            .map(([groupId, groupValues]) => {
+              const instanceElems = [...groupValues.map((groupInstance, idxInGroup) => {
+                const rowId = groupInstance.header[0];
+                const instanceId = `${id}-${rowId}-${idxInGroup}`;
+                return (
+                  <tr key={instanceId}
+                    className={`${idxInGroup === 0 ? "border-t" : ""}`}
+                    onMouseEnter={() => {
+                      console.log(groupInstance.match);
+                    }}>
+                    <th key={`${instanceId}-count`}
+                      className="font-normal">{idxInGroup === 0 ? groupValues.length : ""}</th>
+                    { groupInstance.header.map((headerValue, columnIdx) => {
+                      const headerName = tableViewData.header[columnIdx];
+                      return (
+                        <th key={`${instanceId}-${headerName}`}
+                          className="font-normal">{columnIdx === 0 ? groupInstance.match.label : headerValue}</th>
+                      );
+                    })}
+                  </tr>
+                )
+              }), (
+                <tr key={`${groupId}-spacer`} className="h-5" />
+              )];
+              return instanceElems;
+            })
           }
         </tbody>
       </table>
@@ -298,10 +374,6 @@ export default function SummaryElementList({
 }: {
   pdfSummary: CompletePdfSummary;
 }) {
-  const {
-    doors,
-    windows,
-  } = pdfSummary.pdfSummary;
   const tableData = makeTableData({
     pdfSummary,
   });
@@ -339,7 +411,7 @@ export default function SummaryElementList({
     )
   }];
   return (
-    <div className="m-4">
+    <div className="w-full p-4">
       { items.map((item, idx) => {
         return (
           <Accordion item={item} key={item.id} id={item.id} isFirst={idx === 0} isLast={idx === items.length - 1}  />
