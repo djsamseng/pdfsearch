@@ -8,6 +8,7 @@ import { DataAccessor } from "../utils/DataAccessor";
 import { usePdf } from "../utils/UsePdf";
 import { Database } from "../utils/database.types";
 import { CompletePdfSummary } from "../utils/requestresponsetypes";
+import { PdfViewContext } from "./PdfViewContext";
 
 enum CanvasMouseEvents {
   MOVE = "MOVE",
@@ -16,43 +17,190 @@ enum CanvasMouseEvents {
   OUT = "OUT",
 }
 
+function translatePointToCanvas({
+  x,
+  y,
+  canvasWidth,
+  canvasHeight,
+  pdfWidth,
+  pdfHeight,
+}: {
+  x: number;
+  y: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  pdfWidth: number;
+  pdfHeight: number;
+}) {
+  return [x * canvasWidth / pdfWidth, (pdfHeight - y) * canvasHeight / pdfHeight];
+}
+
+function calculateScale({
+  canvasRef,
+  zoom,
+  bbox,
+  pdfSize,
+}: {
+  canvasRef: React.MutableRefObject<null>;
+  zoom: number | null;
+  bbox: [number, number, number, number] | null;
+  pdfSize: {
+    width: number;
+    height: number;
+  } | null;
+}) {
+  if (zoom !== null) {
+    return zoom;
+  }
+  const defaultValue = 0.4;
+  if (bbox === null) {
+    return defaultValue;
+  }
+  if (pdfSize === null) {
+    return defaultValue;
+  }
+  const canvas = canvasRef.current as HTMLCanvasElement | null;
+  if (!canvas) {
+    return defaultValue;
+  }
+  if (!canvas.parentElement) {
+    return defaultValue;
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return defaultValue;
+  }
+
+  const canvasRect = canvas.getBoundingClientRect();
+  const parentRect = canvas.parentElement.getBoundingClientRect();
+  const bboxWidth = bbox[2] - bbox[0];
+  const bboxHeight = bbox[3] - bbox[1];
+  const desiredWidthRatio = 0.1 * parentRect.width / bboxWidth;
+  const desiredHeightRatio = 0.1 * parentRect.height / bboxHeight;
+
+  const [topLeftX, topLeftY] = translatePointToCanvas({
+    x: bbox[0],
+    y: bbox[3],
+    canvasWidth: canvasRect.width,
+    canvasHeight: canvasRect.height,
+    pdfWidth: pdfSize.width,
+    pdfHeight: pdfSize.height,
+  });
+  canvas.parentElement.scrollLeft = Math.max(topLeftX - bboxWidth, 0);
+  canvas.parentElement.scrollTop = Math.max(topLeftY - bboxHeight, 0);
+  const desiredScale = Math.max(desiredWidthRatio, desiredHeightRatio);
+
+
+
+  // Rendering is too slow - instead use canvasContext.getImageData(bbox[0], pdfHeight-bbox[1], width, height)
+  // and scale up the image
+  return Math.min(desiredScale, 1.5);
+}
+
 function PdfViewer({
   pdfData,
   smallCanvas,
-  page,
-  setPage,
-  bbox,
-  setBbox,
 }: {
   pdfData: ArrayBuffer;
   smallCanvas: boolean;
-  page: number;
-  setPage: React.Dispatch<React.SetStateAction<number>>;
-  bbox: [ number, number, number, number ] | null;
-  setBbox: React.Dispatch<React.SetStateAction<[ number, number, number, number ] | null>>;
 }) {
-  // TODO: https://github.com/mozilla/pdf.js/blob/master/examples/learning/helloworld64.html#L42
-  // And replace https://github.com/mikecousins/react-pdf-js/blob/9b0be61ea478042727f11328ca1b27ecd8b4e411/packages/react-pdf-js/src/index.tsx#L92
   const canvasRef = useRef(null);
-  const [ scale, setScale ] = useState(0.4);
+  const {
+    page,
+    setPage,
+    bbox,
+    setBbox,
+    zoom,
+    setZoom,
+    pdfSize,
+    setPdfSize,
+  } = React.useContext(PdfViewContext);
+  const scale = calculateScale({
+    canvasRef,
+    zoom,
+    bbox,
+    pdfSize,
+  });
+  console.log("scale:", scale);
   const flag = useRef(false);
 
+
+  function drawBbox({
+    pdfWidth,
+    pdfHeight,
+  }: {
+    pdfWidth: number;
+    pdfHeight: number;
+  }) {
+    if (bbox === null) {
+      console.log("Bbox null");
+      return;
+    }
+    const canvas = canvasRef.current as HTMLCanvasElement | null;
+    if (!canvas) {
+      console.log("No canvas");
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      console.log("No ctx");
+      return;
+    }
+    const canvasRect = canvas.getBoundingClientRect();
+    const [topLeftX, topLeftY] = translatePointToCanvas({
+      x: bbox[0],
+      y: bbox[3],
+      canvasWidth: canvasRect.width,
+      canvasHeight: canvasRect.height,
+      pdfWidth,
+      pdfHeight,
+    });
+    const [bottomRightX, bottomRightY] = translatePointToCanvas({
+      x: bbox[2],
+      y: bbox[1],
+      canvasWidth: canvasRect.width,
+      canvasHeight: canvasRect.height,
+      pdfWidth,
+      pdfHeight,
+    });
+    ctx.beginPath();
+    ctx.moveTo(topLeftX, topLeftY);
+    ctx.lineTo(topLeftX, bottomRightY);
+    ctx.lineTo(bottomRightX, bottomRightY);
+    ctx.lineTo(bottomRightX, topLeftY);
+    ctx.lineTo(topLeftX, topLeftY);
+    ctx.strokeStyle = "blue";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.closePath();
+  }
   const { pdfDocument, pdfPage } = usePdf({
     pdfData,
     page,
     canvasRef,
     scale,
     onPageRenderSuccess: async (page) => {
-      console.log("Rendered pdf");
+      console.log("Rendered pdf", page.view, page);
+      const [y0, x0, y1, x1] = page.view;
+      const pdfWidth = x1 - x0;
+      const pdfHeight = y1 - y0;
+      setPdfSize({
+        width: pdfWidth,
+        height: pdfHeight,
+      })
     },
-  })
+  });
 
-  function increaseZoom() {
-    setScale(scale * 1.1);
-  }
-  function decreaseZoom() {
-    setScale(scale * 0.9);
-  }
+  // TODO: Clear other drawings
+  React.useEffect(() => {
+    if (pdfSize !== null) {
+      drawBbox({
+        pdfWidth: pdfSize.width,
+        pdfHeight: pdfSize.height,
+      });
+    }
+  }, [bbox])
+
   function onCanvasMouse(name: CanvasMouseEvents, evt: MouseEvent) {
     const canvas = canvasRef.current as HTMLCanvasElement | null;
     if (!canvas) {
@@ -97,22 +245,28 @@ function PdfViewer({
         <nav>
           <ul className="grid grid-cols-4 justify-center bg-white border border-gray-200 my-2 rounded-lg text-gray-900 max-w-fit mx-auto text-center">
             <li className={buttonStyle + (page === 1 ? " bg-gray-300 hover:bg-gray-200" : "")}>
-              <button disabled={page === 1} onClick={() => setPage(page - 1)}>
+              <button disabled={page === 1} onClick={() => {
+                setPage(page - 1);
+                setBbox(null);
+              }}>
                 Previous Page
               </button>
             </li>
             <li className={buttonStyle}>
-              <button disabled={page === pdfDocument!.numPages} onClick={() => setPage(page + 1)}>
+              <button disabled={page === pdfDocument!.numPages} onClick={() => {
+                setPage(page + 1);
+                setBbox(null);
+              }}>
                 Next Page
               </button>
             </li>
             <li className={buttonStyle}>
-              <button onClick={() => increaseZoom()}>
+              <button onClick={() => setZoom(scale * 1.1)}>
                 Zoom +
               </button>
             </li>
             <li className={buttonStyle}>
-              <button onClick={() => decreaseZoom()}>
+              <button onClick={() => setZoom(scale * 0.9)}>
                 Zoom -
               </button>
             </li>
@@ -136,17 +290,9 @@ function PdfViewer({
 export default function PdfView({
   pdfSummary,
   smallCanvas,
-  page,
-  setPage,
-  bbox,
-  setBbox,
 }: {
   pdfSummary: CompletePdfSummary;
   smallCanvas: boolean;
-  page: number;
-  setPage: React.Dispatch<React.SetStateAction<number>>;
-  bbox: [ number, number, number, number ] | null;
-  setBbox: React.Dispatch<React.SetStateAction<[ number, number, number, number ] | null>>;
 }) {
   const supabase = useSupabaseClient<Database>();
   // TODO: useSWR instead of state, show loading icon for isLoading
@@ -165,11 +311,7 @@ export default function PdfView({
   if (pdfData) {
     return (
       <PdfViewer pdfData={pdfData}
-        smallCanvas={smallCanvas}
-        page={page}
-        setPage={setPage}
-        bbox={bbox}
-        setBbox={setBbox} />
+        smallCanvas={smallCanvas} />
     );
   }
   else if (isLoading) {
