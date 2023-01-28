@@ -19,6 +19,7 @@ type HookProps = {
   onPageLoadFail?: () => void;
   onPageRenderSuccess?: (page: PDFPageProxy) => void;
   onPageRenderFail?: () => void;
+  onPageRenderStart?: () => void;
   scale?: number;
   rotate?: number;
   page?: number;
@@ -43,6 +44,7 @@ export const usePdf = ({
   onPageLoadFail,
   onPageRenderSuccess,
   onPageRenderFail,
+  onPageRenderStart,
   scale = 1,
   rotate = 0,
   page = 1,
@@ -60,6 +62,7 @@ export const usePdf = ({
   const onPageLoadFailRef = useRef(onPageLoadFail);
   const onPageRenderSuccessRef = useRef(onPageRenderSuccess);
   const onPageRenderFailRef = useRef(onPageRenderFail);
+  const onPageRenderStartRef = useRef(onPageRenderStart);
 
   // assign callbacks to refs to avoid redrawing
   useEffect(() => {
@@ -85,6 +88,10 @@ export const usePdf = ({
   useEffect(() => {
     onPageRenderFailRef.current = onPageRenderFail;
   }, [onPageRenderFail]);
+
+  useEffect(() => {
+    onPageRenderStartRef.current = onPageRenderStart;
+  }, [onPageRenderStart]);
 
   useEffect(() => {
     pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
@@ -148,7 +155,9 @@ export const usePdf = ({
         renderTask.current.cancel();
         return;
       }
-
+      if (isFunction(onPageRenderStartRef.current)) {
+        onPageRenderStartRef.current();
+      }
       renderTask.current = page.render({
         canvasContext,
         viewport,
@@ -166,6 +175,7 @@ export const usePdf = ({
           renderTask.current = null;
 
           if (reason && reason.name === 'RenderingCancelledException') {
+            console.log("TODO: Draw the pending page instead of the canceled page");
             drawPDF(page);
           } else if (isFunction(onPageRenderFailRef.current)) {
             onPageRenderFailRef.current();
