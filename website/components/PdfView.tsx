@@ -9,6 +9,7 @@ import { usePdf } from "../utils/UsePdf";
 import { Database } from "../utils/database.types";
 import { CompletePdfSummary } from "../utils/requestresponsetypes";
 import { PdfViewContext } from "./PdfViewContext";
+import { PdfImageView } from "./PdfImageView";
 
 enum CanvasMouseEvents {
   MOVE = "MOVE",
@@ -187,7 +188,7 @@ function PdfViewer({
       setPdfSize({
         width: pdfWidth,
         height: pdfHeight,
-      })
+      });
     },
   });
 
@@ -311,8 +312,7 @@ export default function PdfView({
   )
   if (pdfData) {
     return (
-      <PdfViewer pdfData={pdfData}
-        smallCanvas={smallCanvas} />
+      <PdfImageView pdfData={pdfData} />
     );
   }
   else if (isLoading) {
