@@ -68,11 +68,18 @@ function scrollAndZoomToBbox({
   drawCanvasRef: React.RefObject<HTMLCanvasElement>;
   setImageWidth: React.Dispatch<React.SetStateAction<number>>;
 }) {
+  if (drawCanvasRef.current && drawCanvasRef.current.parentElement) {
+    const drawCanvasCtx = drawCanvasRef.current.getContext("2d");
+    if (drawCanvasCtx) {
+      const parentRect = drawCanvasRef.current.parentElement.getBoundingClientRect();
+      drawCanvasCtx.clearRect(0, 0, parentRect.width, parentRect.height);
+    }
+  }
+
   if (!bboxes || bboxes.length === 0 || !pdfSize || !imageRef.current || !imageRef.current.parentElement) {
     return;
   }
 
-  const imageRect = imageRef.current.getBoundingClientRect();
   const parentRect = imageRef.current.parentElement.getBoundingClientRect();
   const {
     pdfWidth,
@@ -124,7 +131,6 @@ function scrollAndZoomToBbox({
       return;
     }
 
-    ctx.clearRect(0, 0, desiredWidth, desiredHeight);
     for (const elemBbox of bboxes) {
       const x0 = elemBbox[0] * (desiredWidth / pdfWidth) - scrollLeft;
       const y0 = (pdfHeight - elemBbox[3]) * (desiredHeight / pdfHeight) - scrollTop;
@@ -239,6 +245,51 @@ export function PdfImageView({
     setPage(page - 1);
     setBboxes(null);
   }
+  function onImageMouse(name: CanvasMouseEvents, evt: React.MouseEvent) {
+    const imageElem = imageRef.current as HTMLCanvasElement | null;
+    if (!imageElem) {
+      return;
+    }
+    if (!imageElem.parentElement) {
+      return;
+    }
+    if (name === CanvasMouseEvents.MOVE) {
+      if (evt.buttons) {
+        {
+          imageElem.parentElement.scrollTop -= evt.movementY;
+          imageElem.parentElement.scrollLeft -= evt.movementX;
+        }
+      }
+    }
+    else if (name === CanvasMouseEvents.DOWN) {
+    }
+    else if (name === CanvasMouseEvents.UP) {
+      flag.current = false;
+    }
+    else if (name === CanvasMouseEvents.OUT) {
+      flag.current = false;
+    }
+    evt.preventDefault();
+  }
+  function onCanvasMouse(name: CanvasMouseEvents, evt: React.MouseEvent) {
+    const imageElem = imageRef.current as HTMLCanvasElement | null;
+    if (!imageElem) {
+      return;
+    }
+    if (!imageElem.parentElement) {
+      return;
+    }
+    if (name === CanvasMouseEvents.MOVE) {
+      if (evt.buttons) {
+        // TODO: redraw
+        setBboxes(null);
+        {
+          imageElem.parentElement.scrollTop -= evt.movementY;
+          imageElem.parentElement.scrollLeft -= evt.movementX;
+        }
+      }
+    }
+  }
   useEffect(() => {
     scrollAndZoomToBbox({
       bboxes,
@@ -289,12 +340,20 @@ export function PdfImageView({
         <div className="sticky top-[5vh]">
           <div ref={imageParentRef} className="max-h-[90vh] overflow-scroll border">
             { imageDataUrl && (
-                <img ref={imageRef} src={imageDataUrl} style={{minWidth: imageWidth, maxWidth: imageWidth,}}/>
+                <img ref={imageRef} src={imageDataUrl} style={{minWidth: imageWidth, maxWidth: imageWidth}}
+                  onMouseMove={(evt) => onImageMouse(CanvasMouseEvents.MOVE, evt)}
+                  onMouseDown={(evt) => onImageMouse(CanvasMouseEvents.DOWN, evt)}
+                  onMouseUp={(evt) => onImageMouse(CanvasMouseEvents.UP, evt)}
+                  onMouseOut={(evt) => onImageMouse(CanvasMouseEvents.OUT, evt)} />
             )}
           </div>
           <div className="absolute top-0 z-10 w-full">
             <div className="max-h-[90vh]">
-              <canvas ref={drawCanvasRef}/>
+              <canvas ref={drawCanvasRef}
+                onMouseMove={(evt) => onCanvasMouse(CanvasMouseEvents.MOVE, evt)}
+                onMouseDown={(evt) => onCanvasMouse(CanvasMouseEvents.DOWN, evt)}
+                onMouseUp={(evt) => onCanvasMouse(CanvasMouseEvents.UP, evt)}
+                onMouseOut={(evt) => onCanvasMouse(CanvasMouseEvents.OUT, evt)} />
             </div>
           </div>
         </div>

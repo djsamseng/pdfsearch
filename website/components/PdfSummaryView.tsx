@@ -56,7 +56,10 @@ export default function PdfSummaryView({
         <div className="grid grid-cols-3 rounded-md text-sm shadow-sm" role="group">
           <button type="button"
             className={summaryButtonStyle}
-            onClick={() => setSummaryViewMode(PdfSummaryMode.SUMMARY)}>
+            onClick={() => {
+              setSummaryViewMode(PdfSummaryMode.SUMMARY)
+              setBboxes(null);
+            }}>
             Summary
           </button>
           <button type="button"
@@ -66,7 +69,10 @@ export default function PdfSummaryView({
           </button>
           <button type="button"
             className={viewPdfButtonStyle}
-            onClick={() => setSummaryViewMode(PdfSummaryMode.PDF)}>
+            onClick={() => {
+              setSummaryViewMode(PdfSummaryMode.PDF);
+              setBboxes(null);
+            }}>
             View PDF
           </button>
         </div>
