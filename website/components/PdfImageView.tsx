@@ -80,6 +80,22 @@ function scrollAndZoomToBbox({
   setImageWidth(desiredWidth);
 }
 
+function HeightAdjuster() {
+  const [ height, setHeight ] = React.useState(document.body.offsetHeight - window.screen.height);
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      setHeight(document.body.offsetHeight - window.screen.height);
+    });
+    observer.observe(document.body);
+    return () => {
+      observer.disconnect();
+    }
+  });
+  return (
+    <div style={{height,}}></div>
+  );
+}
+
 export function PdfImageView({
   pdfData,
 }: {
@@ -99,10 +115,6 @@ export function PdfImageView({
     setPage,
     bbox,
     setBbox,
-    //zoom,
-    //setZoom,
-    //pdfSize,
-    //setPdfSize,
   } = React.useContext(PdfViewContext);
   const flag = useRef(false);
   const { pdfDocument, pdfPage } = usePdf({
@@ -113,7 +125,6 @@ export function PdfImageView({
     onPageRenderSuccess: async (pageObj) => {
       // Cached and thus won't rerender if not needed
       // TODO: If toggled back and forth we render the wrong page but think we're on the right page
-      console.log("Rendered pdf", pageObj.view, page, bbox);
       const [y0, x0, y1, x1] = pageObj.view;
       const canvas = pdfCanvasRef.current;
       if (!canvas) {
@@ -138,11 +149,10 @@ export function PdfImageView({
     },
     onPageRenderStart: () => {
       // Show loading dialog
-      console.log("Rendering start", page);
       setImageDataUrl(null);
     },
     onPageRenderFail: () => {
-      console.log("Page render fail:", page);
+      console.error("Page render fail:", page);
     }
   });
 
@@ -171,29 +181,29 @@ export function PdfImageView({
       setImageWidth,
     });
   }, [bbox, page, pdfSize, imageRef, setImageWidth]);
-  const buttonStyle = "rounded px-2 py-2 rounded-none first:rounded-l last:rounded-r border-r last:border-r-0 hover:bg-gray-200 first:hover:bg-gray-300";
+  const buttonStyle = "rounded rounded-none first:rounded-l last:rounded-r border-r last:border-r-0 hover:bg-gray-200 first:hover:bg-gray-300";
   return (
     <div className="flex flex-col">
       {Boolean(pdfDocument && pdfDocument.numPages > 0) && (
         <nav>
           <ul className="grid grid-cols-4 justify-center bg-white border border-gray-200 my-2 rounded-lg text-gray-900 max-w-fit mx-auto text-center">
-            <li className={buttonStyle + (page === 1 ? " bg-gray-300 hover:bg-gray-200" : "")}>
-              <button disabled={page === 1} onClick={prevPage}>
+            <li className={buttonStyle + (page === 1 ? " bg-gray-300 hover:bg-gray-200" : "")} >
+              <button disabled={page === 1} className="px-2 py-2" onClick={prevPage}>
                 Previous Page
               </button>
             </li>
             <li className={buttonStyle}>
-              <button disabled={page === pdfDocument!.numPages} onClick={nextPage}>
+              <button disabled={page === pdfDocument!.numPages} className="px-2 py-2" onClick={nextPage}>
                 Next Page
               </button>
             </li>
             <li className={buttonStyle}>
-              <button onClick={increaseZoom}>
+              <button className="px-2 py-2" onClick={increaseZoom}>
                 Zoom +
               </button>
             </li>
             <li className={buttonStyle}>
-              <button onClick={decreaseZoom}>
+              <button className="px-2 py-2" onClick={decreaseZoom}>
                 Zoom -
               </button>
             </li>
@@ -216,7 +226,7 @@ export function PdfImageView({
             )}
           </div>
         </div>
-        <div style={{height: 5000,}}></div>
+        <HeightAdjuster />
       </div>
 
     </div>

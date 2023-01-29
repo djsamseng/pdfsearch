@@ -23,17 +23,11 @@ export default function PdfSummaryView({
   const [ jumpToPositionEnabled, setJumpToPositionEnabled ] = useState(true);
   const [ page, setPage ] = useState(1);
   const [ bbox, setBbox ] = useState<[number, number, number, number] | null>(null);
-  const [ zoom, setZoom ] = useState<number | null>(0.4);
-  const [ pdfSize, setPdfSize ] = useState<{ width: number; height: number;} | null>(null);
   const pdfViewContextProvider = {
     page,
     setPage: (newPage: number) => setPage(newPage),
     bbox,
     setBbox: (newBbox: [number, number, number, number] | null) => setBbox(newBbox),
-    zoom,
-    setZoom: (newZoom: number | null) => setZoom(newZoom),
-    pdfSize,
-    setPdfSize: (newSize: { width: number; height: number}) => setPdfSize(newSize),
   };
 
   function setJumpToPosition(args: {
@@ -43,7 +37,6 @@ export default function PdfSummaryView({
     if (jumpToPositionEnabled) {
       // Page starts from 1
       setPage(args.page + 1);
-      setZoom(null);
       setBbox(args.bbox);
     }
   }

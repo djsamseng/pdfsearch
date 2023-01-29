@@ -56,6 +56,7 @@ export const usePdf = ({
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy>();
   const [pdfPage, setPdfPage] = useState<PDFPageProxy>();
   const renderTask = useRef<PDFRenderTask | null>(null);
+  const lastPageRequestedRenderRef = useRef<PDFPageProxy | null>(null);
   const onDocumentLoadSuccessRef = useRef(onDocumentLoadSuccess);
   const onDocumentLoadFailRef = useRef(onDocumentLoadFail);
   const onPageLoadSuccessRef = useRef(onPageLoadSuccess);
@@ -152,12 +153,15 @@ export const usePdf = ({
 
       // if previous render isn't done yet, we cancel it
       if (renderTask.current) {
+        lastPageRequestedRenderRef.current = page;
         renderTask.current.cancel();
         return;
       }
+
       if (isFunction(onPageRenderStartRef.current)) {
         onPageRenderStartRef.current();
       }
+
       renderTask.current = page.render({
         canvasContext,
         viewport,
@@ -175,8 +179,8 @@ export const usePdf = ({
           renderTask.current = null;
 
           if (reason && reason.name === 'RenderingCancelledException') {
-            console.log("TODO: Draw the pending page instead of the canceled page");
-            drawPDF(page);
+            const lastPageRequestedRender = lastPageRequestedRenderRef.current ?? page;
+            drawPDF(lastPageRequestedRender);
           } else if (isFunction(onPageRenderFailRef.current)) {
             onPageRenderFailRef.current();
           }
