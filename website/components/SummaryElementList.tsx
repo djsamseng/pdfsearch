@@ -49,7 +49,7 @@ function Accordion({
         </button>
       </div>
       <div id={`accordion-open-body-${id}`} className={isOpen ? "" : "hidden"} aria-labelledby="accordion-open-heading-1">
-        <div className={`p-5 font-light border ${isLast ? "" : "border-b-0"} border-gray-200`}>
+        <div className={`font-light border ${isLast ? "" : "border-b-0"} border-gray-200`}>
           {item.body}
         </div>
       </div>
@@ -254,8 +254,8 @@ function TableView({
     }
   });
   return (
-    <div className="overflow-x-scroll">
-      <div className="flex flex-col items-end">
+    <div className="overflow-x-scroll py-4">
+      <div className="flex flex-col items-end px-4">
         <DropdownRadio selectId={selectId}
           tableViewData={tableViewData}
           radioStates={radioStates}
@@ -265,7 +265,7 @@ function TableView({
       <table className="table-auto text-sm">
         <thead>
           <tr>
-            <th key={`${id}-count`} className="pr-2">Counts</th>
+            <th key={`${id}-count`} className="px-2">Counts</th>
             { tableViewData.header.map(headerItem => {
               return (
                 <th key={`${id}-${headerItem}`}
@@ -274,50 +274,73 @@ function TableView({
             })}
           </tr>
         </thead>
-        <tbody className="">
           { groupsArray
             .map(([groupId, groupValues]) => {
               const instanceElems = [...groupValues.map((groupInstance, idxInGroup) => {
                 const rowId = groupInstance.header[0];
                 const instanceId = `${id}-${rowId}-${idxInGroup}`;
                 return (
-                  <tr key={instanceId}
-                    className={`${idxInGroup === 0 ? "border-t" : ""}`}
-                    >
-                    <th key={`${instanceId}-count`}
-                      className="font-normal"
-                      onMouseEnter={() => {
-                        setJumpToPosition({
-                          page: groupInstance.match.page_number,
-                          bboxes: groupValues
-                            .filter(v => {
-                              return v.match.page_number === groupInstance.match.page_number;
-                            })
-                            .map(v => v.match.bbox),
-                        });
-                      }}>{idxInGroup === 0 ? groupValues.length : ""}</th>
-                    { groupInstance.header.map((headerValue, columnIdx) => {
-                      const headerName = tableViewData.header[columnIdx];
-                      return (
-                        <th key={`${instanceId}-${headerName}`}
-                          className="font-normal"
-                          onMouseEnter={() => {
-                            setJumpToPosition({
-                              page: groupInstance.match.page_number,
-                              bboxes: [groupInstance.match.bbox],
-                            });
-                          }}>{columnIdx === 0 ? groupInstance.match.label : headerValue}</th>
-                      );
-                    })}
-                  </tr>
+
+                    <tr key={instanceId}
+                      className={`${idxInGroup === 0 ? "border-t" : ""}`}
+                      >
+                      <th key={`${instanceId}-count`}
+                        className="font-normal"
+                        onMouseEnter={() => {
+                          setJumpToPosition({
+                            page: groupInstance.match.page_number,
+                            bboxes: groupValues
+                              .filter(v => {
+                                return v.match.page_number === groupInstance.match.page_number;
+                              })
+                              .map(v => v.match.bbox),
+                          });
+                        }}>{idxInGroup === 0 ? groupValues.length : ""}</th>
+                      { groupInstance.header.map((headerValue, columnIdx) => {
+                        const headerName = tableViewData.header[columnIdx];
+                        return (
+                          <th key={`${instanceId}-${headerName}`}
+                            className="font-normal"
+                            onMouseEnter={() => {
+                              if (columnIdx === 0) {
+                                setJumpToPosition({
+                                  page: groupInstance.match.page_number,
+                                  bboxes: [groupInstance.match.bbox],
+                                });
+                              }
+                              else {
+                                setJumpToPosition({
+                                  page: groupInstance.match.page_number,
+                                  bboxes: groupValues
+                                  .filter(v => {
+                                    return v.match.page_number === groupInstance.match.page_number;
+                                  })
+                                  .map(v => v.match.bbox),
+                                });
+                              }
+                            }}>{columnIdx === 0 ? groupInstance.match.label : headerValue}</th>
+                        );
+                      })}
+                    </tr>
                 )
               }), (
-                <tr key={`${groupId}-spacer`} className="h-5" />
+                <tr key={`${groupId}-spacer`} className="h-5">
+                  <th key={`${groupId}-spacer-count`} className="pr-2"></th>
+                  { tableViewData.header.map(headerItem => {
+                    return (
+                      <th key={`${groupId}-spacer-${headerItem}`}
+                        className="px-2"></th>
+                    );
+                  })}
+                </tr>
               )];
-              return instanceElems;
+              return (
+                <tbody key={groupId} className="hover:bg-gray-200" data-group={groupId}>
+                  {instanceElems}
+                </tbody>
+              );
             })
           }
-        </tbody>
       </table>
     </div>
 

@@ -180,6 +180,7 @@ export const usePdf = ({
 
           if (reason && reason.name === 'RenderingCancelledException') {
             const lastPageRequestedRender = lastPageRequestedRenderRef.current ?? page;
+            lastPageRequestedRenderRef.current = null;
             drawPDF(lastPageRequestedRender);
           } else if (isFunction(onPageRenderFailRef.current)) {
             onPageRenderFailRef.current();
