@@ -55,7 +55,9 @@ function scrollAndZoomToBbox({
   bboxes,
   pdfSize,
   imageRef,
+  drawCanvasRef,
   setImageWidth,
+
 }: {
   bboxes: [number, number, number, number][] | null;
   pdfSize: {
@@ -63,6 +65,7 @@ function scrollAndZoomToBbox({
     pdfHeight: number;
   } | null;
   imageRef: React.RefObject<HTMLImageElement>;
+  drawCanvasRef: React.RefObject<HTMLCanvasElement>;
   setImageWidth: React.Dispatch<React.SetStateAction<number>>;
 }) {
   if (!bboxes || bboxes.length === 0 || !pdfSize || !imageRef.current || !imageRef.current.parentElement) {
@@ -98,13 +101,45 @@ function scrollAndZoomToBbox({
     pdfWidth,
     pdfHeight,
   });
-  const margin = 50;
+  const margin = 0;
+  if (drawCanvasRef.current) {
+    drawCanvasRef.current.width = parentRect.width;
+    drawCanvasRef.current.height = parentRect.height;
+  }
+
   setTimeout(() => {
     if (!imageRef.current || !imageRef.current.parentElement) {
       return;
     }
-    imageRef.current.parentElement.scrollLeft = Math.max(topLeftX - margin, 0);
-    imageRef.current.parentElement.scrollTop = Math.max(topLeftY - margin, 0);
+    const scrollLeft = Math.max(topLeftX - margin, 0);
+    const scrollTop = Math.max(topLeftY - margin, 0);
+    imageRef.current.parentElement.scrollLeft = scrollLeft;
+    imageRef.current.parentElement.scrollTop = scrollTop;
+
+    if (!drawCanvasRef.current || !drawCanvasRef.current.parentElement) {
+      return;
+    }
+    const ctx = drawCanvasRef.current.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+
+    ctx.clearRect(0, 0, desiredWidth, desiredHeight);
+    for (const elemBbox of bboxes) {
+      const x0 = elemBbox[0] * (desiredWidth / pdfWidth) - scrollLeft;
+      const y0 = (pdfHeight - elemBbox[3]) * (desiredHeight / pdfHeight) - scrollTop;
+      const x1 =  elemBbox[2] * (desiredWidth / pdfWidth) - scrollLeft;
+      const y1 = (pdfHeight - elemBbox[1]) * (desiredHeight / pdfHeight) - scrollTop;
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y0);
+      ctx.lineTo(x1, y1);
+      ctx.lineTo(x0, y1);
+      ctx.lineTo(x0, y0);
+      ctx.strokeStyle = "blue";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.closePath();
+    }
   }, 100);
 }
 
@@ -112,7 +147,8 @@ function HeightAdjuster() {
   const [ height, setHeight ] = React.useState(document.body.offsetHeight - window.screen.height);
   useEffect(() => {
     const observer = new ResizeObserver(() => {
-      setHeight(document.body.offsetHeight - window.screen.height);
+      const newHeight = Math.min(20000, document.body.offsetHeight - window.screen.height);
+      setHeight(newHeight);
     });
     observer.observe(document.body);
     return () => {
@@ -130,6 +166,7 @@ export function PdfImageView({
   pdfData: ArrayBuffer;
 }) {
   const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
+  const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const imageParentRef = useRef<HTMLDivElement>(null);
   const [ imageDataUrl, setImageDataUrl ] = useState<string | null>(null);
@@ -186,10 +223,12 @@ export function PdfImageView({
 
   function increaseZoom() {
     setBboxes(null);
+    // TODO: move scrollTop and scrollLeft down and right
     setImageWidth(Math.round(imageWidth * 1.1));
   }
   function decreaseZoom() {
     setBboxes(null);
+    // TODO: move scrollTop and scrollLeft up and left
     setImageWidth(Math.round(imageWidth * 0.9));
   }
   function nextPage() {
@@ -205,6 +244,7 @@ export function PdfImageView({
       bboxes,
       pdfSize,
       imageRef,
+      drawCanvasRef,
       setImageWidth,
     });
   }, [bboxes, page, pdfSize, imageRef, setImageWidth]);
@@ -247,12 +287,18 @@ export function PdfImageView({
       )}
       <div className="relative">
         <div className="sticky top-[5vh]">
-          <div ref={imageParentRef} className="max-h-[90vh] overflow-scroll p-5">
+          <div ref={imageParentRef} className="max-h-[90vh] overflow-scroll border">
             { imageDataUrl && (
-              <img ref={imageRef} src={imageDataUrl} style={{minWidth: imageWidth, maxWidth: imageWidth,}}/>
+                <img ref={imageRef} src={imageDataUrl} style={{minWidth: imageWidth, maxWidth: imageWidth,}}/>
             )}
           </div>
+          <div className="absolute top-0 z-10 w-full">
+            <div className="max-h-[90vh]">
+              <canvas ref={drawCanvasRef}/>
+            </div>
+          </div>
         </div>
+
         <HeightAdjuster />
       </div>
 
