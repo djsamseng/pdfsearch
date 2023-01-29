@@ -170,7 +170,7 @@ function TableView({
   tableViewData: TableViewData;
   setJumpToPosition: (args: {
     page: number;
-    bbox: [number, number, number, number];
+    bboxes: [number, number, number, number][];
   }) => void;
 }) {
   const selectId = `${id}-group-select`;
@@ -283,19 +283,30 @@ function TableView({
                 return (
                   <tr key={instanceId}
                     className={`${idxInGroup === 0 ? "border-t" : ""}`}
-                    onMouseEnter={() => {
-                      setJumpToPosition({
-                        page: groupInstance.match.page_number,
-                        bbox: groupInstance.match.bbox,
-                      });
-                    }}>
+                    >
                     <th key={`${instanceId}-count`}
-                      className="font-normal">{idxInGroup === 0 ? groupValues.length : ""}</th>
+                      className="font-normal"
+                      onMouseEnter={() => {
+                        setJumpToPosition({
+                          page: groupInstance.match.page_number,
+                          bboxes: groupValues
+                            .filter(v => {
+                              return v.match.page_number === groupInstance.match.page_number;
+                            })
+                            .map(v => v.match.bbox),
+                        });
+                      }}>{idxInGroup === 0 ? groupValues.length : ""}</th>
                     { groupInstance.header.map((headerValue, columnIdx) => {
                       const headerName = tableViewData.header[columnIdx];
                       return (
                         <th key={`${instanceId}-${headerName}`}
-                          className="font-normal">{columnIdx === 0 ? groupInstance.match.label : headerValue}</th>
+                          className="font-normal"
+                          onMouseEnter={() => {
+                            setJumpToPosition({
+                              page: groupInstance.match.page_number,
+                              bboxes: [groupInstance.match.bbox],
+                            });
+                          }}>{columnIdx === 0 ? groupInstance.match.label : headerValue}</th>
                       );
                     })}
                   </tr>
@@ -384,7 +395,7 @@ export default function SummaryElementList({
   pdfSummary: CompletePdfSummary;
   setJumpToPosition: (args: {
       page: number;
-      bbox: [number, number, number, number];
+      bboxes: [number, number, number, number][];
   }) => void;
 }) {
   const tableData = makeTableData({

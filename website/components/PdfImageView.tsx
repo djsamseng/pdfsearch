@@ -33,13 +33,31 @@ function translatePointToCanvas({
   };
 }
 
+function calculateBoundingBbox({
+  bboxes,
+}: {
+  bboxes: [number, number, number, number][]
+}) {
+  if (bboxes.length === 0) {
+    return [0, 0, 0, 0];
+  }
+  let [xMin, yMin, xMax, yMax] = bboxes[0];
+  for (const [x0, y0, x1, y1] of bboxes) {
+    xMin = Math.min(xMin, x0);
+    yMin = Math.min(yMin, y0);
+    xMax = Math.max(xMax, x1);
+    yMax = Math.max(yMax, y1);
+  }
+  return [xMin, yMin, xMax, yMax];
+}
+
 function scrollAndZoomToBbox({
-  bbox,
+  bboxes,
   pdfSize,
   imageRef,
   setImageWidth,
 }: {
-  bbox: [number, number, number, number] | null;
+  bboxes: [number, number, number, number][] | null;
   pdfSize: {
     pdfWidth: number;
     pdfHeight: number;
@@ -47,7 +65,7 @@ function scrollAndZoomToBbox({
   imageRef: React.RefObject<HTMLImageElement>;
   setImageWidth: React.Dispatch<React.SetStateAction<number>>;
 }) {
-  if (!bbox || !pdfSize || !imageRef.current || !imageRef.current.parentElement) {
+  if (!bboxes || bboxes.length === 0 || !pdfSize || !imageRef.current || !imageRef.current.parentElement) {
     return;
   }
 
@@ -57,27 +75,37 @@ function scrollAndZoomToBbox({
     pdfWidth,
     pdfHeight
   } = pdfSize;
-  const {
-    x: topLeftX,
-    y: topLeftY,
-  } = translatePointToCanvas({
-    x: bbox[0],
-    y: bbox[3],
-    htmlWidth: imageRect.width,
-    htmlHeight: imageRect.height,
-    pdfWidth,
-    pdfHeight,
-  });
-  const margin = 50;
-  imageRef.current.parentElement.scrollLeft = Math.max(topLeftX - margin, 0);
-  imageRef.current.parentElement.scrollTop = Math.max(topLeftY - margin, 0);
 
+  // Calculate desired size
+  const bbox = calculateBoundingBbox({ bboxes });
   const bboxWidth = bbox[2] - bbox[0];
   const bboxHeight = bbox[3] - bbox[1];
   // make image width so big that bboxWidth becomes parentRect.width - margin * 2
   const scaleMult = (parentRect.width) / bboxWidth;
   const desiredWidth = Math.min(pdfWidth * 5, Math.round(pdfWidth * scaleMult));
   setImageWidth(desiredWidth);
+
+  // Calculate scroll position: TODO based off of desired width not current width
+  const desiredHeight = pdfHeight * desiredWidth / pdfWidth
+  const {
+    x: topLeftX,
+    y: topLeftY,
+  } = translatePointToCanvas({
+    x: bbox[0],
+    y: bbox[3],
+    htmlWidth: desiredWidth,
+    htmlHeight: desiredHeight,
+    pdfWidth,
+    pdfHeight,
+  });
+  const margin = 50;
+  setTimeout(() => {
+    if (!imageRef.current || !imageRef.current.parentElement) {
+      return;
+    }
+    imageRef.current.parentElement.scrollLeft = Math.max(topLeftX - margin, 0);
+    imageRef.current.parentElement.scrollTop = Math.max(topLeftY - margin, 0);
+  }, 100);
 }
 
 function HeightAdjuster() {
@@ -113,8 +141,8 @@ export function PdfImageView({
   const {
     page,
     setPage,
-    bbox,
-    setBbox,
+    bboxes,
+    setBboxes,
   } = React.useContext(PdfViewContext);
   const flag = useRef(false);
   const { pdfDocument, pdfPage } = usePdf({
@@ -124,7 +152,6 @@ export function PdfImageView({
     scale: 1.5,
     onPageRenderSuccess: async (pageObj) => {
       // Cached and thus won't rerender if not needed
-      // TODO: If toggled back and forth we render the wrong page but think we're on the right page
       const [y0, x0, y1, x1] = pageObj.view;
       const canvas = pdfCanvasRef.current;
       if (!canvas) {
@@ -139,7 +166,7 @@ export function PdfImageView({
         pdfWidth: pdfWidth,
         pdfHeight: pdfHeight,
       });
-      if (bbox === null) {
+      if (bboxes === null) {
         if (imageParentRef.current) {
           const parentRect = imageParentRef.current.getBoundingClientRect();
           setImageWidth(parentRect.width);
@@ -158,29 +185,29 @@ export function PdfImageView({
 
 
   function increaseZoom() {
-    setBbox(null);
+    setBboxes(null);
     setImageWidth(Math.round(imageWidth * 1.1));
   }
   function decreaseZoom() {
-    setBbox(null);
+    setBboxes(null);
     setImageWidth(Math.round(imageWidth * 0.9));
   }
   function nextPage() {
     setPage(page + 1);
-    setBbox(null);
+    setBboxes(null);
   }
   function prevPage() {
     setPage(page - 1);
-    setBbox(null);
+    setBboxes(null);
   }
   useEffect(() => {
     scrollAndZoomToBbox({
-      bbox,
+      bboxes,
       pdfSize,
       imageRef,
       setImageWidth,
     });
-  }, [bbox, page, pdfSize, imageRef, setImageWidth]);
+  }, [bboxes, page, pdfSize, imageRef, setImageWidth]);
   const buttonStyle = "rounded rounded-none first:rounded-l last:rounded-r border-r last:border-r-0 hover:bg-gray-200 first:hover:bg-gray-300";
   return (
     <div className="flex flex-col">

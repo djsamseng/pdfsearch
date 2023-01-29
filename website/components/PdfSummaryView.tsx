@@ -22,22 +22,22 @@ export default function PdfSummaryView({
   const [ summaryViewMode, setSummaryViewMode ] = useState(PdfSummaryMode.SPLIT);
   const [ jumpToPositionEnabled, setJumpToPositionEnabled ] = useState(true);
   const [ page, setPage ] = useState(1);
-  const [ bbox, setBbox ] = useState<[number, number, number, number] | null>(null);
+  const [ bboxes, setBboxes ] = useState<[number, number, number, number][] | null>(null);
   const pdfViewContextProvider = {
     page,
     setPage: (newPage: number) => setPage(newPage),
-    bbox,
-    setBbox: (newBbox: [number, number, number, number] | null) => setBbox(newBbox),
+    bboxes,
+    setBboxes: (newBboxes: [number, number, number, number][] | null) => setBboxes(newBboxes),
   };
 
   function setJumpToPosition(args: {
     page: number;
-    bbox: [number, number, number, number]
+    bboxes: [number, number, number, number][];
   }) {
     if (jumpToPositionEnabled) {
       // Page starts from 1
       setPage(args.page + 1);
-      setBbox(args.bbox);
+      setBboxes(args.bboxes);
     }
   }
 
