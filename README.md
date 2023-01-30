@@ -27,6 +27,35 @@ sudo ln -s ~/.docker/desktop/docker.sock /var/run/docker.sock # May need to reru
 npx supabase gen types typescript --local > utils/database.types.ts
 ```
 
+### Deploying
+- Install AWS CLI
+- [Configure AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config)
+  - Create Access Key in the AWS console Security Credentials
+```bash
+aws configure
+```
+- Sign in to docker hub [Configure docker credentials](https://docs.docker.com/desktop/get-started/#credentials-management-for-linux-users)
+- [Upload docker image to Amazon ECR](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html#images-upload)
+```bash
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin USERID.dkr.ecr.us-east-1.amazonaws.com
+aws ecr create-repository --repository-name takeoff --image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE
+docker build -t takeoff .
+docker run -p 9000:8080 -e DEV_LOCAL="true" -e SUPABASE_URL="http://host.docker.internal:54321" -e SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" takeoff # Optionally Test
+./test_local.sh
+docker tag takeoff:latest USERID.dkr.ecr.us-east-1.amazonaws.com/takeoff:latest
+docker push USERID.dkr.ecr.us-east-1.amazonaws.com/takeoff:latest
+```
+- Configure in Functions > function > Configuration
+  - environment variables in > Environment Variables
+    - SUPABASE_URL
+    - SUPABASE_KEY
+    - DEV_LOCAL only present if testing
+- Configure memory and timeout in > General Configuration
+  - 1280 MB memory
+  - 14 Minute timeout
+- Create function URL in > Function URL
+  - Enable CORS
+
 ## Running
 ```bash
 cd website && npm run dev
