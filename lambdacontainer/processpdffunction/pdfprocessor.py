@@ -7,8 +7,7 @@ import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 import pdfminer.pdfparser, pdfminer.pdfdocument, pdfminer.pdftypes
 
 import dataprovider
-import debugutils
-from pdfextract import pdfindexer, pdfelemtransforms, votesearch, michaelsmithsymbols, ltjson
+from pdfextract import pdfindexer, pdfelemtransforms, votesearch, michaelsmithsymbols
 
 def get_pdf_num_pages(pdfdata_io: io.BytesIO):
   parser = pdfminer.pdfparser.PDFParser(pdfdata_io)
@@ -102,10 +101,7 @@ def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pd
   num_steps_total = num_pages + 1
   data_provider.write_processpdf_start(pdfkey=pdfkey, num_steps_total=num_steps_total)
 
-  if debugutils.is_dev() and False:
-    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=[2,5,9])
-  else:
-    pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io)
+  pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io) # 2,5,9
   processor = PdfProcessor(pages_gen=pages_gen, data_provider=data_provider)
   t0 = time.time()
   t_writing = 0.

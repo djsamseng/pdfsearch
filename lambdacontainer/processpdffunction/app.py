@@ -27,7 +27,9 @@ def process_pdf(pdfId: str):
   return results_json
 
 
-def handler(event: typing.Any, context: typing.Any
+def handler(
+  event: typing.Any,
+  context: typing.Any, # pylint:disable=unused-argument
 ) -> typing.Union[None, str]:
   pdfId = event["pdfId"]
   results_json = process_pdf(pdfId=pdfId)

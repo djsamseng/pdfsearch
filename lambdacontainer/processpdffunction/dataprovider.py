@@ -5,11 +5,8 @@ import enum
 import os
 import typing
 
-import boto3 # type: ignore
-import botocore.exceptions # type: ignore
 import supabase
 import storage3 # type: ignore
-
 import debugutils
 
 supabase_url = os.environ.get("SUPABASE_URL") or ""
@@ -19,10 +16,6 @@ db_client: supabase.client.Client = supabase.client.create_client(
   supabase_url=supabase_url,
   supabase_key=supabase_key
 )
-if debugutils.is_dev():
-  s3_client: typing.Any = None
-else:
-  s3_client: typing.Any = boto3.resource("s3") # type: ignore
 
 # Match /website/utils/tablenames.types.ts
 class TableNames(enum.Enum):
@@ -71,35 +64,20 @@ class SupabaseDataProvider(DataProvider):
     self.pdfId = pdfId
 
   def get_pdf_for_key(self, pdfkey: str) -> typing.Union[None, bytes]:
-    if s3_client is None:
+    if debugutils.is_dev():
       if os.path.exists(pdfkey):
         with open(file=pdfkey, mode="rb") as f:
           binary_str = f.read()
           return binary_str
-      try:
-        storage_client: storage3.SyncStorageClient = typing.cast(
-          storage3.SyncStorageClient,
-          db_client.storage()
-        )
-        pdf_bytes = storage_client.from_("pdfs").download("public/" + pdfkey + ".pdf")
-        return pdf_bytes
-      except Exception as e:
-        print("DEV_LOCAL: {0} not found", pdfkey, e)
-      return None
     try:
-      resp = s3_client.get_object(
-        Bucket="",
-        Key=pdfkey,
+      storage_client: storage3.SyncStorageClient = typing.cast(
+        storage3.SyncStorageClient,
+        db_client.storage()
       )
-      return resp["Body"].read()
-    except botocore.exceptions.NoSuchKey as e: # type: ignore pylint:disable=no-member
-      e = typing.cast(typing.Any, e)
-      print(e)
-    except botocore.exceptions.InvalidObjectState as e: # type: ignore pylint:disable=no-member
-      e = typing.cast(typing.Any, e)
-      print(e)
+      pdf_bytes = storage_client.from_("pdfs").download("public/" + pdfkey + ".pdf")
+      return pdf_bytes
     except Exception as e:
-      print(e)
+      print("PDF: {0} not found", pdfkey, e)
     return None
 
   def write_pdf_summary(self, results_json: str):
@@ -149,14 +127,3 @@ def parse_args():
   parser.add_argument("--listtables", dest="listtables", default=False, action="store_true")
   parser.add_argument("--scanstream", dest="scanstream", default=False, action="store_true")
   return parser.parse_args()
-
-def main():
-  # DEV_LOCAL=True python3 dataprovider.py
-  # args = parse_args()
-  return
-
-if __name__ == "__main__":
-  if debugutils.is_dev():
-    main()
-  else:
-    print("Append DEV_LOCAL=True python3 dataprovider.py")

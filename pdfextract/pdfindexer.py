@@ -11,7 +11,7 @@ import scipy.spatial # type: ignore
 from . import path_utils
 from .ltjson import LTJson
 
-LOG_TIME = True
+LOG_TIME = False
 
 class PdfIndexer:
   # To find contents inside shapes
