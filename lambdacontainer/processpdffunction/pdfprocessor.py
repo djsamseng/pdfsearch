@@ -1,5 +1,7 @@
 
 import io
+import json
+import os
 import typing
 import time
 
@@ -7,7 +9,7 @@ import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 import pdfminer.pdfparser, pdfminer.pdfdocument, pdfminer.pdftypes
 
 import dataprovider
-from pdfextract import pdfindexer, pdfelemtransforms, votesearch, michaelsmithsymbols
+from pdfextract import pdfindexer, pdfelemtransforms, votesearch, ltjson
 
 def get_pdf_num_pages(pdfdata_io: io.BytesIO):
   parser = pdfminer.pdfparser.PDFParser(pdfdata_io)
@@ -16,7 +18,17 @@ def get_pdf_num_pages(pdfdata_io: io.BytesIO):
   return num_pages
 
 def read_symbols_from_json():
-  return michaelsmithsymbols.read_symbols_from_json(dirpath="./")
+  dirpath = "./"
+  with open(os.path.join(dirpath, "symbols_michael_smith.json"), "r", encoding="utf-8") as f:
+    json_string = f.read()
+  symbols_dicts = json.loads(json_string)
+  symbols: typing.Dict[str, typing.List[ltjson.LTJson]] = dict()
+  for key, serialized_elems in symbols_dicts.items():
+    elems: typing.List[ltjson.LTJson] = []
+    for serialized_json in serialized_elems:
+      elems.append(ltjson.LTJson(serialized_json=serialized_json))
+    symbols[key] = elems
+  return symbols
 
 # Recognizer is the opposite of searching in terms of datastructures
 # Recognizer is good for classifying areas
