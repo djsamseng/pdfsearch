@@ -13,6 +13,7 @@ import PdfSummaryView from "../../components/PdfSummaryView";
 import NavBreadcrumb from "../../components/NavBreadcrumb";
 import Link from "next/link";
 import { CompletePdfSummary } from "../../utils/requestresponsetypes";
+import { LoadingSpinner } from "../../components/LoadingSpinner";
 
 type PdfProcessingProgress = Database["public"]["Tables"]["pdf_processing_progress"]["Row"]
 
@@ -181,13 +182,23 @@ function PdfIdViewer({
       <div className="my-3">
         <span className="text-2xl">{ pdfName }</span>
       </div>
-      { pdfProcessingProgress.success !== true && (
-        <>
+      { pdfProcessingProgress.success === null && (
+        <div>
           <div>
-            { pdfProcessingProgress.success === null ? "Processing PDF" : "Failed to process PDF" }
+            <LoadingSpinner text={`Processing PDF ${pdfProcessingProgress.curr_step} / ${pdfProcessingProgress.total_steps}`} />
           </div>
           <div>
-            { pdfProcessingProgress.msg}
+            {pdfProcessingProgress.msg}
+          </div>
+        </div>
+      )}
+      { pdfProcessingProgress.success === false && (
+        <>
+          <div>
+            Failed to process PDF
+          </div>
+          <div>
+            { pdfProcessingProgress.msg }
           </div>
         </>
       )}

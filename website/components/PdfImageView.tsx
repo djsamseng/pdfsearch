@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { usePdf } from "../utils/UsePdf";
+import { LoadingSpinner } from "./LoadingSpinner";
 import { PdfViewContext } from "./PdfViewContext";
 
 enum CanvasMouseEvents {
@@ -333,7 +334,7 @@ export function PdfImageView({
       </div>
       { !imageDataUrl && (
         <div>
-          Loading...
+          <LoadingSpinner text={`Rendering page ${page}`} />
         </div>
       )}
       <div className="relative">
