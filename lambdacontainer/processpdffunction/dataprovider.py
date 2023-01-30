@@ -11,7 +11,7 @@ import debugutils
 
 supabase_url = os.environ.get("SUPABASE_URL") or ""
 supabase_key = os.environ.get("SUPABASE_KEY") or ""
-print(supabase_url, supabase_key)
+print("Supabase url:", supabase_url, "Key:", supabase_key)
 db_client: supabase.client.Client = supabase.client.create_client(
   supabase_url=supabase_url,
   supabase_key=supabase_key
@@ -85,16 +85,22 @@ class SupabaseDataProvider(DataProvider):
       PdfSummaryTable.PDF_ID.value: self.pdfId,
       PdfSummaryTable.PDF_SUMMARY.value: results_json,
     }
-    db_client.table(TableNames.PDF_SUMMARY.value)\
-      .update(json=data).eq(PdfSummaryTable.PDF_ID.value, self.pdfId).execute() # type: ignore
+    try:
+      db_client.table(TableNames.PDF_SUMMARY.value)\
+        .update(json=data).eq(PdfSummaryTable.PDF_ID.value, self.pdfId).execute() # type: ignore
+    except Exception as e:
+      print("Failed to write_pdf_summary:", e)
 
   def write_processpdf_start(self, pdfkey: str, num_steps_total: int):
     data = {
       StreamingProgressTable.PDF_ID.value: pdfkey,
       StreamingProgressTable.TOTAL_STEPS.value: num_steps_total,
     }
-    db_client.table(TableNames.STREAMING_PROGRESS.value)\
-      .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+    try:
+      db_client.table(TableNames.STREAMING_PROGRESS.value)\
+        .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+    except Exception as e:
+      print("Failed to write_processpdf_start:", e)
 
   def write_processpdf_progress(self, pdfkey: str, curr_step: int, message: str):
     data = {
@@ -102,8 +108,11 @@ class SupabaseDataProvider(DataProvider):
       StreamingProgressTable.CURR_STEP.value: curr_step,
       StreamingProgressTable.MSG.value: message
     }
-    db_client.table(TableNames.STREAMING_PROGRESS.value)\
-      .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+    try:
+      db_client.table(TableNames.STREAMING_PROGRESS.value)\
+        .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+    except Exception as e:
+      print("Failed to write_processpdf_progress:", e)
 
   def write_processpdf_error(self, pdfkey: str, error_message: str):
     # Could occur before start
@@ -111,16 +120,22 @@ class SupabaseDataProvider(DataProvider):
       StreamingProgressTable.PDF_ID.value: pdfkey,
       StreamingProgressTable.MSG.value: error_message
     }
-    db_client.table(TableNames.STREAMING_PROGRESS.value)\
-      .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+    try:
+      db_client.table(TableNames.STREAMING_PROGRESS.value)\
+        .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+    except Exception as e:
+      print("Failed to write_processpdf_error:", e)
 
   def write_processpdf_done(self, pdfkey: str, success: bool):
     data = {
       StreamingProgressTable.PDF_ID.value: pdfkey,
       StreamingProgressTable.SUCCESS.value: success,
     }
-    db_client.table(TableNames.STREAMING_PROGRESS.value)\
-      .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+    try:
+      db_client.table(TableNames.STREAMING_PROGRESS.value)\
+        .update(json=data).eq(StreamingProgressTable.PDF_ID.value, pdfkey).execute() # type:ignore
+    except Exception as e:
+      print("Failed to write_processpdf_done:", e)
 
 def parse_args():
   parser = argparse.ArgumentParser()
