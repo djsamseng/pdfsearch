@@ -55,6 +55,12 @@ docker push USERID.dkr.ecr.us-east-1.amazonaws.com/takeoff:latest
   - 14 Minute timeout
 - Create function URL in > Function URL
   - Enable CORS
+    - Allow origin *
+    - Allow methods *
+    - Allow credentials false
+
+### Supabase
+- Project TakeOff database password: regular+TakeOff
 
 ## Running
 ```bash

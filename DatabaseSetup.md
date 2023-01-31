@@ -42,5 +42,5 @@ alter publication supabase_realtime add table pdf_processing_progress;
 
 ### Storage
 - Click storage in the dashboard
-- Create a public bucket (if going to production with supabase storage instead of S3 make it private and use createSignedUrl to send to lambda)
+- Create a public bucket "pdfs" (if going to production with supabase storage instead of S3 make it private and use createSignedUrl to send to lambda)
 - Create a policy on the pdfs bucket allowing select insert and update for all users

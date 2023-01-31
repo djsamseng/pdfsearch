@@ -31,9 +31,22 @@ def handler(
   event: typing.Any,
   context: typing.Any, # pylint:disable=unused-argument
 ) -> typing.Union[None, str]:
-  pdfId = event["pdfId"]
-  results_json = process_pdf(pdfId=pdfId)
+  pdfId = None
+  if "pdfId" in event:
+    print("Found pdfId in event")
+    pdfId = event["pdfId"]
+  if "body" in event:
+    if "pdfId" in event["body"]:
+      print("Found pdfId in body")
+      pdfId = event["body"]["pdfId"]
+    else:
+      print("Has body but no pdfId:", event["body"])
+  if pdfId is not None:
+    print("Found pdfId:", pdfId)
+    results_json = process_pdf(pdfId=pdfId)
 
-  if debugutils.is_dev():
-    return results_json
+    if debugutils.is_dev():
+      return results_json
+  else:
+    print("pdfId not in event", event)
   return None
