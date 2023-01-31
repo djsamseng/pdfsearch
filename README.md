@@ -58,6 +58,8 @@ docker push USERID.dkr.ecr.us-east-1.amazonaws.com/takeoff:latest
     - Allow origin *
     - Allow methods *
     - Allow credentials false
+- Vercel
+  - login with github devcider@gmail.com
 
 ### Supabase
 - Project TakeOff database password: regular+TakeOff
