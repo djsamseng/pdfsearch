@@ -1,9 +1,11 @@
 
+import json
 import typing
 
 import dataprovider
 import pdfprocessor
 import debugutils
+
 from pdfextract import ltjson
 
 def process_pdf(pdfId: str):
@@ -33,14 +35,16 @@ def handler(
 ) -> typing.Union[None, str]:
   pdfId = None
   if "pdfId" in event:
-    print("Found pdfId in event")
     pdfId = event["pdfId"]
   if "body" in event:
-    if "pdfId" in event["body"]:
-      print("Found pdfId in body")
-      pdfId = event["body"]["pdfId"]
-    else:
-      print("Has body but no pdfId:", event["body"])
+    body = event["body"]
+    try:
+      body_json = json.loads(body)
+      if "pdfId" in body_json:
+        pdfId = body_json["pdfId"]
+    except Exception as e:
+      print("Failed to json parse body:", body, e)
+
   if pdfId is not None:
     print("Found pdfId:", pdfId)
     results_json = process_pdf(pdfId=pdfId)

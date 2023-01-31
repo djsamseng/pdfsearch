@@ -28,6 +28,7 @@ npx supabase gen types typescript --local > utils/database.types.ts
 ```
 
 ### Deploying
+#### AWS Lambda
 - Install AWS CLI
 - [Configure AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config)
   - Create Access Key in the AWS console Security Credentials
@@ -58,11 +59,13 @@ docker push USERID.dkr.ecr.us-east-1.amazonaws.com/takeoff:latest
     - Allow origin *
     - Allow methods *
     - Allow credentials false
-- Vercel
-  - login with github devcider@gmail.com
 
-### Supabase
+#### Supabase
+- login with email devcider@gmail.com password: regular
 - Project TakeOff database password: regular+TakeOff
+
+#### Vercel
+- login with github devcider@gmail.com
 
 ## Running
 ```bash
