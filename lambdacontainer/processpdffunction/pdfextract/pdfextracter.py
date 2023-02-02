@@ -117,23 +117,15 @@ def remove_duplicate_bbox_text(items: typing.List[LTJson]):
   radius = 0
   for item in items:
     results = bbox_indexer.intersection(item.bbox)
-    # Overlap exceeds 80 percent
-    add_item = False
-    if results is None:
-      add_item = True
-    if results is not None:
-      results = list(results)
-      if len(results) == 0:
-        add_item = True
-      else:
-        if item.text is None:
-          add_item = True
-
-    if add_item:
+    if item.text is None or results is None or len(list(results)) == 0:
       x0, y0, x1, y1 = item.bbox
       bbox = (x0-radius, y0-radius, x1+radius, y1+radius)
-      bbox_indexer.insert(idx, bbox)
+      if item.text is None:
+        bbox_indexer.insert(idx, (-1,-1,-1,-1))
+      else:
+        bbox_indexer.insert(idx, bbox)
       out.append(item)
+      idx += 1
   return out
 
 class ExtractedRowElem():

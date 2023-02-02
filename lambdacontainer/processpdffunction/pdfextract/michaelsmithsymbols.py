@@ -496,15 +496,24 @@ def compare_schedules(a: typing.Any, b: typing.Any):
   np.testing.assert_array_equal(a["rows"], b["rows"]) # type:ignore
 
 def process_pdf():
+  debug_utils.is_debug = True
   data_provider = dataprovider.NullDataProvider()
   filename = "plan.pdf"
   with open(filename, mode="rb") as f:
     pdfdata = f.read()
   # Test that the processing results are equivalent
-  ltjson_results = pdfprocessor.process_pdf(data_provider=data_provider, pdfkey=filename, pdfdata=pdfdata, page_numbers=[2,5,9])
-  if False:
+  page_numbers = [2,5,9]
+  page_numbers = None
+  ltjson_results = pdfprocessor.process_pdf(data_provider=data_provider, pdfkey=filename, pdfdata=pdfdata, page_numbers=page_numbers)
+
+  update_saved = False
+  if update_saved:
+    encoder = LTJsonEncoder()
+    with open("test.json", "w", encoding="utf-8") as f:
+      f.write(encoder.encode(ltjson_results))
     with open("plan_2_5_9.pickle", "wb") as f:
       pickle.dump(ltjson_results, file=f)
+
   with open("plan_2_5_9.pickle", "rb") as f:
     # windows, doors, houseName, architectName, pageNames, windowSchedule, doorSchedule, lightingSchedule
     # page_number, class_name, full_id = [LTJsonResponse]

@@ -177,6 +177,7 @@ class RegexShapeSearchRule(SearchRule):
 class LightingSearchRule(SearchRule):
   def __init__(self) -> None:
     self.results: MultiClassSearchRuleResults = create_results_dict()
+    # TODO: Replace RegexShapeSearchRule with optional regex and the text can be outside but near
     self.search_rules: typing.List[RegexShapeSearchRule] = []
 
   def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
@@ -308,9 +309,10 @@ class LightingScheduleSearchRule(PageRecognizerRule):
     self.header_row = None
     self.rows = None
     self.lighting_search_rule = lighting_search_rule
+    self.used_search_rules: typing.List[SearchRule] = []
 
   def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    self.lighting_search_rule.search_rules = []
+    self.lighting_search_rule.search_rules = [] # Reset what to search for
     header_row, rows = pdfextracter.extract_table(
       indexer=indexer,
       text_key="lighting legend",
@@ -345,16 +347,20 @@ class LightingScheduleSearchRule(PageRecognizerRule):
         row_rule = RegexShapeSearchRule(shape_matches=row[1].elems, description="lighting", regex="")
         row_rule.add_match_to_results = add_match_to_results_bound
         self.lighting_search_rule.search_rules.append(row_rule)
+        self.used_search_rules.append(row_rule)
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     if self.rows is None:
       return {}
-    return {
+    out = {
       self.description: {
         "header": self.header_row,
         "rows": self.rows,
       }
     }
+    for rule in self.used_search_rules:
+      merge(dest=out, other=rule.get_results())
+    return out
 
 class PageNameSearchRule(PageRecognizerRule):
   def __init__(self, description: str) -> None:

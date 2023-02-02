@@ -215,6 +215,40 @@ class LTJsonResponse:
         out[key] = self.__dict__[key]
     return out
 
+  def __hash__(self) -> int:
+    return hash(self.__str__())
+
+  def __repr__(self) -> str:
+    return self.__str__()
+
+  def __str__(self) -> str:
+    return json.dumps(self.as_dict())
+
+  def __eq__(self, other: object) -> bool:
+    if not debug_utils.is_debug:
+      print("===== __eq__ should not be called in production =====")
+      return False
+    if not isinstance(other, LTJsonResponse):
+      return False
+    for key in self.__dict__.keys():
+      if key == "bbox":
+        if not self.__eq_bbox(other):
+          return False
+      elif self.__dict__[key] != other.__dict__[key]:
+        return False
+    return True
+
+  def __eq_bbox(self, other: object) -> bool:
+    if not debug_utils.is_debug:
+      print("===== __eq_bbox should not be called in production =====")
+      return False
+    if not isinstance(other, LTJsonResponse):
+      return False
+    for itr in range(len(self.bbox)):
+      if abs(self.bbox[itr] - other.bbox[itr]) > 0.1:
+        return False
+    return True
+
 class LTJsonEncoder(json.JSONEncoder):
   def default(self, o: typing.Any):
     if isinstance(o, LTJson):
