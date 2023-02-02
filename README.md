@@ -52,8 +52,9 @@ docker push USERID.dkr.ecr.us-east-1.amazonaws.com/takeoff:latest
     - SUPABASE_KEY
     - DEV_LOCAL only present if testing
 - Configure memory and timeout in > General Configuration
-  - 1280 MB memory
-  - 14 Minute timeout
+  - plan.pdf
+    - Timed out after 5 minutes 17/26 pages set at 1024mb `Duration: 300077.29 ms Billed Duration: 301120 ms Memory Size: 1024 MB Max Memory Used: 595 MB`
+    - Successfully ran in 4 minutes set at 3008mb `Duration: 222601.26 ms Billed Duration: 223689 ms Memory Size: 3008 MB Max Memory Used: 595 MB`
 - Create function URL in > Function URL
   - Enable CORS
     - Allow origin *
