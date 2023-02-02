@@ -75,6 +75,9 @@ class PdfProcessor:
       description="doors",
       regex="^(?P<class_name>\\d)(?P<elem_type>\\d\\d)"
     )
+    self.lighting_search_rule = votesearch.LightingSearchRule(
+      description="lighting",
+    )
     search_rules: typing.List[votesearch.SearchRule] = [
       self.window_search_rule,
       self.door_search_rule,
@@ -85,7 +88,7 @@ class PdfProcessor:
       votesearch.PageNameSearchRule(description="pageNames"),
       votesearch.WindowScheduleSearchRule(window_search_rule=self.window_search_rule),
       votesearch.DoorScheduleSearchRule(door_search_rule=self.door_search_rule),
-      votesearch.LightingScheduleSearchRule(),
+      votesearch.LightingScheduleSearchRule(lighting_search_rule=self.lighting_search_rule),
     ]
     self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=page_rules)
     self.processing_time = 0.

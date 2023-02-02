@@ -423,11 +423,13 @@ def findschedule():
     indexer=indexer,
     text_key="window schedule",
     has_header=True,
-    header_above_table=False
+    header_above_table=False,
   )
 
-  print(header_row)
-  print(rows)
+  if header_row is not None:
+    print([h.text for h in header_row])
+  if rows is not None:
+    print([[r.text for r in row] for row in rows])
   if header_row is None or rows is None:
     return
   print([len(row) for row in rows], len(header_row))
@@ -447,12 +449,23 @@ def findlighting():
     header_above_table=True,
   )
   # RECT = top horizontal line + 3 lines in one
-  # vs RECT = window schedule = 4 lines in one
-  print(header_row)
-  print(rows)
+  # vs RECT = window schedule = 4 lines in oWne
+  if header_row is not None:
+    print([h.text for h in header_row])
+  if rows is not None:
+    print([[r.text for r in row] for row in rows])
   if header_row is None or rows is None:
     return
   print([len(row) for row in rows], len(header_row))
+  row_elems: typing.List[LTJson] = []
+  for row in rows:
+    for r in row:
+
+      row_elems.extend(r.elems)
+  print([e.text for e in row_elems])
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=row_elems, draw_buttons=False, align_top_left=True)
+  drawer.show("Below")
 
 def parse_args():
   parser = argparse.ArgumentParser()

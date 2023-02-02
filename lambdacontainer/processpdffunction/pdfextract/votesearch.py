@@ -1,6 +1,7 @@
 
 from abc import ABCMeta, abstractmethod
 import collections
+import functools
 import re
 import typing
 
@@ -173,6 +174,23 @@ class RegexShapeSearchRule(SearchRule):
       self.description: self.results
     }
 
+class LightingSearchRule(SearchRule):
+  def __init__(self) -> None:
+    self.results: MultiClassSearchRuleResults = create_results_dict()
+    self.search_rules: typing.List[RegexShapeSearchRule] = []
+
+  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    for rule in self.search_rules:
+      rule.process_elem(elem=elem, page_number=page_number, indexer=indexer)
+
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    results: typing.Dict[str, typing.Any] = {}
+    for rule in self.search_rules:
+      rule_results = rule.get_results() # description: page: display_class_name: full_id: elem
+      merge(dest=results, other=rule_results)
+    return results
+
+
 class HouseNameSearchRule(SearchRule):
   def __init__(self, description: str) -> None:
     self.regex = re.compile("^project name.{0,2}")
@@ -218,12 +236,12 @@ class WindowScheduleSearchRule(PageRecognizerRule):
       indexer=indexer,
       text_key="window schedule",
       has_header=True,
-      header_above_table=False
+      header_above_table=False,
     )
     if header_row is not None:
-      self.header_row = header_row
+      self.header_row = [h.text for h in header_row]
     if rows is not None:
-      self.rows = rows
+      self.rows = [[r.text for r in row] for row in rows]
     def add_match_to_results(
       results: MultiClassSearchRuleResults,
       page_number: int,
@@ -258,12 +276,12 @@ class DoorScheduleSearchRule(PageRecognizerRule):
       indexer=indexer,
       text_key="door schedule",
       has_header=True,
-      header_above_table=False
+      header_above_table=False,
     )
     if header_row is not None:
-      self.header_row = header_row
+      self.header_row = [h.text for h in header_row]
     if rows is not None:
-      self.rows = rows
+      self.rows = [[r.text for r in row] for row in rows]
 
       def add_match_to_results(
         results: MultiClassSearchRuleResults,
@@ -285,22 +303,48 @@ class DoorScheduleSearchRule(PageRecognizerRule):
     }
 
 class LightingScheduleSearchRule(PageRecognizerRule):
-  def __init__(self) -> None:
+  def __init__(self, lighting_search_rule: LightingSearchRule) -> None:
     self.description = "lightingSchedule"
     self.header_row = None
     self.rows = None
+    self.lighting_search_rule = lighting_search_rule
 
   def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    self.lighting_search_rule.search_rules = []
     header_row, rows = pdfextracter.extract_table(
       indexer=indexer,
       text_key="lighting legend",
       has_header=True,
-      header_above_table=True
+      header_above_table=True,
     )
     if header_row is not None:
-      self.header_row = header_row,
+      self.header_row = [h.text for h in header_row]
     if rows is not None:
-      self.rows = rows
+      self.rows = [[r.text for r in row] for row in rows]
+
+    if header_row is not None and rows is not None:
+      for idx, row in enumerate(rows):
+        def add_match_to_results(
+          results: MultiClassSearchRuleResults,
+          page_number: int,
+          class_name: str,
+          elem_type: str,
+          elem: LTJsonResponse,
+          idx: int
+        ):
+          # class_name = A B C or empty
+          # elem_type = empty
+          display_class_name = class_name
+          if len(display_class_name.strip()) == 0:
+            display_class_name = str(idx)
+          full_id = display_class_name
+          results[page_number][display_class_name][full_id].append(elem)
+
+        add_match_to_results_bound = functools.partial(add_match_to_results, idx=idx)
+        # TODO: parse out shape_matches
+        row_rule = RegexShapeSearchRule(shape_matches=row[1].elems, description="lighting", regex="")
+        row_rule.add_match_to_results = add_match_to_results_bound
+        self.lighting_search_rule.search_rules.append(row_rule)
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
     if self.rows is None:

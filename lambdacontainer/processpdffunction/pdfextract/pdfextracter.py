@@ -100,7 +100,12 @@ def is_line_horizontal(elem: LTJson):
     return True
   return False
 
-def remove_duplicate_bbox(items: typing.List[LTJson]):
+def bbox_intersection_area(a: pdfelemtransforms.BboxType, b: pdfelemtransforms.BboxType):
+  dx = max(a[0], b[0]) - min(a[2], b[2])
+  dy = max(a[1], b[1]) - min(a[3], b[3])
+  return dx * dy
+
+def remove_duplicate_bbox_text(items: typing.List[LTJson]):
   def item_size(item: LTJson):
     x0, y0, x1, y1 = item.bbox
     return (x1-x0) * (y1-y0)
@@ -112,12 +117,29 @@ def remove_duplicate_bbox(items: typing.List[LTJson]):
   radius = 0
   for item in items:
     results = bbox_indexer.intersection(item.bbox)
-    if results is None or len(list(results)) == 0:
+    # Overlap exceeds 80 percent
+    add_item = False
+    if results is None:
+      add_item = True
+    if results is not None:
+      results = list(results)
+      if len(results) == 0:
+        add_item = True
+      else:
+        if item.text is None:
+          add_item = True
+
+    if add_item:
       x0, y0, x1, y1 = item.bbox
       bbox = (x0-radius, y0-radius, x1+radius, y1+radius)
       bbox_indexer.insert(idx, bbox)
       out.append(item)
   return out
+
+class ExtractedRowElem():
+  def __init__(self, text:str, elems: typing.List[LTJson]) -> None:
+    self.text = text
+    self.elems = elems
 
 def extract_row(
   table_elems: typing.List[LTJson],
@@ -127,38 +149,37 @@ def extract_row(
   # FIXME: PAINT SKYLIGHT is interpreted as a single item
   # even though there is a line between the two
   # TODO: Manual joining of characters into words instead of looking at the parent
-  text_elems_in_row = [
+  elems_in_row = [
     e for e in table_elems if \
       pdfelemtransforms.box_contains(outer=bbox, inner=e.bbox) and e.parent_idx is None
   ]
-  text_elems_in_row.sort(key=lambda e: e.bbox[0]) # left to right
+  elems_in_row.sort(key=lambda e: e.bbox[0]) # left to right
   vertical_divider_bboxes = [ v.bbox for v in vertical_dividers ]
   vertical_divider_bboxes.sort(key=lambda v: v[0]) # left to right
   vertical_divider_bboxes.append((bbox[2],bbox[1],bbox[2],bbox[3]))
-  row: typing.List[str] = []
+  row: typing.List[ExtractedRowElem] = []
   # If multicolumn, join MATERIAL INT = column 0, MATERIAL EXT = column 1
   elem_idx = 0
   hangover_elem: typing.Union[LTJson, None] = None
   for right_divider in vertical_divider_bboxes:
-    text_elems_in_this_box: typing.List[LTJson] = []
+    elems_in_this_box: typing.List[LTJson] = []
     if hangover_elem:
-      text_elems_in_this_box.append(hangover_elem)
+      elems_in_this_box.append(hangover_elem)
       hangover_elem = None
-    while elem_idx < len(text_elems_in_row) and \
-      text_elems_in_row[elem_idx].bbox[0] < right_divider[0]:
+    while elem_idx < len(elems_in_row) and \
+      elems_in_row[elem_idx].bbox[0] < right_divider[0]:
 
-      add_elem = text_elems_in_row[elem_idx]
-      if add_elem.text is not None:
-        text_elems_in_this_box.append(add_elem)
-        if add_elem.bbox[2] + 5 > right_divider[2]:
-          hangover_elem = add_elem
+      add_elem = elems_in_row[elem_idx]
+      elems_in_this_box.append(add_elem)
+      if add_elem.text is not None and add_elem.bbox[2] + 5 > right_divider[2]:
+        hangover_elem = add_elem
       elem_idx += 1
 
-    text_elems_in_this_box = remove_duplicate_bbox(items=text_elems_in_this_box)
-    text_elems_in_this_box.sort(key=lambda x: x.bbox[1])
-    row_text = " ".join([t.text for t in text_elems_in_this_box if t.text is not None])
+    elems_in_this_box = remove_duplicate_bbox_text(items=elems_in_this_box)
+    elems_in_this_box.sort(key=lambda x: x.bbox[1])
+    row_text = " ".join([t.text for t in elems_in_this_box if t.text is not None])
     row_text = row_text.replace("\n", " ").strip().replace("  ", " ")
-    row.append(row_text)
+    row.append(ExtractedRowElem(text=row_text, elems=elems_in_this_box))
 
   return row
 
@@ -243,7 +264,7 @@ def extract_table(
     vertical_dividers=vertical_dividers
   )
 
-  rows: typing.List[typing.List[str]] = []
+  rows: typing.List[typing.List[ExtractedRowElem]] = []
   for bottom_divider_idx in range(1, len(left_aligned_horizontal_lines)):
     bottom_divider = left_aligned_horizontal_lines[bottom_divider_idx]
     top_divider = left_aligned_horizontal_lines[bottom_divider_idx - 1]

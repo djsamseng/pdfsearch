@@ -536,7 +536,11 @@ class TkDrawer:
     self.app.controlPanel.finish_draw()
     self.app.mainloop()
 
-  def draw_elems(self, elems: typing.Iterable[LTJson], align_top_left: bool=False, draw_buttons: bool=True):
+  def draw_elems(self,
+    elems: typing.Iterable[LTJson],
+    align_top_left: bool=False,
+    draw_buttons: bool=True,
+    draw_all_text: bool=True):
     # Want to accept the hierarchy
     # If we get a container, we want to present the container in the control panel with its inner text
     # however when we draw we draw the underlying LTChar
@@ -550,6 +554,8 @@ class TkDrawer:
       if wrapper.is_container:
         # Children always come immediately after container so indentation will be underneath parent
         self.insert_container(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+        if draw_all_text and wrapper.text is not None:
+          self.insert_text(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
       elif wrapper.original_path is not None and wrapper.linewidth is not None:
         if wrapper.linewidth > 0:
           self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
