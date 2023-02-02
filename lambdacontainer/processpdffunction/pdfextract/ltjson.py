@@ -138,6 +138,9 @@ class LTJson:
         out.append(elem)
     return out
 
+  def __hash__(self) -> int:
+    return hash(self.__str__())
+
   def __repr__(self) -> str:
     return self.__str__()
 

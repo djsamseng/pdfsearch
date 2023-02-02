@@ -1,4 +1,5 @@
 
+import collections
 import typing
 
 import tkinter as tk
@@ -10,7 +11,131 @@ import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 from . import pdfelemtransforms
 from .ltjson import LTJson, ElemListType
 
+class MousePositionTracker(tk.Frame):
+    """ Tkinter Canvas mouse position widget. """
 
+    def __init__(self, canvas, on_end):
+        self.canvas = canvas
+        self.canv_width = self.canvas.cget('width')
+        self.canv_height = self.canvas.cget('height')
+        self.reset()
+
+        # Create canvas cross-hair lines.
+        xhair_opts = dict(dash=(3, 2), fill='white', state=tk.HIDDEN)
+        self.lines = (self.canvas.create_line(0, 0, 0, self.canv_height, **xhair_opts),
+                      self.canvas.create_line(0, 0, self.canv_width,  0, **xhair_opts))
+        self.on_end = on_end
+
+    def cur_selection(self):
+        return (self.start, self.end)
+
+    def begin(self, event):
+        self.hide()
+        x, y = self.__get_x_y(event)
+        self.start = (x, y)  # Remember position (no drawing).
+
+    def update(self, event):
+        x, y = self.__get_x_y(event)
+        self.end = (x, y)
+        self._update(event)
+        self._command(self.start, (x, y))  # User callback.
+
+    def _update(self, event):
+        # Update cross-hair lines.
+        x, y = self.__get_x_y(event)
+        self.canvas.coords(self.lines[0], x, 0, x, self.canv_height)
+        self.canvas.coords(self.lines[1], 0, y, self.canv_width, y)
+        self.show()
+
+    def __get_x_y(self, event):
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        x = int(x)
+        y = int(y)
+        return x, y
+
+    def reset(self):
+        self.start = self.end = None
+
+    def hide(self):
+        self.canvas.itemconfigure(self.lines[0], state=tk.HIDDEN)
+        self.canvas.itemconfigure(self.lines[1], state=tk.HIDDEN)
+
+    def show(self):
+        self.canvas.itemconfigure(self.lines[0], state=tk.NORMAL)
+        self.canvas.itemconfigure(self.lines[1], state=tk.NORMAL)
+
+    def autodraw(self, command=lambda *args: None):
+        """Setup automatic drawing; supports command option"""
+        self.reset()
+        self._command = command
+        self.canvas.bind("<Button-3>", self.begin)
+        self.canvas.bind("<B3-Motion>", self.update)
+        self.canvas.bind("<ButtonRelease-3>", self.quit)
+
+    def quit(self, event):
+        self.hide()  # Hide cross-hairs.
+        self.on_end(self.cur_selection())
+        self.reset()
+
+
+
+class SelectionObject:
+    """ Widget to display a rectangular area on given canvas defined by two points
+        representing its diagonal.
+    """
+    def __init__(self, canvas, select_opts):
+        # Create attributes needed to display selection.
+        self.canvas = canvas
+        self.select_opts1 = select_opts
+        self.width = self.canvas.cget('width')
+        self.height = self.canvas.cget('height')
+
+        # Options for areas outside rectanglar selection.
+        select_opts1 = self.select_opts1.copy()  # Avoid modifying passed argument.
+        select_opts1.update(state=tk.HIDDEN)  # Hide initially.
+        # Separate options for area inside rectanglar selection.
+        select_opts2 = dict(dash=(2, 2), fill='', outline='red', state=tk.HIDDEN)
+
+        # Initial extrema of inner and outer rectangles.
+        imin_x, imin_y,  imax_x, imax_y = 0, 0,  1, 1
+        omin_x, omin_y,  omax_x, omax_y = 0, 0,  self.width, self.height
+
+        self.rects = (
+            # Area *outside* selection (inner) rectangle.
+            #self.canvas.create_rectangle(omin_x, omin_y,  omax_x, imin_y, **select_opts1),
+            #self.canvas.create_rectangle(omin_x, imin_y,  imin_x, imax_y, **select_opts1),
+            #self.canvas.create_rectangle(imax_x, imin_y,  omax_x, imax_y, **select_opts1),
+            #self.canvas.create_rectangle(omin_x, imax_y,  omax_x, omax_y, **select_opts1),
+            # Inner rectangle.
+            self.canvas.create_rectangle(imin_x, imin_y,  imax_x, imax_y, **select_opts2),
+        )
+
+    def update(self, start, end):
+        # Current extrema of inner and outer rectangles.
+        imin_x, imin_y,  imax_x, imax_y = self._get_coords(start, end)
+        omin_x, omin_y,  omax_x, omax_y = 0, 0,  self.width, self.height
+
+        # Update coords of all rectangles based on these extrema.
+        #self.canvas.coords(self.rects[0], omin_x, omin_y,  omax_x, imin_y),
+        #self.canvas.coords(self.rects[1], omin_x, imin_y,  imin_x, imax_y),
+        #self.canvas.coords(self.rects[2], imax_x, imin_y,  omax_x, imax_y),
+        #self.canvas.coords(self.rects[3], omin_x, imax_y,  omax_x, omax_y),
+        self.canvas.coords(self.rects[0], imin_x, imin_y,  imax_x, imax_y),
+
+        for rect in self.rects:  # Make sure all are now visible.
+            self.canvas.itemconfigure(rect, state=tk.NORMAL)
+
+    def _get_coords(self, start, end):
+        """ Determine coords of a polygon defined by the start and
+            end points one of the diagonals of a rectangular area.
+        """
+        return (min((start[0], end[0])), min((start[1], end[1])),
+                max((start[0], end[0])), max((start[1], end[1])))
+
+    def hide(self):
+        for rect in self.rects:
+            self.canvas.itemconfigure(rect, state=tk.HIDDEN)
 
 class AutoScrollbar(ttk.Scrollbar):
   '''
@@ -35,7 +160,7 @@ class ZoomCanvas(ttk.Frame):
   page_width: int - width of the underlying canvas cropped to parent size
   page_height: int - height of the underlying canvas cropped to parent size
   '''
-  def __init__(self, root: tk.Tk, page_width: int, page_height: int):
+  def __init__(self, root: tk.Tk, page_width: int, page_height: int, on_selection: typing.Callable[[typing.List[int]], None]):
     self.width = page_width
     self.height = page_height
     self.master = ttk.Frame(root)
@@ -72,6 +197,17 @@ class ZoomCanvas(ttk.Frame):
     self.label_ids: typing.List[tk._CanvasItemId] = []
     self.item_ids: typing.List[typing.List[tk._CanvasItemId]] = []
     self.has_zoomed = False
+    self.selection_obj = SelectionObject(self.canvas, dict(dash=(2,2), stipple="gray25", fill="", outline="red"))
+    self.on_selection = on_selection
+    def on_drag(start, end, **kwarg):
+      self.selection_obj.update(start, end)
+    def on_end(selection):
+      if self.on_selection is not None:
+        (x0, y0), (x1, y1) = selection
+        enclosed = self.canvas.find_enclosed(x0, y0, x1, y1)
+        self.on_selection(enclosed)
+    self.pos_tracker = MousePositionTracker(self.canvas, on_end=on_end)
+    self.pos_tracker.autodraw(command=on_drag)
 
   def rot_point(self, x: float, y: float):
     return x, self.height - y
@@ -107,18 +243,6 @@ class ZoomCanvas(ttk.Frame):
     text_id = self.canvas.create_text(x, y, fill="black", font=("Arial", font_size), text=text)
     return [text_id]
 
-  def unused(self):
-    import random
-    # Plot some optional random rectangles for the test purposes
-    minsize, maxsize, number = 5, 20, 10
-    for _ in range(number):
-      x0 = random.randint(0, self.width - maxsize)
-      y0 = random.randint(0, self.height - maxsize)
-      x1 = x0 + random.randint(minsize, maxsize)
-      y1 = y0 + random.randint(minsize, maxsize)
-      color = ('red', 'orange', 'yellow', 'green', 'blue')[random.randint(0, 4)]
-      self.canvas.create_rectangle(x0, y0, x1, y1, fill=color, activefill='black')
-
   def scroll_y(self, *args, **kwargs):
       ''' Scroll canvas vertically and redraw the image '''
       self.canvas.yview(*args, **kwargs)  # scroll vertically
@@ -131,10 +255,6 @@ class ZoomCanvas(ttk.Frame):
       ''' Remember previous coordinates for scrolling with the mouse '''
       x = self.canvas.canvasx(event.x)
       y = self.canvas.canvasy(event.y)
-      if self.has_zoomed:
-        print("Has zoomed (y,x)", (y,x))
-      else:
-        print("(y, x)", (y, x))
 
       self.canvas.scan_mark(event.x, event.y)
 
@@ -223,6 +343,12 @@ class TkDrawerControlPanel:
     self.canvas.bind_all('<Button-5>',   self.__wheel)  # zoom for Linux, wheel scroll down
     self.canvas.bind_all('<Button-4>',   self.__wheel)  # zoom for Linux, wheel scroll up
 
+  def clear_buttons(self):
+    for button in self.buttons:
+      button.grid_forget()
+      button.destroy()
+    self.buttons = []
+
   def add_button(
     self,
     text: str,
@@ -275,7 +401,7 @@ class TkDrawerControlPanel:
       self.canvas.yview_scroll(-1, what="units")
 
 class TkDrawerMainWindow(ttk.Frame):
-  def __init__(self, root: tk.Tk, window_width: int, window_height: int, page_width: int, page_height: int):
+  def __init__(self, root: tk.Tk, window_width: int, window_height: int, page_width: int, page_height: int, on_selection: typing.Callable[[typing.List[int]], None]):
     ttk.Frame.__init__(self, master=root)
     self.master.title("Pdf Drawer")
     self.master.geometry("{0}x{1}".format(window_width, window_height))
@@ -284,7 +410,7 @@ class TkDrawerMainWindow(ttk.Frame):
     self.master.bind("<Key>", lambda event: self.master.after_idle(self.__keystroke, event))
     self.controlPanel = TkDrawerControlPanel(root=self.master, controls_width=200, controls_height=1_000)
     self.controlPanel.grid(row=0, column=1)
-    self.canvas = ZoomCanvas(root=self.master, page_width=page_width, page_height=page_height)
+    self.canvas = ZoomCanvas(root=self.master, page_width=page_width, page_height=page_height, on_selection=on_selection)
     self.canvas.grid(row=0, column=0)
 
   def __keystroke(self, event):
@@ -305,7 +431,31 @@ class TkDrawer:
     root = tk.Tk()
     self.page_width = width
     self.page_height = height
-    self.app = TkDrawerMainWindow(root=root, window_width=1200, window_height=800, page_width=width, page_height=height)
+    self.app = TkDrawerMainWindow(root=root, window_width=1200, window_height=800, page_width=width, page_height=height, on_selection=self.on_selection)
+    self.id_to_elem: typing.Dict[int, LTJson] = {}
+
+  def on_selection(
+    self,
+    line_ids: typing.List[int],
+  ):
+    self.app.controlPanel.clear_buttons()
+    elems: typing.DefaultDict[LTJson, typing.List[int]] = collections.defaultdict(list)
+    for id in line_ids:
+      if id in self.id_to_elem:
+        elem = self.id_to_elem[id]
+        elems[elem].append(id)
+    for elem, ids in elems.items():
+      text = ""
+      if elem.text is not None:
+        text += elem.text.replace("\n", " ")
+      def on_press(ids: typing.List[int]):
+        self.app.canvas.set_item_visibility(ids)
+
+      self.app.controlPanel.add_button(
+        text="{0} {1} {2}".format(text, pdfminer_class_name(elem), elem.original_path),
+        callback=lambda ids=ids: on_press(ids))
+
+
   def insert_container(
     self,
     elem: LTJson,
@@ -317,6 +467,8 @@ class TkDrawer:
     x0, y0, x1, y1 = elem.bbox
     box = (x0-xmin, y0-ymin, x1-xmin, y1-ymin)
     ids = self.app.canvas.draw_rect(box=box)
+    for id in ids:
+      self.id_to_elem[id] = elem
     self.app.canvas.set_item_visibility(ids, visibility=False)
     text = ""
     if elem.text is not None:
@@ -341,6 +493,8 @@ class TkDrawer:
   ):
 
     ids = self.app.canvas.draw_path(wrapper=wrapper, color="black", xmin=xmin, ymin=ymin)
+    for id in ids:
+      self.id_to_elem[id] = wrapper
     text = ""
     text_idx = None
     if wrapper.text is not None:
@@ -370,6 +524,8 @@ class TkDrawer:
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
     # y1 because we flip the point on the y axis
     ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size))
+    for id in ids:
+      self.id_to_elem[id] = elem
     if draw_buttons:
       def on_press():
         self.app.canvas.set_item_visibility(ids)
