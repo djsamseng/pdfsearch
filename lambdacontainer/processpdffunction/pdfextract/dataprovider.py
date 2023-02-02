@@ -9,8 +9,8 @@ import supabase
 import storage3 # type: ignore
 import debugutils
 
-supabase_url = os.environ.get("SUPABASE_URL") or ""
-supabase_key = os.environ.get("SUPABASE_KEY") or ""
+supabase_url = os.environ.get("SUPABASE_URL") or "1"
+supabase_key = os.environ.get("SUPABASE_KEY") or "1"
 print("Supabase url:", supabase_url, "Key:", supabase_key)
 db_client: supabase.client.Client = supabase.client.create_client(
   supabase_url=supabase_url,
@@ -56,6 +56,22 @@ class DataProvider(metaclass=abc.ABCMeta):
     pass
 
   @abc.abstractmethod
+  def write_processpdf_done(self, pdfkey: str, success: bool):
+    pass
+
+class NullDataProvider(DataProvider):
+  def get_pdf_for_key(self, pdfkey: str) -> typing.Union[None, bytes]:
+    pass
+
+  def write_processpdf_start(self, pdfkey: str, num_steps_total: int):
+    pass
+
+  def write_processpdf_progress(self, pdfkey: str, curr_step: int, message: str):
+    pass
+
+  def write_processpdf_error(self, pdfkey: str, error_message: str):
+    pass
+
   def write_processpdf_done(self, pdfkey: str, success: bool):
     pass
 

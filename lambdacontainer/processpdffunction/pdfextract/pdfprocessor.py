@@ -8,8 +8,7 @@ import time
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 import pdfminer.pdfparser, pdfminer.pdfdocument, pdfminer.pdftypes
 
-import dataprovider
-from pdfextract import pdfindexer, pdfelemtransforms, votesearch, ltjson
+from pdfextract import pdfindexer, pdfelemtransforms, votesearch, dataprovider, ltjson
 
 def get_pdf_num_pages(pdfdata_io: io.BytesIO):
   parser = pdfminer.pdfparser.PDFParser(pdfdata_io)
@@ -56,7 +55,7 @@ class PageProcessor:
 class PdfProcessor:
   def __init__(self,
     pages_gen: typing.Iterator[pdfminer.layout.LTPage],
-    data_provider: dataprovider.SupabaseDataProvider
+    data_provider: dataprovider.DataProvider
   ) -> None:
     self.pages_gen = pages_gen
     self.data_provider = data_provider
@@ -75,9 +74,7 @@ class PdfProcessor:
       description="doors",
       regex="^(?P<class_name>\\d)(?P<elem_type>\\d\\d)"
     )
-    self.lighting_search_rule = votesearch.LightingSearchRule(
-      description="lighting",
-    )
+    self.lighting_search_rule = votesearch.LightingSearchRule()
     search_rules: typing.List[votesearch.SearchRule] = [
       self.window_search_rule,
       self.door_search_rule,
@@ -110,13 +107,18 @@ class PdfProcessor:
   def get_results(self):
     return self.vote_searcher.get_results()
 
-def process_pdf(data_provider: dataprovider.SupabaseDataProvider, pdfkey:str, pdfdata: bytes):
+def process_pdf(
+  data_provider: dataprovider.DataProvider,
+  pdfkey:str,
+  pdfdata: bytes,
+  page_numbers: typing.Union[None, typing.List[int]] = None
+):
   pdfdata_io = io.BytesIO(initial_bytes=pdfdata)
   num_pages = get_pdf_num_pages(pdfdata_io=pdfdata_io)
   num_steps_total = num_pages + 1
   data_provider.write_processpdf_start(pdfkey=pdfkey, num_steps_total=num_steps_total)
 
-  pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io) # 2,5,9
+  pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=page_numbers) # 2,5,9
   processor = PdfProcessor(pages_gen=pages_gen, data_provider=data_provider)
   t0 = time.time()
   t_writing = 0.

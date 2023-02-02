@@ -1,6 +1,7 @@
 
 import collections
 import os
+import pickle
 import time
 import typing
 import argparse
@@ -17,6 +18,7 @@ from . import pdfextracter
 from . import pdfindexer
 from . import pdftkdrawer
 from . import votesearch
+from . import dataprovider, pdfprocessor
 from .ltjson import LTJson, LTJsonResponse, LTJsonEncoder
 
 def find_contains_with_room(
@@ -467,6 +469,53 @@ def findlighting():
   drawer.draw_elems(elems=row_elems, draw_buttons=False, align_top_left=True)
   drawer.show("Below")
 
+def compare_windows_doors(
+  a: votesearch.MultiClassSearchRuleResults,
+  b: votesearch.MultiClassSearchRuleResults,
+):
+  np.testing.assert_array_equal(list(a.keys()), list(b.keys())) # type:ignore
+  for page_key in a.keys():
+    a_page_vals = a[page_key]
+    b_page_vals = b[page_key]
+    np.testing.assert_array_equal(list(a_page_vals.keys()), list(b_page_vals.keys())) # type:ignore
+    for class_key in a_page_vals.keys():
+      a_class_vals = a_page_vals[class_key]
+      b_class_vals = b_page_vals[class_key]
+      np.testing.assert_array_equal( # type:ignore
+        list(a_class_vals.keys()),
+        list(b_class_vals.keys()))
+      for id_key in a_class_vals.keys():
+        a_id_vals = a_class_vals[id_key]
+        b_id_vals = b_class_vals[id_key]
+        np.testing.assert_array_equal(a_id_vals, b_id_vals) # type:ignore
+
+# header: [str]
+# rows: [[str]]
+def compare_schedules(a: typing.Any, b: typing.Any):
+  np.testing.assert_array_equal(a["header"], b["header"]) # type:ignore
+  np.testing.assert_array_equal(a["rows"], b["rows"]) # type:ignore
+
+def process_pdf():
+  data_provider = dataprovider.NullDataProvider()
+  filename = "plan.pdf"
+  with open(filename, mode="rb") as f:
+    pdfdata = f.read()
+  # Test that the processing results are equivalent
+  ltjson_results = pdfprocessor.process_pdf(data_provider=data_provider, pdfkey=filename, pdfdata=pdfdata, page_numbers=[2,5,9])
+  if False:
+    with open("plan_2_5_9.pickle", "wb") as f:
+      pickle.dump(ltjson_results, file=f)
+  with open("plan_2_5_9.pickle", "rb") as f:
+    # windows, doors, houseName, architectName, pageNames, windowSchedule, doorSchedule, lightingSchedule
+    # page_number, class_name, full_id = [LTJsonResponse]
+    saved_results:typing.Any = pickle.load(f)
+
+  compare_windows_doors(saved_results["windows"], ltjson_results["windows"])
+  compare_windows_doors(saved_results["doors"], ltjson_results["doors"])
+  compare_schedules(saved_results["windowSchedule"], ltjson_results["windowSchedule"])
+  compare_schedules(saved_results["doorSchedule"], ltjson_results["doorSchedule"])
+  compare_schedules(saved_results["lightingSchedule"], ltjson_results["lightingSchedule"])
+
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--getall", dest="getall", default=False, action="store_true")
@@ -481,6 +530,7 @@ def parse_args():
   parser.add_argument("--findmeta", dest="findmeta", default=False, action="store_true")
   parser.add_argument("--findschedule", dest="findschedule", default=False, action="store_true")
   parser.add_argument("--findlighting", dest="findlighting", default=False, action="store_true")
+  parser.add_argument("--process", dest="process", default=False, action="store_true")
   parser.add_argument("--x0", dest="x0", type=int, required=False)
   parser.add_argument("--y0", dest="y0", type=int, required=False)
   parser.add_argument("--x1", dest="x1", type=int, required=False)
@@ -511,6 +561,8 @@ def main():
     findschedule()
   elif args.findlighting:
     findlighting()
+  elif args.process:
+    process_pdf()
   else:
     door_labels_should_match()
 

@@ -2,11 +2,9 @@
 import json
 import typing
 
-import dataprovider
-import pdfprocessor
 import debugutils
 
-from pdfextract import ltjson
+from pdfextract import ltjson, pdfprocessor, dataprovider
 
 def process_pdf(pdfId: str):
   data_provider = dataprovider.SupabaseDataProvider(pdfId=pdfId)
