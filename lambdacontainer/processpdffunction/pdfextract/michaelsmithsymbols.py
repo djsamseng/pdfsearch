@@ -259,7 +259,7 @@ def door_labels_should_match():
 def showall(page: typing.Union[int, None] = None):
   elems, width, height = get_pdf(which=0, page_number=page)
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-  drawer.draw_elems(elems=elems, draw_buttons=False)
+  drawer.draw_elems(elems=elems, draw_buttons=False, draw_all_text=False)
   drawer.show("All")
 
 def elems_not_equal(elems: typing.List[LTJson]):
