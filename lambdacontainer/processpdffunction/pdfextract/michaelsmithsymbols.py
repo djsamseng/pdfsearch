@@ -118,7 +118,7 @@ def get_all_symbols(save: bool):
   if save:
     encoder = LTJsonEncoder()
     json_string = encoder.encode(all_symbols)
-    with open("./lambdacontainer/processpdffunction/symbols_michael_smith.json", "w", encoding="utf-8") as f:
+    with open("./symbols_michael_smith.json", "w", encoding="utf-8") as f:
       f.write(json_string)
   else:
     for key, symbol in all_symbols.items():
@@ -126,7 +126,7 @@ def get_all_symbols(save: bool):
       drawer.draw_elems(elems=symbol, align_top_left=True)
       drawer.show(key)
 
-def read_symbols_from_json(dirpath:str="./lambdacontainer/processpdffunction/"):
+def read_symbols_from_json(dirpath:str="./"):
   with open(os.path.join(dirpath, "symbols_michael_smith.json"), "r", encoding="utf-8") as f:
     json_string = f.read()
   symbols_dicts = json.loads(json_string)
@@ -256,8 +256,8 @@ def door_labels_should_match():
   drawer.show("")
 
 
-def showall():
-  elems, width, height = get_pdf(which=1)
+def showall(page: typing.Union[int, None] = None):
+  elems, width, height = get_pdf(which=0, page_number=page)
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   drawer.draw_elems(elems=elems, draw_buttons=False)
   drawer.show("All")
@@ -298,11 +298,11 @@ def test_encode_decode():
 def print_indent(d: votesearch.MergeDict, level: int = 0):
   for key, val in d.items():
     if isinstance(val, (dict, collections.defaultdict)):
-      print(" " * level + key)
+      print(" " * level + str(key))
       print_indent(d=typing.cast(votesearch.MergeDict, val), level=level+1)
     elif isinstance(val, list):
-      val = typing.cast(typing.List[LTJson], val)
-      print(" " * level + key, ":", [v.text for v in val])
+      val = typing.cast(typing.List[LTJsonResponse], val)
+      print(" " * level + key, ":", [v.label for v in val])
 
 def find_by_bbox_and_content_search_rule():
   t0 = time.time()
@@ -316,12 +316,12 @@ def find_by_bbox_and_content_search_rule():
     ], description="doors", regex="(?P<class_name>\\d)(?P<elem_type>\\d\\d)")
   ]
   t1 = time.time()
-  elems, width, height = get_pdf(which=1)
+  elems, width, height = get_pdf(which=0, page_number=9)
   t2 = time.time()
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
   vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=[])
 
-  vote_searcher.process_page(page_number=2, elems=elems, indexer=indexer)
+  vote_searcher.process_page(page_number=9, elems=elems, indexer=indexer)
   vote_searcher.refine()
   all_results = vote_searcher.get_results()
   t3 = time.time()
@@ -331,18 +331,20 @@ def find_by_bbox_and_content_search_rule():
 
   print("Took:", t3-t2 + t1-t0)
 
-  def draw_results(results: typing.Dict[str, typing.Any]):
+  def draw_results(name:str, results: typing.Dict[str, typing.Any]):
     all_found: typing.List[typing.Any] = []
     for _, val in results.items():
       for _, valwt in val.items():
         for _, valwid in valwt.items():
-          all_found.extend(valwid)
+          all_found.extend([LTJson(serialized_json=v.as_dict()) for v in valwid])
+    print(name, "num found:", len(all_found))
+    return
     drawer = pdftkdrawer.TkDrawer(width=width, height=height)
     drawer.draw_elems(elems=all_found, draw_buttons=True, align_top_left=False)
     drawer.show("")
 
-  for results in all_results.values():
-    draw_results(results)
+  for key, results in all_results.items():
+    draw_results(key, results)
 
   # weird = all_results["windows"]["Page 2"]["F"]["01"]
 
@@ -544,14 +546,15 @@ def parse_args():
   parser.add_argument("--y0", dest="y0", type=int, required=False)
   parser.add_argument("--x1", dest="x1", type=int, required=False)
   parser.add_argument("--y1", dest="y1", type=int, required=False)
+  parser.add_argument("--page", dest="page", type=int, required=False)
   return parser.parse_args()
 
 def main():
   args = parse_args()
   if args.test:
     test_encode_decode()
-  elif args.showall:
-    showall()
+  elif args.showall or args.page is not None:
+    showall(args.page)
   elif args.x0 is not None and args.y0 is not None and args.x1 is not None and args.y1 is not None:
     # python3 michaelsmithsymbols.py --y0 306 --x0 549 --y1 329 --x1 579
     if args.find:

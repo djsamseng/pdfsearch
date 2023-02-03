@@ -559,7 +559,9 @@ class TkDrawer:
       elif wrapper.original_path is not None and wrapper.linewidth is not None:
         if wrapper.linewidth > 0:
           self.draw_path(wrapper=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
-      elif wrapper.text is not None:
+      elif wrapper.text is not None or wrapper.label is not None:
+        if wrapper.text is None:
+          wrapper.text = wrapper.label
         self.insert_text(elem=wrapper, parent_idx=wrapper.parent_idx, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
 
       else:

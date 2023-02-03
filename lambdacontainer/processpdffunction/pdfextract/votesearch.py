@@ -99,6 +99,15 @@ MultiClassSearchRuleResults = typing.DefaultDict[
     ]
   ]
 ]
+
+class RowHeader(typing.TypedDict):
+  header: typing.List[str]
+  rows: typing.List[typing.List[str]] # TODO: Replace with positions and what they map to etc.
+
+PageScheduleSearchRuleResults = typing.Dict[
+  int, # page_number
+  RowHeader,
+]
 def create_results_dict() -> MultiClassSearchRuleResults:
   return collections.defaultdict( # page_number
     lambda: collections.defaultdict( # class_name
@@ -229,6 +238,7 @@ class WindowScheduleSearchRule(PageRecognizerRule):
   def __init__(self, window_search_rule: RegexShapeSearchRule) -> None:
     self.window_search_rule = window_search_rule
     self.description = "windowSchedule"
+    self.results: PageScheduleSearchRuleResults = {}
     self.header_row = None
     self.rows = None
 
@@ -239,10 +249,11 @@ class WindowScheduleSearchRule(PageRecognizerRule):
       has_header=True,
       header_above_table=False,
     )
-    if header_row is not None:
-      self.header_row = [h.text for h in header_row]
-    if rows is not None:
-      self.rows = [[r.text for r in row] for row in rows]
+    if header_row is not None and rows is not None:
+      self.results[page_number] = {
+        "header": [h.text for h in header_row],
+        "rows": [[r.text for r in row] for row in rows],
+      }
     def add_match_to_results(
       results: MultiClassSearchRuleResults,
       page_number: int,
@@ -256,13 +267,8 @@ class WindowScheduleSearchRule(PageRecognizerRule):
     self.window_search_rule.add_match_to_results = add_match_to_results
 
   def get_results(self) -> typing.Dict[str, typing.Any]:
-    if self.rows is None:
-      return {}
     return {
-      self.description: {
-        "header": self.header_row,
-        "rows": self.rows,
-      }
+      self.description: self.results
     }
 
 class DoorScheduleSearchRule(PageRecognizerRule):

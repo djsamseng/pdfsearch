@@ -63,8 +63,10 @@ class LTJson:
 
     if serialized_json is not None:
       self.bbox = serialized_json["bbox"]
-      self.width = serialized_json["width"]
-      self.height = serialized_json["height"]
+      if "width" in serialized_json:
+        self.width = serialized_json["width"]
+      if "height" in serialized_json:
+        self.height = serialized_json["height"]
       if "label" in serialized_json:
         self.label = serialized_json["label"]
       if "text" in serialized_json:
@@ -75,15 +77,18 @@ class LTJson:
         self.original_path = serialized_json["original_path"]
       if "linewidth" in serialized_json:
         self.linewidth = serialized_json["linewidth"]
-      self.is_container = serialized_json["is_container"]
-      self.is_annotation = serialized_json["is_annotation"]
-      # TODO: Regen saved json symbols and remove is_line check
+      if "is_container" in serialized_json:
+        self.is_container = serialized_json["is_container"]
+      if "is_annotation" in serialized_json:
+       self.is_annotation = serialized_json["is_annotation"]
       if "is_line" in serialized_json:
         self.is_line = serialized_json["is_line"]
       if "is_rect" in serialized_json:
         self.is_rect = serialized_json["is_rect"]
-      self.parent_idx = serialized_json["parent_idx"]
-      self.children_idxes = serialized_json["children_idxes"]
+      if "parent_idx" in serialized_json:
+        self.parent_idx = serialized_json["parent_idx"]
+      if "children_idxes" in serialized_json:
+        self.children_idxes = serialized_json["children_idxes"]
 
   def __eq__(self, other: object) -> bool:
     if not debug_utils.is_debug:
