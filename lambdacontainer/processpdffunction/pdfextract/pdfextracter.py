@@ -6,7 +6,7 @@ import re
 import rtree
 
 from . import pdfindexer, pdfelemtransforms
-from .ltjson import LTJson
+from .ltjson import LTJson, BboxType
 
 def extract_page_name(indexer: pdfindexer.PdfIndexer):
   orig_height = 2160
@@ -129,9 +129,10 @@ def remove_duplicate_bbox_text(items: typing.List[LTJson]):
   return out
 
 class ExtractedRowElem():
-  def __init__(self, text:str, elems: typing.List[LTJson]) -> None:
+  def __init__(self, text:str, elems: typing.List[LTJson], bbox: BboxType) -> None:
     self.text = text
     self.elems = elems
+    self.bbox = bbox
 
 def extract_row(
   table_elems: typing.List[LTJson],
@@ -171,7 +172,7 @@ def extract_row(
     elems_in_this_box.sort(key=lambda x: x.bbox[1])
     row_text = " ".join([t.text for t in elems_in_this_box if t.text is not None])
     row_text = row_text.replace("\n", " ").strip().replace("  ", " ")
-    row.append(ExtractedRowElem(text=row_text, elems=elems_in_this_box))
+    row.append(ExtractedRowElem(text=row_text, elems=elems_in_this_box, bbox=cell_bbox))
 
   return row
 

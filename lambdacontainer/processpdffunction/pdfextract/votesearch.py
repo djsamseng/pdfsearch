@@ -2,26 +2,20 @@
 from abc import ABCMeta, abstractmethod
 import collections
 import functools
+import os
 import re
 import typing
+import uuid
 
 import rtree
 
 from . import pdfindexer, pdfextracter
-from .ltjson import LTJson, PdfElem, PdfSchedule, PdfScheduleCell, PdfScheduleRow,\
-   PdfScheduleCellMatchCriteria, PdfSummaryJson, PdfSummaryJsonItem, PdfSummaryJsonSchedules
+from .ltjson import LTJson, BboxType, PdfElem, PdfSchedule, PdfScheduleCell, PdfScheduleRow,\
+   PdfScheduleCellMatchCriteria, PdfSummaryJson, PdfSummaryJsonItem, PdfSummaryJsonSchedules, \
+    PdfItemPtr
 
-MergeDict = typing.Dict[str, typing.Any]
-def merge(
-  dest: MergeDict,
-  other: MergeDict
-):
-  for key, val in other.items():
-    if isinstance(val, (dict, collections.defaultdict)):
-      node = dest.setdefault(key, {})
-      merge(dest=node, other=typing.cast(MergeDict, val))
-    else:
-      dest[key] = val
+def get_uuid() -> str:
+  return uuid.uuid4().hex
 
 def item_is_multiline_text(item: LTJsonResponse):
   if item.label is not None:
@@ -263,43 +257,6 @@ class WindowScheduleSearchRule(PageRecognizerRule):
       self.description: self.results
     }
 
-class DoorScheduleSearchRule(PageRecognizerRule):
-  def __init__(self, door_search_rule: RegexShapeSearchRule) -> None:
-    self.door_search_rule = door_search_rule
-    self.description = "doorSchedule"
-    self.header_row = None
-    self.rows = None
-
-  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    header_row, rows = pdfextracter.extract_table(
-      indexer=indexer,
-      text_key="door schedule",
-      has_header=True,
-      header_above_table=False,
-    )
-    if header_row is not None:
-      self.header_row = [h.text for h in header_row]
-    if rows is not None:
-      self.rows = [[r.text for r in row] for row in rows]
-
-      def add_match_to_results(
-        results: MultiClassSearchRuleResults,
-        page_number: int,
-        class_name: str,
-        elem_type: str,
-        elem: LTJsonResponse
-      ):
-        full_id = class_name + elem_type
-        results[page_number][full_id][full_id].append(elem)
-      self.door_search_rule.add_match_to_results = add_match_to_results
-
-  def get_results(self) -> typing.Dict[str, typing.Any]:
-    return {
-      self.description: {
-        "header": self.header_row,
-        "rows": self.rows,
-      }
-    }
 
 class LightingScheduleSearchRule(PageRecognizerRule):
   def __init__(self, lighting_search_rule: LightingSearchRule) -> None:
@@ -360,7 +317,7 @@ class LightingScheduleSearchRule(PageRecognizerRule):
       merge(dest=out, other=rule.get_results())
     return out
 
-class PageNameSearchRule(PageRecognizerRule):
+class PageNameSearchRule(PageSearchRule):
   def __init__(self, description: str) -> None:
     self.page_names: typing.Dict[int, str] = {}
     self.description = description
@@ -374,42 +331,223 @@ class PageNameSearchRule(PageRecognizerRule):
       self.description: self.page_names
     }
 
-# doorScheduleSearch -> rows -> each row has a search rule
-# Every search rule returns
-class SearchRuleResults(typing.TypedDict):
-  items: typing.Dict[int, PdfSummaryJsonItem]
-  schedules: typing.Union[None, PdfSummaryJsonSchedules]
+class DoorScheduleSearchRule(PageSearchRule):
+  def __init__(self) -> None:
+    self.elem_search_rule = None
+    self.header_row = None
+    self.rows = None
+    self.items: typing.Dict[int, PdfSummaryJsonItem] = {}
+
+  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> typing.List[SearchRule]:
+    header_row, rows = pdfextracter.extract_table(
+      indexer=indexer,
+      text_key="door schedule",
+      has_header=True,
+      header_above_table=False,
+    )
+    if header_row is not None and rows is not None:
+      self.header_row = [h.text for h in header_row]
+      self.rows = [[r.text for r in row] for row in rows]
+
+      self.elem_search_rule = RegexShapeSearchRule(
+        shape_matches=[],
+        description="",
+        regex=""
+      )
+    if self.elem_search_rule is not None:
+      return [self.elem_search_rule]
+    return []
+
+  def finish_page(self, page_number: int) -> None:
+    items_found = None
+    if self.elem_search_rule is not None:
+      items_found = self.elem_search_rule.get_and_clear_results()
+    if self.header_row is not None and self.rows is not None:
+
+
+      def add_match_to_results(
+        results: MultiClassSearchRuleResults,
+        page_number: int,
+        class_name: str,
+        elem_type: str,
+        elem: LTJsonResponse
+      ):
+        full_id = class_name + elem_type
+        results[page_number][full_id][full_id].append(elem)
+      self.door_search_rule.add_match_to_results = add_match_to_results
+
+  def get_results(self) -> typing.Dict[str, typing.Any]:
+    return {
+      self.description: {
+        "header": self.header_row,
+        "rows": self.rows,
+      }
+    }
+
+import json
+def read_symbols_from_json():
+  dirpath = "./"
+  with open(os.path.join(dirpath, "symbols_michael_smith.json"), "r", encoding="utf-8") as f:
+    json_string = f.read()
+  symbols_dicts = json.loads(json_string)
+  symbols: typing.Dict[str, typing.List[LTJson]] = dict()
+  for key, serialized_elems in symbols_dicts.items():
+    elems: typing.List[LTJson] = []
+    for serialized_json in serialized_elems:
+      elems.append(LTJson(serialized_json=serialized_json))
+    symbols[key] = elems
+  return symbols
+
+global_symbols = read_symbols_from_json()
+
+MergeDict = typing.Dict[str, typing.Any]
+def merge_impl(
+  dest: MergeDict,
+  other: MergeDict
+):
+  for key, val in other.items():
+    if isinstance(val, (dict, collections.defaultdict)):
+      node = dest.setdefault(key, {})
+      merge_impl(dest=node, other=typing.cast(MergeDict, val))
+    elif isinstance(val, str) and len(val) == 0:
+      dest[key] = val
+    else:
+      print("TODO: merge onConflict")
+      dest[key] = val
+
+def merge(
+  dest: PdfSummaryJson,
+  other: PdfSummaryJson
+):
+  merge_impl(typing.cast(MergeDict, dest), typing.cast(MergeDict, other))
+
 
 class SearchRule(metaclass=ABCMeta):
   @abstractmethod
-  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+  def process_page(
+    self,
+    page_number: int,
+    elems: typing.List[LTJson],
+    indexer: pdfindexer.PdfIndexer
+  ):
     pass
 
   @abstractmethod
-  def get_results(self) -> SearchRuleResults:
+  def get_results(self) -> typing.Union[PdfSummaryJson, typing.List[PdfElem]]:
     pass
 
-class PageRecognizerRule(metaclass=ABCMeta):
-  @abstractmethod
-  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> typing.List[SearchRule]:
-    pass
+def make_empty_pdfsummarryjson() -> PdfSummaryJson:
+  return {
+    "items": {},
+    "schedules": {
+      "doors": {},
+      "windows": {},
+      "lighting": {},
+    },
+    "houseName": "",
+    "architectName": "",
+    "pageNames": {}
+  }
 
-  @abstractmethod
-  def finish_page(self) -> None:
-    pass
-
-  @abstractmethod
-  def get_results(self) -> SearchRuleResults:
-    pass
-
-class PdfSearcher:
+class ItemSearchRule(SearchRule):
   def __init__(
     self,
-    elem_search_rules: typing.List[SearchRule],
-    page_search_rules: typing.List[PageRecognizerRule]
+    row_ptr: PdfItemPtr,
+    regex: str,
+    shape_matches: typing.List[LTJson] # TODO: Replace with just the shape
   ) -> None:
-    self.elem_search_rules = elem_search_rules
-    self.page_search_rules = page_search_rules
+    self.row_ptr = row_ptr
+
+  def process_page(self, page_number: int, elems: typing.List[LTJson], indexer: pdfindexer.PdfIndexer):
+    pass
+
+  def get_results(self) -> typing.List[PdfElem]:
+    return []
+
+
+class WindowScheduleSearchRule(SearchRule):
+  def __init__(self) -> None:
+    self.window_item_search_rules: typing.List[ItemSearchRule] = []
+    self.results: PdfSummaryJson = make_empty_pdfsummarryjson()
+
+  def process_page(self, page_number: int, elems: typing.List[LTJson], indexer: pdfindexer.PdfIndexer):
+    header_row, rows = pdfextracter.extract_table(
+      indexer=indexer,
+      text_key="window schedule",
+      has_header=True,
+      header_above_table=False,
+    )
+    if header_row is not None and rows is not None:
+      for item_search_rule in self.window_item_search_rules:
+        rule_results = item_search_rule.get_results()
+        for rule_result in rule_results:
+          result_id = get_uuid()
+          self.results["items"][page_number]["elems"][result_id] = rule_result
+      self.window_item_search_rules = []
+      header_row_id = get_uuid()
+      self.results["schedules"]["windows"][page_number] = {
+        "headerRowPtr": {
+          "page": page_number,
+          "id": header_row_id,
+        },
+        "rowsRowPtrs": []
+      }
+      for row in rows:
+        id_col_value = row[0]
+        row_id = get_uuid()
+        self.results["schedules"]["windows"][page_number]["rowsRowPtrs"].append({
+          "page": page_number,
+          "id": row_id
+        })
+        for idx in range(len(header_row)):
+          cell_id = get_uuid()
+          self.results["items"][page_number]["cells"][cell_id] = {
+            "key": header_row[idx].text,
+            "label": row[idx].text,
+            "bbox": row[idx].bbox, # TODO: return bbox
+            "rowPtr": {
+              "page": page_number,
+              "id": row_id
+            },
+            "matchCriteria": None
+          }
+        self.window_item_search_rules.append(ItemSearchRule(
+          row_ptr={
+            "page": page_number,
+            "id": row_id,
+          },
+          regex="^(?P<label>{0})".format(id_col_value.text.replace("##", "\\d\\d")),
+          shape_matches=[global_symbols["window_label"][0]]
+        ))
+
+    for item_search_rule in self.window_item_search_rules:
+      item_search_rule.process_page(page_number=page_number, elems=elems, indexer=indexer)
+
+  def get_results(self) -> PdfSummaryJson:
+    return self.results
+
+class PdfSearcher:
+  '''
+  Layer 1: Look at the page and classify regions of interest
+  Layer 2: Extract information from that region
+  Layer 3: Vote to see if extracted information makes sense together
+  Layer 4: Form a consensus
+  Divide Conquer Merge
+  Divide - multiple layers = classify regions (ex: layer 1. See Window Schedule layer 2. Find table box 3. Find rows 4. Find cells)
+  Conquer - pull out the data and recognize it / associate it with memories
+  Merge - Does this data make sense in context? If not, restart the divide, conquer, merge with the additional information
+  Essentially this is a neural network view to writing a function that calls sub functions
+  However when we divide, we want to pass down what we know (ex: the window schedule)
+  So we go elem by elem, hey I might recognize this "W" might start "Window Schedule"!
+  Also we might need to do another loop. I recognized a window but I don't know what to do with it until we get the schedule data
+  A search rule may create and own sub rules. They are responsible for merging back upward
+  '''
+  def __init__(
+    self
+  ) -> None:
+    self.search_rules: typing.List[SearchRule] = [
+
+    ]
 
   def process_page(
     self,
@@ -417,60 +555,15 @@ class PdfSearcher:
     elems: typing.List[LTJson],
     indexer: pdfindexer.PdfIndexer
   ):
-    page_elem_search_rules: typing.List[SearchRule] = []
-    for page_rule in self.page_search_rules:
-      add_page_elem_search_rules = page_rule.process_page(page_number=page_number, indexer=indexer)
-      page_elem_search_rules.extend(add_page_elem_search_rules)
-    for elem in elems:
-      for rule in self.elem_search_rules:
-        rule.process_elem(elem=elem, page_number=page_number, indexer=indexer)
-      for rule in page_elem_search_rules:
-        rule.process_elem(elem=elem, page_number=page_number, indexer=indexer)
-    for page_rule in self.page_search_rules:
-      page_rule.finish_page()
+    for rule in self.search_rules:
+      rule.process_page(page_number=page_number, elems=elems, indexer=indexer)
 
   def refine(self):
     pass
 
   def get_results(self) -> PdfSummaryJson:
-    return {
-      "items": {},
-      "schedules": {
-        "doors": {},
-        "windows": {},
-        "lighting": {},
-      },
-      "houseName": "",
-      "architectName": "",
-      "pageNames": {}
-    }
-
-class VoteSearcher:
-  def __init__(self,
-    search_rules: typing.List[SearchRule],
-    page_rules: typing.List[PageRecognizerRule],
-  ) -> None:
-    self.search_rules = search_rules
-    self.page_rules = page_rules
-
-  def process_page(
-    self,
-    page_number: int,
-    elems: typing.List[LTJson],
-    indexer: pdfindexer.PdfIndexer
-  ):
-    for rule in self.page_rules:
-      rule.process_page(page_number=page_number, indexer=indexer)
-    for elem in elems:
-      for rule in self.search_rules:
-        rule.process_elem(elem=elem, page_number=page_number, indexer=indexer)
-
-  def refine(self) -> None:
-    return
-
-  def get_results(self):
-    results: typing.Dict[str, typing.Any] = {}
-    for rule in self.search_rules + self.page_rules:
+    results: PdfSummaryJson = make_empty_pdfsummarryjson()
+    for rule in self.search_rules:
       rule_results = rule.get_results()
       merge(dest=results, other=rule_results)
     return results
