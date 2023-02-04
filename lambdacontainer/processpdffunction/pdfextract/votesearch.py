@@ -8,7 +8,8 @@ import typing
 import rtree
 
 from . import pdfindexer, pdfextracter
-from .ltjson import LTJson, LTJsonResponse
+from .ltjson import LTJson, PdfElem, PdfSchedule, PdfScheduleCell, PdfScheduleRow,\
+   PdfScheduleCellMatchCriteria, PdfSummaryJson, PdfSummaryJsonItem, PdfSummaryJsonSchedules
 
 MergeDict = typing.Dict[str, typing.Any]
 def merge(
@@ -71,24 +72,6 @@ def remove_duplicate_bbox(items: typing.List[LTJson]):
       out.append(item)
   return out
 
-class SearchRule(metaclass=ABCMeta):
-  @abstractmethod
-  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    pass
-
-  @abstractmethod
-  def get_results(self) -> typing.Dict[str, typing.Any]:
-    pass
-
-class PageRecognizerRule(metaclass=ABCMeta):
-  @abstractmethod
-  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    pass
-
-  @abstractmethod
-  def get_results(self) -> typing.Dict[str, typing.Any]:
-    pass
-
 MultiClassSearchRuleResults = typing.DefaultDict[
   int, # page_number
   typing.DefaultDict[
@@ -116,6 +99,9 @@ def create_results_dict() -> MultiClassSearchRuleResults:
       )
     )
   )
+
+
+
 class RegexShapeSearchRule(SearchRule):
   def __init__(self, shape_matches: typing.List[LTJson], description: str, regex: str) -> None:
     '''
@@ -161,8 +147,14 @@ class RegexShapeSearchRule(SearchRule):
         max_dist=2.
       )
       if len(matching_curves) > 0:
-        matching_shape = LTJsonResponse(elem=matching_curves[0], page_number=page_number)
-        matching_shape.label = elem.text
+        matching_shape: PdfElem = {
+          "label": elem.text,
+          "bbox": elem.bbox,
+          "rowPtr": {
+            "page": 0, # page of schedule
+            "id": "" # id of schedule row
+          }
+        }
         self.add_match_to_results(
           results=self.results,
           page_number=page_number,
@@ -380,6 +372,77 @@ class PageNameSearchRule(PageRecognizerRule):
   def get_results(self) -> typing.Dict[str, typing.Any]:
     return {
       self.description: self.page_names
+    }
+
+# doorScheduleSearch -> rows -> each row has a search rule
+# Every search rule returns
+class SearchRuleResults(typing.TypedDict):
+  items: typing.Dict[int, PdfSummaryJsonItem]
+  schedules: typing.Union[None, PdfSummaryJsonSchedules]
+
+class SearchRule(metaclass=ABCMeta):
+  @abstractmethod
+  def process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    pass
+
+  @abstractmethod
+  def get_results(self) -> SearchRuleResults:
+    pass
+
+class PageRecognizerRule(metaclass=ABCMeta):
+  @abstractmethod
+  def process_page(self, page_number: int, indexer: pdfindexer.PdfIndexer) -> typing.List[SearchRule]:
+    pass
+
+  @abstractmethod
+  def finish_page(self) -> None:
+    pass
+
+  @abstractmethod
+  def get_results(self) -> SearchRuleResults:
+    pass
+
+class PdfSearcher:
+  def __init__(
+    self,
+    elem_search_rules: typing.List[SearchRule],
+    page_search_rules: typing.List[PageRecognizerRule]
+  ) -> None:
+    self.elem_search_rules = elem_search_rules
+    self.page_search_rules = page_search_rules
+
+  def process_page(
+    self,
+    page_number: int,
+    elems: typing.List[LTJson],
+    indexer: pdfindexer.PdfIndexer
+  ):
+    page_elem_search_rules: typing.List[SearchRule] = []
+    for page_rule in self.page_search_rules:
+      add_page_elem_search_rules = page_rule.process_page(page_number=page_number, indexer=indexer)
+      page_elem_search_rules.extend(add_page_elem_search_rules)
+    for elem in elems:
+      for rule in self.elem_search_rules:
+        rule.process_elem(elem=elem, page_number=page_number, indexer=indexer)
+      for rule in page_elem_search_rules:
+        rule.process_elem(elem=elem, page_number=page_number, indexer=indexer)
+    for page_rule in self.page_search_rules:
+      page_rule.finish_page()
+
+  def refine(self):
+    pass
+
+  def get_results(self) -> PdfSummaryJson:
+    return {
+      "items": {},
+      "schedules": {
+        "doors": {},
+        "windows": {},
+        "lighting": {},
+      },
+      "houseName": "",
+      "architectName": "",
+      "pageNames": {}
     }
 
 class VoteSearcher:

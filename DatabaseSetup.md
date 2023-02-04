@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS pdf_processing_progress (
 
 
 #### With Users
+- [https://supabase.com/docs/guides/getting-started/tutorials/with-nextjs#set-up-the-database-schema](https://supabase.com/docs/guides/getting-started/tutorials/with-nextjs#set-up-the-database-schema)
 ```sql
 CREATE TABLE IF NOT EXISTS pdf_summary (
   pdf_id TEXT PRIMARY KEY,

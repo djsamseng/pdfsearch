@@ -198,66 +198,49 @@ class LTJson:
         out[key] = self.__dict__[key]
     return out
 
-
-def to_precision(val: float):
-  return round(val, 3)
-
-class LTJsonResponse:
-  def __init__(
-    self,
-    elem: LTJson,
-    page_number: int,
-  ):
-    x0, y0, x1, y1 = elem.bbox
-    self.bbox = (to_precision(x0), to_precision(y0), to_precision(x1), to_precision(y1))
-    self.label = elem.label
-    self.page_number = page_number
-
-  def as_dict(self):
-    out: typing.Dict[str, typing.Any] = dict()
-    for key in self.__dict__.keys():
-      if not key.startswith("_{0}__".format(self.__class__.__name__)):
-        out[key] = self.__dict__[key]
-    return out
-
-  def __hash__(self) -> int:
-    return hash(self.__str__())
-
-  def __repr__(self) -> str:
-    return self.__str__()
-
-  def __str__(self) -> str:
-    return json.dumps(self.as_dict())
-
-  def __eq__(self, other: object) -> bool:
-    if not debug_utils.is_debug:
-      print("===== __eq__ should not be called in production =====")
-      return False
-    if not isinstance(other, LTJsonResponse):
-      return False
-    for key in self.__dict__.keys():
-      if key == "bbox":
-        if not self.__eq_bbox(other):
-          return False
-      elif self.__dict__[key] != other.__dict__[key]:
-        return False
-    return True
-
-  def __eq_bbox(self, other: object) -> bool:
-    if not debug_utils.is_debug:
-      print("===== __eq_bbox should not be called in production =====")
-      return False
-    if not isinstance(other, LTJsonResponse):
-      return False
-    for itr in range(len(self.bbox)):
-      if abs(self.bbox[itr] - other.bbox[itr]) > 0.1:
-        return False
-    return True
-
 class LTJsonEncoder(json.JSONEncoder):
   def default(self, o: typing.Any):
     if isinstance(o, LTJson):
       return o.as_dict()
-    if isinstance(o, LTJsonResponse):
-      return o.as_dict()
     return None
+
+class PdfItemPtr(typing.TypedDict):
+  page: int
+  id: str
+class PdfSchedulePtr(typing.TypedDict):
+  page: int
+  scheduleName: str
+class PdfElem(typing.TypedDict):
+  label: str
+  bbox: BboxType
+  rowPtr: PdfItemPtr
+class PdfScheduleRow(typing.TypedDict):
+  elems: typing.List[PdfItemPtr]
+  cells: typing.List[PdfItemPtr]
+class PdfSchedule(typing.TypedDict):
+  headerRowPtr: PdfItemPtr
+  rowsRowPtrs: typing.List[PdfItemPtr]
+class PdfScheduleCellMatchCriteria(typing.TypedDict):
+  schedulePtr: PdfSchedulePtr
+  matchCellKey: str
+  matchCellLabel: str
+class PdfScheduleCell(typing.TypedDict):
+  key: str
+  label: str
+  bbox: BboxType
+  rowPtr: PdfItemPtr
+  matchCriteria: typing.Union[None, PdfScheduleCellMatchCriteria]
+class PdfSummaryJsonItem(typing.TypedDict):
+  elems: typing.Dict[str, PdfElem]
+  rows: typing.Dict[str, PdfScheduleRow]
+  cells: typing.Dict[str, PdfScheduleCell]
+class PdfSummaryJsonSchedules(typing.TypedDict):
+  doors: typing.Dict[int, PdfSchedule]
+  windows: typing.Dict[int, PdfSchedule]
+  lighting: typing.Dict[int, PdfSchedule]
+class PdfSummaryJson(typing.TypedDict):
+  items: typing.Dict[int, PdfSummaryJsonItem]
+  schedules: PdfSummaryJsonSchedules
+  houseName: str
+  architectName: str
+  pageNames: typing.Dict[int, str]
