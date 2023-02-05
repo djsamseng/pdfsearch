@@ -200,12 +200,23 @@ class ItemSearchRule(SearchRule):
       return
     groups = match.groupdict()
     label = groups["label"]
+    if len(label) == 0:
+      return
     around_bbox = (
       elem.bbox[0] - self.radius,
       elem.bbox[1] - self.radius,
       elem.bbox[2] + self.radius,
       elem.bbox[3] + self.radius,
     )
+    #  30847    0.062    0.000    0.103    0.000 layout.py:360(__init__) LTChar
+    #   8279    0.003    0.000    0.016    0.000 layout.py:483(__init__) LTTextContainer
+    #  76655    0.112    0.000    0.184    0.000 ltjson.py:15(__init__)
+    # 108492    0.452    0.000  146.521    0.001 pdfindexer.py:50(find_contains)
+    # so at most we need to process 8279 elements
+    # But we have 100 regexes which gets to 108492
+    # Maybe just making the regex more strict?
+    # That gets us down to
+    #    294    0.002    0.000    0.275    0.001 pdfindexer.py:50(find_contains)
     around_elems = indexer.find_contains(bbox=around_bbox)
     for shape in self.shape_matches:
       matching_curves = pdfindexer.find_similar_curves(
