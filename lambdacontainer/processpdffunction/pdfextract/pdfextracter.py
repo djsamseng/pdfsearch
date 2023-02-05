@@ -100,11 +100,6 @@ def is_line_horizontal(elem: LTJson):
     return True
   return False
 
-def bbox_intersection_area(a: pdfelemtransforms.BboxType, b: pdfelemtransforms.BboxType):
-  dx = max(a[0], b[0]) - min(a[2], b[2])
-  dy = max(a[1], b[1]) - min(a[3], b[3])
-  return dx * dy
-
 def remove_duplicate_bbox_text(items: typing.List[LTJson]):
   def item_size(item: LTJson):
     x0, y0, x1, y1 = item.bbox

@@ -86,6 +86,11 @@ def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: Bbox
 
   return out
 
+def bbox_intersection_area(a: BboxType, b: BboxType):
+  dx = max(a[0], b[0]) - min(a[2], b[2])
+  dy = max(a[1], b[1]) - min(a[3], b[3])
+  return dx * dy
+
 def bounding_bbox(elems: typing.List[LTJson]):
   if len(elems) == 0:
     return 0, 0, 1, 1
