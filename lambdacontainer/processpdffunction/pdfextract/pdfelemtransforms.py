@@ -85,3 +85,19 @@ def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: Bbox
       old_idx_to_new_idx[old_idx] = len(out) - 1
 
   return out
+
+def bounding_bbox(elems: typing.List[LTJson]):
+  if len(elems) == 0:
+    return 0, 0, 1, 1
+  x0, y0, x1, y1 = elems[0].bbox
+  xmin = x0
+  ymin = y0
+  xmax = x1
+  ymax = y1
+  for elem in elems:
+    x0, y0, x1, y1 = elem.bbox
+    xmin = min(xmin, x0)
+    ymin = min(ymin, y0)
+    xmax = max(xmax, x1)
+    ymax = max(ymax, y1)
+  return xmin, ymin, xmax, ymax

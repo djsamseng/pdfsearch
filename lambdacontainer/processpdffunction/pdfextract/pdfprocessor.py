@@ -29,29 +29,6 @@ def read_symbols_from_json():
     symbols[key] = elems
   return symbols
 
-# Recognizer is the opposite of searching in terms of datastructures
-# Recognizer is good for classifying areas
-# Recognizer easily misses things
-# Searching is good for pulling together what I recognized
-# Searching easily finds things that don't count
-# 1. Take a quick look and recognize areas
-# 2. This gives me a good idea of what to search for on this page and where
-class ArchitectRecognizer:
-  def __init__(self) -> None:
-    pass
-
-class SymbolRecognizer:
-  def __init__(self, ) -> None:
-    pass
-
-class TableRecognizer:
-  def __init__(self) -> None:
-    pass
-
-class PageProcessor:
-  def __init__(self) -> None:
-    self.architect_vote = []
-
 class PdfProcessor:
   def __init__(self,
     pages_gen: typing.Iterator[pdfminer.layout.LTPage],
@@ -59,35 +36,7 @@ class PdfProcessor:
   ) -> None:
     self.pages_gen = pages_gen
     self.data_provider = data_provider
-    symbols = read_symbols_from_json()
-    self.window_search_rule = votesearch.RegexShapeSearchRule(
-      shape_matches=[
-        symbols["window_label"][0],
-      ],
-      description="windows",
-      regex="^(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"
-    )
-    self.door_search_rule = votesearch.RegexShapeSearchRule(
-      shape_matches=[
-        symbols["door_label"][0],
-      ],
-      description="doors",
-      regex="^(?P<class_name>\\d)(?P<elem_type>\\d\\d)"
-    )
-    self.lighting_search_rule = votesearch.LightingSearchRule()
-    search_rules: typing.List[votesearch.SearchRule] = [
-      self.window_search_rule,
-      self.door_search_rule,
-      votesearch.HouseNameSearchRule(description="houseName"),
-      votesearch.ArchitectNameSearchRule(description="architectName"),
-    ]
-    page_rules = [
-      votesearch.PageNameSearchRule(description="pageNames"),
-      votesearch.WindowScheduleSearchRule(window_search_rule=self.window_search_rule),
-      votesearch.DoorScheduleSearchRule(door_search_rule=self.door_search_rule),
-      votesearch.LightingScheduleSearchRule(lighting_search_rule=self.lighting_search_rule),
-    ]
-    self.vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=page_rules)
+    self.searcher = votesearch.PdfSearcher()
     self.processing_time = 0.
 
   def process_page(self):
@@ -98,14 +47,14 @@ class PdfProcessor:
       elems = pdfelemtransforms.get_underlying_parent_links(elems=page)
       indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
 
-      self.vote_searcher.process_page(page_number=page_number, elems=elems, indexer=indexer)
-      self.vote_searcher.refine()
+      self.searcher.process_page(page_number=page_number, elems=elems, indexer=indexer)
+      self.searcher.refine()
       t1 = time.time()
       self.processing_time += t1 - t0
       yield
 
   def get_results(self):
-    return self.vote_searcher.get_results()
+    return self.searcher.get_results()
 
 def process_pdf(
   data_provider: dataprovider.DataProvider,
@@ -117,8 +66,7 @@ def process_pdf(
   num_pages = get_pdf_num_pages(pdfdata_io=pdfdata_io)
   num_steps_total = num_pages + 1
   data_provider.write_processpdf_start(pdfkey=pdfkey, num_steps_total=num_steps_total)
-
-  pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=page_numbers) # 2,5,9
+  pages_gen = pdfminer.high_level.extract_pages(pdf_file=pdfdata_io, page_numbers=page_numbers)
   processor = PdfProcessor(pages_gen=pages_gen, data_provider=data_provider)
   t0 = time.time()
   t_writing = 0.

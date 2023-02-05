@@ -170,6 +170,7 @@ def extract_row(
 
     elems_in_this_box = remove_duplicate_bbox_text(items=elems_in_this_box)
     elems_in_this_box.sort(key=lambda x: x.bbox[1])
+    cell_bbox = pdfelemtransforms.bounding_bbox(elems=elems_in_this_box)
     row_text = " ".join([t.text for t in elems_in_this_box if t.text is not None])
     row_text = row_text.replace("\n", " ").strip().replace("  ", " ")
     row.append(ExtractedRowElem(text=row_text, elems=elems_in_this_box, bbox=cell_bbox))

@@ -1,5 +1,6 @@
 
 import collections
+import cProfile
 import os
 import pickle
 import time
@@ -19,7 +20,7 @@ from . import pdfindexer
 from . import pdftkdrawer
 from . import votesearch
 from . import dataprovider, pdfprocessor
-from .ltjson import LTJson, LTJsonResponse, LTJsonEncoder
+from .ltjson import LTJson, LTJsonEncoder
 
 def find_contains_with_room(
   indexer: pdfindexer.PdfIndexer,
@@ -497,7 +498,7 @@ def compare_schedules(a: typing.Any, b: typing.Any):
   np.testing.assert_array_equal(a["header"], b["header"]) # type:ignore
   np.testing.assert_array_equal(a["rows"], b["rows"]) # type:ignore
 
-def process_pdf():
+def process_pdf_imp():
   debug_utils.is_debug = True
   data_provider = dataprovider.NullDataProvider()
   filename = "plan.pdf"
@@ -505,10 +506,13 @@ def process_pdf():
     pdfdata = f.read()
   # Test that the processing results are equivalent
   page_numbers = [2,5,9]
-  page_numbers = None
+  # page_numbers = None
   ltjson_results = pdfprocessor.process_pdf(data_provider=data_provider, pdfkey=filename, pdfdata=pdfdata, page_numbers=page_numbers)
-
   update_saved = False
+  write_pending = True
+  if write_pending:
+    with open("test2.json", "w", encoding="utf-8") as f:
+      f.write(json.dumps(ltjson_results))
   if update_saved:
     encoder = LTJsonEncoder()
     with open("test.json", "w", encoding="utf-8") as f:
@@ -521,11 +525,8 @@ def process_pdf():
     # page_number, class_name, full_id = [LTJsonResponse]
     saved_results:typing.Any = pickle.load(f)
 
-  compare_windows_doors(saved_results["windows"], ltjson_results["windows"])
-  compare_windows_doors(saved_results["doors"], ltjson_results["doors"])
-  compare_schedules(saved_results["windowSchedule"], ltjson_results["windowSchedule"])
-  compare_schedules(saved_results["doorSchedule"], ltjson_results["doorSchedule"])
-  compare_schedules(saved_results["lightingSchedule"], ltjson_results["lightingSchedule"])
+def process_pdf():
+  cProfile.run("process_pdf_imp()")
 
 def parse_args():
   parser = argparse.ArgumentParser()

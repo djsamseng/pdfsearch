@@ -1,4 +1,5 @@
 
+import enum
 import json
 import typing
 
@@ -234,6 +235,10 @@ class PdfSummaryJsonItem(typing.TypedDict):
   elems: typing.Dict[str, PdfElem]
   rows: typing.Dict[str, PdfScheduleRow]
   cells: typing.Dict[str, PdfScheduleCell]
+class ScheduleTypes(enum.Enum):
+  DOORS = "doors"
+  WINDOWS = "windows"
+  LIGHTING = "lighting"
 class PdfSummaryJsonSchedules(typing.TypedDict):
   doors: typing.Dict[int, PdfSchedule]
   windows: typing.Dict[int, PdfSchedule]
