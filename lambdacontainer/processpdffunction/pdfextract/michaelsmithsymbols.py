@@ -331,7 +331,9 @@ def process_pdf_imp():
   # Test that the processing results are equivalent
   page_numbers = [2,5,9]
   # page_numbers = None
+  t0 = time.time()
   ltjson_results = pdfprocessor.process_pdf(data_provider=data_provider, pdfkey=filename, pdfdata=pdfdata, page_numbers=page_numbers)
+  t1 = time.time()
   update_saved = False
   write_pending = True
   if write_pending:
@@ -341,16 +343,15 @@ def process_pdf_imp():
     encoder = LTJsonEncoder()
     with open("test.json", "w", encoding="utf-8") as f:
       f.write(encoder.encode(ltjson_results))
-    with open("plan_2_5_9.pickle", "wb") as f:
-      pickle.dump(ltjson_results, file=f)
 
-  with open("plan_2_5_9.pickle", "rb") as f:
-    # windows, doors, houseName, architectName, pageNames, windowSchedule, doorSchedule, lightingSchedule
-    # page_number, class_name, full_id = [LTJsonResponse]
-    saved_results:typing.Any = pickle.load(f)
+  print("process_pdf took:", t1-t0)
 
 def process_pdf():
-  cProfile.run("process_pdf_imp()")
+  profile = False
+  if profile:
+    cProfile.run("process_pdf_imp()")
+  else:
+    process_pdf_imp()
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -397,5 +398,5 @@ def main():
 
 
 if __name__ == "__main__":
-  # python3 -m pdfextract.michaelsmithsymbols --findbbox
+  # python3 -m pdfextract.michaelsmithsymbols --process
   main()

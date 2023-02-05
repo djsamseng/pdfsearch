@@ -130,8 +130,10 @@ def merge_impl(
       dest[key].extend(other[key])
     elif isinstance(val, str) and len(val) == 0:
       dest[key] = val
+    elif key not in dest:
+      dest[key] = val
     else:
-      print("TODO: merge onConflict", dest, other)
+      print("TODO: merge onConflict", dest, other, key)
       dest[key] = val
 
 def merge(
@@ -260,7 +262,7 @@ class ScheduleSearchRule(SearchRule):
       indexer=indexer,
       text_key=self.table_text_key,
       has_header=True,
-      header_above_table=False,
+      header_above_table=self.destination == ScheduleTypes.LIGHTING,
     )
     if header_row is not None and rows is not None:
       self.__insert_new_schedule(page_number=page_number, header_row=header_row, rows=rows)
@@ -309,7 +311,10 @@ class ScheduleSearchRule(SearchRule):
         "elems": [],
         "cells": [],
       }
+      elem_shape_symbol_col_idx = 0
       for idx in range(len(header_row)):
+        if header_row[idx].text.lower().find("symbol") >= 0:
+          elem_shape_symbol_col_idx = idx
         cell_id = get_uuid()
         self.results["items"][page_number]["cells"][cell_id] = {
           "key": header_row[idx].text,
@@ -333,8 +338,7 @@ class ScheduleSearchRule(SearchRule):
       if self.elem_shape_matches is not None:
         elem_shape_matches = self.elem_shape_matches
       else:
-        # TODO extract from table
-        elem_shape_matches = []
+        elem_shape_matches = row[elem_shape_symbol_col_idx].elems
       # TODO: have a single ItemSearchRule per schedule that maps to results
       self.item_search_rules.append(ItemSearchRule(
         row_ptr={
@@ -401,7 +405,13 @@ class PdfSearcher:
         destination=ScheduleTypes.WINDOWS,
         elem_shape_matches=[global_symbols["window_label"][0]],
         elem_label_regex_maker=lambda id_row_text: id_row_text.replace("##", "\\d\\d")
-      )
+      ),
+      ScheduleSearchRule(
+        table_text_key="lighting legend",
+        destination=ScheduleTypes.LIGHTING,
+        elem_shape_matches=None,
+        elem_label_regex_maker=None
+      ),
     ]
 
   def process_page(
