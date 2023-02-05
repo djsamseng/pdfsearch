@@ -271,6 +271,7 @@ def findschedule():
 def findlighting():
   elems, width, height = get_pdf(which=1, page_number=2)
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  # TODO: Check vertical in pdfextracter.extract_row
   header_row, rows = pdfextracter.extract_table(
     indexer=indexer,
     text_key="lighting legend",
@@ -289,12 +290,24 @@ def findlighting():
   row_elems: typing.List[LTJson] = []
   for row in rows:
     for r in row:
-
       row_elems.extend(r.elems)
   print([e.text for e in row_elems])
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   drawer.draw_elems(elems=row_elems, draw_buttons=False, align_top_left=True)
   drawer.show("Below")
+
+def processlighting():
+  elems, width, height = get_pdf(which=1, page_number=2)
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  rule = votesearch.ScheduleSearchRule(
+    table_text_key="lighting legend",
+    destination=votesearch.ScheduleTypes.LIGHTING,
+    elem_shape_matches=None,
+    elem_label_regex_maker=None
+  )
+  rule.process_page(page_number=2, elems=elems, indexer=indexer)
+  results = rule.get_results()
+  print(results)
 
 def compare_windows_doors(
   a: votesearch.MultiClassSearchRuleResults,
@@ -344,6 +357,7 @@ def process_pdf_imp():
     with open("test.json", "w", encoding="utf-8") as f:
       f.write(encoder.encode(ltjson_results))
 
+  # 17 seconds for doors, windows and
   print("process_pdf took:", t1-t0)
 
 def process_pdf():
@@ -366,6 +380,7 @@ def parse_args():
   parser.add_argument("--findmeta", dest="findmeta", default=False, action="store_true")
   parser.add_argument("--findschedule", dest="findschedule", default=False, action="store_true")
   parser.add_argument("--findlighting", dest="findlighting", default=False, action="store_true")
+  parser.add_argument("--processlighting", dest="processlighting", default=False, action="store_true")
   parser.add_argument("--process", dest="process", default=False, action="store_true")
   parser.add_argument("--x0", dest="x0", type=int, required=False)
   parser.add_argument("--y0", dest="y0", type=int, required=False)
@@ -391,6 +406,8 @@ def main():
     findschedule()
   elif args.findlighting:
     findlighting()
+  elif args.processlighting:
+    processlighting()
   elif args.process:
     process_pdf()
   else:

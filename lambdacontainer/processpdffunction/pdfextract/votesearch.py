@@ -121,16 +121,14 @@ def merge_impl(
   other: MergeDict
 ):
   for key, val in other.items():
-    if isinstance(val, (dict, collections.defaultdict)):
+    if key not in dest:
+      dest[key] = val
+    elif isinstance(val, (dict, collections.defaultdict)):
       node = dest.setdefault(key, {})
       merge_impl(dest=node, other=typing.cast(MergeDict, val))
     elif isinstance(val, list):
-      if key not in dest:
-        dest[key] = [] # TODO: Not being merged correctly
       dest[key].extend(other[key])
-    elif isinstance(val, str) and len(val) == 0:
-      dest[key] = val
-    elif key not in dest:
+    elif isinstance(val, str) and len(dest[key]) == 0:
       dest[key] = val
     else:
       print("TODO: merge onConflict", dest, other, key)

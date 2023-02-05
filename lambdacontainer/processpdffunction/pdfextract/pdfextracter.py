@@ -156,7 +156,7 @@ def extract_row(
       hangover_elem = None
     while elem_idx < len(elems_in_row) and \
       elems_in_row[elem_idx].bbox[0] < right_divider[0]:
-
+      # TODO: also check vertical
       add_elem = elems_in_row[elem_idx]
       elems_in_this_box.append(add_elem)
       if add_elem.text is not None and add_elem.bbox[2] + 5 > right_divider[2]:
