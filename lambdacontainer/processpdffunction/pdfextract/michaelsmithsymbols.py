@@ -139,47 +139,6 @@ def read_symbols_from_json(dirpath:str="./"):
     symbols[key] = elems
   return symbols
 
-def find_symbol():
-  symbols = read_symbols_from_json()
-  elems, width, height = get_pdf()
-  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  response_obj: typing.Dict[str, typing.Dict[str, typing.List[LTJsonResponse]]] = {}
-  simple_response_obj: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
-  page_response_obj: typing.Dict[str, typing.List[LTJsonResponse]] = {}
-  simple_page_response_obj: typing.Dict[str, typing.Any] = {}
-  for symbol_key in ["door_label", "window_label"]:
-    # notes_circle, door_label fails because of "c" curves
-    to_find = symbols[symbol_key][0]
-    results, result_inner_contents = pdfindexer.find_symbol_with_text(symbol=to_find, indexer=indexer)
-    result_response = [LTJsonResponse(elem=elem,page_number=0) for elem in results]
-    page_response_obj[symbol_key] = result_response
-    labels = [elem.label for elem in result_response]
-    simple_page_response_obj[symbol_key] = len(labels)
-    print(symbol_key, len(results))
-    if False:
-      drawer_all = pdftkdrawer.TkDrawer(width=width, height=height)
-      drawer_all.draw_elems(elems=elems, draw_buttons=False)
-    drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-    to_draw = [elem for elem in results]
-    to_draw.extend(result_inner_contents)
-    drawer.draw_elems(elems=to_draw, draw_buttons=True)
-    drawer.show(symbol_key)
-
-  response_obj["page9"] = page_response_obj
-  simple_response_obj["page9"] = simple_page_response_obj
-  encoder = LTJsonEncoder()
-  json_string = encoder.encode(response_obj)
-  compressed_string = gzip.compress(bytes(json_string, "utf-8"))
-  simple_json_string = encoder.encode(simple_response_obj)
-  simple_compressed_string = gzip.compress(bytes(simple_json_string, "utf-8"))
-  # 1kb per symbol per page, 10k pdfs per GB
-  # $0.13 per RCU per hour
-  print(json_string)
-  print(simple_json_string)
-  print(len(json_string), len(json_string.encode("utf-8"))/1000, "kb", len(compressed_string)/1000, "kb")
-  print(len(simple_json_string), len(simple_json_string.encode("utf-8"))/1000, "kb", len(simple_compressed_string)/1000, "kb")
-
-
 def show_inside(y0: float, x0: float, y1: float, x1: float):
   elems, width, height = get_pdf()
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
@@ -188,36 +147,6 @@ def show_inside(y0: float, x0: float, y1: float, x1: float):
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   drawer.draw_elems(elems=results, draw_buttons=True)
   drawer.show("All")
-
-def find_symbol_elem(y0: float, x0: float, y1: float, x1: float):
-  elems, width, height = get_pdf(which=1)
-  symbols = read_symbols_from_json()
-  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  results = indexer.find_contains(bbox=(x0, y0, x1, y1), y_is_down=True)
-  to_find = [r for r in results if r.original_path is not None]
-  print("Num in area:", len(results), "Num curves in area:", len(to_find))
-  to_find = to_find[0]
-  results, result_inner_contents = pdfindexer.find_symbol_with_text(symbol=to_find, indexer=indexer)
-  print("Searched for:", to_find.get_zeroed_path_lines())
-  saved_to_find = symbols["door_label"][0]
-  print("Saved door symbol:", saved_to_find.get_zeroed_path_lines())
-  mismatch_dist = pdfindexer.line_set_distance(lines1=to_find.get_zeroed_path_lines(), lines2=saved_to_find.get_zeroed_path_lines(), max_dist=1000)
-  print("Mismatch dist:", mismatch_dist)
-  print("bboxes:", to_find.get_zeroed_bbox(), saved_to_find.get_zeroed_bbox())
-  elems2, w2, h2 = get_pdf(which=0)
-  indexer2 = pdfindexer.PdfIndexer(wrappers=elems2, page_width=w2, page_height=h2)
-  saved_to_find_orig = get_door_label_symbol(indexer=indexer2)
-  print(len(to_find.get_zeroed_path_lines()), len(saved_to_find.get_zeroed_path_lines()))
-  # Different lengths, to_find uses c curves. saved_to_find uses just m and l
-  # Even though they have different zeroed lines, they do draw very similarly
-  #print("To find:", to_find.original_path)
-  #print("Saved:", saved_to_find.original_path)
-  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-  to_draw = [elem for elem in results]
-  to_draw.extend(result_inner_contents)
-  print(to_find.original_path)
-  drawer.draw_elems(elems=[to_find, saved_to_find, saved_to_find_orig[0]], draw_buttons=True, align_top_left=True)
-  drawer.show("Found")
 
 def door_labels_should_match():
   match_window_circle_lines_only = False
@@ -295,111 +224,6 @@ def test_encode_decode():
   if True:
     print("Checking no equal elements out of {0}".format(len(elems)))
     elems_not_equal(elems=elems)
-
-def print_indent(d: votesearch.MergeDict, level: int = 0):
-  for key, val in d.items():
-    if isinstance(val, (dict, collections.defaultdict)):
-      print(" " * level + str(key))
-      print_indent(d=typing.cast(votesearch.MergeDict, val), level=level+1)
-    elif isinstance(val, list):
-      val = typing.cast(typing.List[LTJsonResponse], val)
-      print(" " * level + key, ":", [v.label for v in val])
-
-def find_by_bbox_and_content_search_rule():
-  t0 = time.time()
-  symbols = read_symbols_from_json()
-  search_rules: typing.List[votesearch.SearchRule] = [
-    votesearch.RegexShapeSearchRule(shape_matches=[
-      symbols["window_label"][0],
-    ], description="windows", regex="(?P<class_name>[a-zA-Z])(?P<elem_type>\\d\\d)"),
-    votesearch.RegexShapeSearchRule(shape_matches=[
-      symbols["door_label"][0],
-    ], description="doors", regex="(?P<class_name>\\d)(?P<elem_type>\\d\\d)")
-  ]
-  t1 = time.time()
-  elems, width, height = get_pdf(which=0, page_number=9)
-  t2 = time.time()
-  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  vote_searcher = votesearch.VoteSearcher(search_rules=search_rules, page_rules=[])
-
-  vote_searcher.process_page(page_number=9, elems=elems, indexer=indexer)
-  vote_searcher.refine()
-  all_results = vote_searcher.get_results()
-  t3 = time.time()
-  for key, results in all_results.items():
-    print(key)
-    print_indent(results, level=1)
-
-  print("Took:", t3-t2 + t1-t0)
-
-  def draw_results(name:str, results: typing.Dict[str, typing.Any]):
-    all_found: typing.List[typing.Any] = []
-    for _, val in results.items():
-      for _, valwt in val.items():
-        for _, valwid in valwt.items():
-          all_found.extend([LTJson(serialized_json=v.as_dict()) for v in valwid])
-    print(name, "num found:", len(all_found))
-    return
-    drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-    drawer.draw_elems(elems=all_found, draw_buttons=True, align_top_left=False)
-    drawer.show("")
-
-  for key, results in all_results.items():
-    draw_results(key, results)
-
-  # weird = all_results["windows"]["Page 2"]["F"]["01"]
-
-
-def find_by_bbox_and_content():
-
-  t0 = time.time()
-  symbols = read_symbols_from_json()
-  t1 = time.time()
-  search_symbols = {
-    "window_label": pdfindexer.SearchSymbol(
-      elem=symbols["window_label"][0],
-      description="window_label",
-      inside_text_regex_str="[a-zA-Z]\\d\\d"
-    ),
-    "door_label": pdfindexer.SearchSymbol(
-      elem=symbols["door_label"][0],
-      description="door_label",
-      inside_text_regex_str="\\d\\d\\d"
-    )
-  }
-  t2 = time.time()
-  elems, width, height = get_pdf(which=1)
-  t3a = time.time()
-  items_indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
-  search_indexer = pdfindexer.SearchIndexer(search_items=list(search_symbols.values()), items_indexer=items_indexer)
-  t3b = time.time()
-  found_results: typing.Dict[str, typing.List[LTJson]] = {
-    "window_label": [],
-    "door_label": []
-  }
-  for elem in elems:
-    recognized_symbols = search_indexer.match_distance(search_elem=elem, query_radius=1)
-    if len(recognized_symbols) > 1:
-      print("==== Matched Both ====")
-    for rec in recognized_symbols:
-      found_results[rec.description].append(elem)
-  t4 = time.time()
-  for symbol_name, symbol_matches in found_results.items():
-    print(symbol_name, ":", len(symbol_matches))
-
-  t5 = time.time()
-  print(pdfextracter.extract_page_name(indexer=items_indexer))
-  t6 = time.time()
-  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-  to_draw: typing.List[LTJson] = []
-  for val in found_results.values():
-    to_draw.extend(val)
-  drawer.draw_elems(elems=to_draw, draw_buttons=True, align_top_left=False)
-  t7 = time.time()
-  print("read:", t1-t0, "symbol creation:", t2-t1, "getpdf:", t3a-t2, "indexer creation:", t3b-t3a,
-    "distance match:", t4-t3b, "page name extraction:", t6-t5, "drawing:", t7-t6
-  )
-  drawer.show("Found")
 
 def findmeta():
   elems, width, height = get_pdf(which=1)
@@ -536,7 +360,6 @@ def parse_args():
   parser.add_argument("--save", dest="save", default=False, action="store_true")
   # Take the saved file and upload
   parser.add_argument("--upload", dest="upload", default=False, action="store_true")
-  parser.add_argument("--find", dest="find", default=False, action="store_true")
   parser.add_argument("--showall", dest="showall", default=False, action="store_true")
   parser.add_argument("--findbbox", dest="findbbox", default=False, action="store_true")
   parser.add_argument("--findmeta", dest="findmeta", default=False, action="store_true")
@@ -558,14 +381,7 @@ def main():
     showall(args.page)
   elif args.x0 is not None and args.y0 is not None and args.x1 is not None and args.y1 is not None:
     # python3 michaelsmithsymbols.py --y0 306 --x0 549 --y1 329 --x1 579
-    if args.find:
-      find_symbol_elem(y0=args.y0, x0=args.x0, y1=args.y1, x1=args.x1)
-    else:
-      show_inside(y0=args.y0, x0=args.x0, y1=args.y1, x1=args.x1)
-  elif args.find:
-    find_symbol()
-  elif args.findbbox:
-    find_by_bbox_and_content_search_rule()
+    show_inside(y0=args.y0, x0=args.x0, y1=args.y1, x1=args.x1)
   elif args.getall:
     get_all_symbols(save=args.save)
   elif args.findmeta:

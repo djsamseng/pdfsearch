@@ -113,45 +113,6 @@ class PdfIndexer:
       return ret
     return []
 
-
-class SearchSymbol:
-  def __init__(self, elem: LTJson, description: str, inside_text_regex_str: str, ) -> None:
-    self.elem = elem
-    self.description = description
-    self.inside_text_regex = re.compile(inside_text_regex_str)
-    self.inside_pixels_rule = None
-
-class SearchIndexer:
-  def __init__(self, search_items: typing.List[SearchSymbol], items_indexer: PdfIndexer) -> None:
-    tb = time.time()
-    all_elem_shapes = [[e.elem.width, e.elem.height] for e in search_items]
-    t0 = time.time()
-    self.find_by_shape_kdtree = scipy.spatial.KDTree(data=all_elem_shapes)
-    t1 = time.time()
-
-    self.search_items = search_items
-    self.items_indexer = items_indexer
-    if LOG_TIME:
-      print("searchindexer kdtree:", t1-t0, "total:", time.time()-tb)
-
-  def match_distance(self, search_elem: LTJson, query_radius: float):
-    print("TODO: match_distance only looks at width, height")
-    search_shape = [search_elem.width, search_elem.height]
-    result_idxes: typing.List[int] = self.find_by_shape_kdtree.query_ball_point(x=search_shape, r=query_radius) # type: ignore
-    shape_results = [self.search_items[idx] for idx in result_idxes]
-    results: typing.List[SearchSymbol] = []
-    for result in shape_results:
-      if result.inside_text_regex is not None:
-        contents_inside = self.items_indexer.find_contains(bbox=search_elem.bbox)
-        chars_inside = [ c for c in contents_inside if c.size is not None ]
-        chars_inside.sort(key=lambda c: c.bbox[0])
-        text = "".join([c.text for c in chars_inside if c.text is not None])
-        regex_match = result.inside_text_regex.search(text)
-        if regex_match is not None:
-          print("Text:", text)
-          results.append(result)
-    return results
-
 def line_distance(
   linea: path_utils.LinePointsType,
   lineb: path_utils.LinePointsType,
