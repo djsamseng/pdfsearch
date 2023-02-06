@@ -311,7 +311,8 @@ def processlighting():
   drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=False)
   for _, item in results["items"][2]["elems"].items():
     drawer.draw_bbox(item["bbox"], color="blue")
-    drawer.app.canvas.insert_text(pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+    drawer.app.canvas.insert_text(
+      pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
 
   drawer.show("Below")
 
@@ -363,11 +364,23 @@ def process_pdf_imp():
     with open("test.json", "w", encoding="utf-8") as f:
       f.write(encoder.encode(ltjson_results))
 
-  # 17 seconds for doors, windows and
+  # 17 seconds for doors, windows and lighting schedule
+  # 18 second for doors, windows and lights
   print("process_pdf took:", t1-t0)
+  page_idx = 2
+  page = page_numbers[page_idx]
+  elems, width, height = get_pdf(which=0, page_number=page)
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  elems = [e for e in elems if not e.is_container]
+  drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=False)
+  for _, item in ltjson_results["items"][page_idx]["elems"].items():
+    drawer.draw_bbox(item["bbox"], color="blue")
+    drawer.app.canvas.insert_text(
+      pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+  drawer.show("Found")
 
 def process_pdf():
-  profile = True
+  profile = False
   if profile:
     cProfile.run("process_pdf_imp()")
   else:

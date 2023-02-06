@@ -198,6 +198,7 @@ def join_text(elems: typing.List[LTJson]) -> str:
 
   for text_line in text_lines:
     text_line.sort(key=lambda e:e.bbox[0]) # left right
+  text_lines = [t for t in text_lines if len(t) > 0]
   text_lines.sort(key=lambda line_elems: line_elems[0].bbox[3], reverse=True) # top down
   text = " ".join([join_line_split(text_line) for text_line in text_lines])
   return text

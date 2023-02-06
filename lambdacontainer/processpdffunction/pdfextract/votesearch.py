@@ -223,8 +223,10 @@ class ItemSearchRule(SearchRule):
         elem.bbox[3] + self.radius,
       )
       # TODO: Need voting since regex for "C" can match "CO" and conflict
+      # TODO: D8 and D9 page 9 plan.pdf are missing
+      # TODO: Need merge filtering to remove similar shapes in odd places
     else:
-      return # TODO: Need merge filtering to remove similar shapes in odd places
+      return
       # check if the elem matches the first shape match
       label = ""
       # the first shape must match to prevent duplicates
