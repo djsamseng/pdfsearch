@@ -1,5 +1,5 @@
 
-
+import collections
 import typing
 import re
 
@@ -129,45 +129,105 @@ class ExtractedRowElem():
     self.elems = elems
     self.bbox = bbox
 
+def elem_splits_another_elem(elem_idx: int, others: typing.List[LTJson]) -> bool:
+  for other_idx in range(len(others)):
+    if elem_idx == other_idx:
+      continue
+    my_top_below_your_top = elem.bbox[3] < other.bbox[3]
+  return True
+  for other in others:
+    my_top_below_your_top = elem.bbox[3] < other.bbox[3] - padding
+    my_top_above_your_bottom = elem.bbox[3] > other.bbox[1] + padding
+    if my_top_below_your_top and my_top_above_your_bottom:
+      return False
+  return True
+
+def vertical_aligns(e1: LTJson, e2: LTJson) -> bool:
+  return e1.bbox[3] >= e2.bbox[1] and e1.bbox[1] <= e2.bbox[3]
+
+def vertical_aligns_others(elem: LTJson, others: typing.List[LTJson]) -> typing.Union[None, int]:
+  for idx, other in enumerate(others):
+    if vertical_aligns(e1=elem, e2=other):
+      return idx
+  return None
+
+def get_line_splits(elems: typing.List[LTJson]) -> typing.List[float]:
+  cur_tops: typing.List[LTJson] = []
+  for consider in elems:
+    vertical_collision_idx = vertical_aligns_others(elem=consider, others=cur_tops)
+    if vertical_collision_idx is not None:
+      vertical_collision = cur_tops[vertical_collision_idx]
+      if vertical_collision.bbox[3] < consider.bbox[3]:
+        cur_tops[vertical_collision_idx] = consider
+    else:
+      cur_tops.append(consider)
+  return [top.bbox[3] for top in cur_tops]
+
+def join_text(elems: typing.List[LTJson]) -> str:
+  # 1. Try to figure out text lines (y0, y1). Only allow a text line if it does not divide a character in half
+  # 2. Left to right join letters into words for each line
+  text_line_tops = get_line_splits(elems=elems)
+  text_line_tops.sort()
+  text_lines: typing.List[typing.List[LTJson]] = [[] for _ in range(len(text_line_tops))]
+  for elem in elems:
+    for text_line_idx in range(len(text_lines)):
+      if elem.bbox[3] <= text_line_tops[text_line_idx]:
+        text_lines[text_line_idx].append(elem)
+        break
+
+  for text_line in text_lines:
+    text_line.sort(key=lambda e:e.bbox[0]) # left right
+  text_lines.sort(key=lambda line_elems: line_elems[0].bbox[3], reverse=True) # top down
+  # TODO: Spaces
+  # TODO: / Curve
+  text = " ".join(["".join([e.text for e in text_line if e.text is not None]) for text_line in text_lines])
+  return text
+
 def extract_row(
   table_elems: typing.List[LTJson],
   bbox: pdfelemtransforms.BboxType,
-  vertical_dividers: typing.List[LTJson]
+  vertical_dividers: typing.List[LTJson],
+  padding: float
 ):
   # FIXME: PAINT SKYLIGHT is interpreted as a single item
   # even though there is a line between the two
   # TODO: Manual joining of characters into words instead of looking at the parent
+  bbox = (
+    bbox[0] + padding,
+    bbox[1] + padding,
+    bbox[2] - padding,
+    bbox[3] - padding,
+  )
   elems_in_row = [
     e for e in table_elems if \
-      pdfelemtransforms.box_contains(outer=bbox, inner=e.bbox) and e.parent_idx is None
+      pdfelemtransforms.box_contains(outer=bbox, inner=e.bbox) and not e.is_container
   ]
-  elems_in_row.sort(key=lambda e: e.bbox[0]) # left to right
-  vertical_divider_bboxes = [ v.bbox for v in vertical_dividers ]
+  elems_in_row.sort(key=lambda e: e.bbox[2]) # left to right by their right side
+  vertical_divider_bboxes = [ (bbox[0], bbox[1], bbox[0], bbox[3]) ] # left/begin
+  vertical_divider_bboxes.extend([ v.bbox for v in vertical_dividers ]) # middle
+  vertical_divider_bboxes.append( (bbox[2],bbox[1],bbox[2],bbox[3]) ) # right/end
   vertical_divider_bboxes.sort(key=lambda v: v[0]) # left to right
-  vertical_divider_bboxes.append((bbox[2],bbox[1],bbox[2],bbox[3]))
   row: typing.List[ExtractedRowElem] = []
   # If multicolumn, join MATERIAL INT = column 0, MATERIAL EXT = column 1
   elem_idx = 0
-  hangover_elem: typing.Union[LTJson, None] = None
-  for right_divider in vertical_divider_bboxes:
+  for divider_idx in range(1, len(vertical_divider_bboxes)):
+    left_divider = vertical_divider_bboxes[divider_idx - 1]
+    right_divider = vertical_divider_bboxes[divider_idx]
     elems_in_this_box: typing.List[LTJson] = []
-    if hangover_elem:
-      elems_in_this_box.append(hangover_elem)
-      hangover_elem = None
     while elem_idx < len(elems_in_row) and \
-      elems_in_row[elem_idx].bbox[0] < right_divider[0]:
-      # TODO: also check vertical
+      elems_in_row[elem_idx].bbox[2] < right_divider[0]:
+
       add_elem = elems_in_row[elem_idx]
       elems_in_this_box.append(add_elem)
-      if add_elem.text is not None and add_elem.bbox[2] + 5 > right_divider[2]:
-        hangover_elem = add_elem
       elem_idx += 1
 
-    elems_in_this_box = remove_duplicate_bbox_text(items=elems_in_this_box)
-    elems_in_this_box.sort(key=lambda x: x.bbox[1])
-    cell_bbox = pdfelemtransforms.bounding_bbox(elems=elems_in_this_box)
-    row_text = " ".join([t.text for t in elems_in_this_box if t.text is not None])
-    row_text = row_text.replace("\n", " ").strip().replace("  ", " ")
+    cell_bbox = (
+      left_divider[0],
+      left_divider[1],
+      right_divider[2],
+      right_divider[3],
+    )
+    row_text = join_text(elems=elems_in_this_box)
     row.append(ExtractedRowElem(text=row_text, elems=elems_in_this_box, bbox=cell_bbox))
 
   return row
@@ -178,6 +238,7 @@ def extract_table(
   has_header: bool,
   header_above_table: bool,
 ):
+  table_padding = 0.1
   lookup_results = indexer.text_lookup[text_key]
   if len(lookup_results) == 0:
     return None, None
@@ -217,8 +278,10 @@ def extract_table(
     # Already set header_bbox
     header_bbox = typing.cast(pdfelemtransforms.BboxType, header_bbox) # type:ignore
   elif has_header:
+    header_content_min_height = 5
     header_line = next(
-      (x for x in left_aligned_horizontal_lines if x.bbox[3] < table_rect[3] - 5),
+      (x for x in left_aligned_horizontal_lines if \
+        x.bbox[3] < table_rect[3] - header_content_min_height),
       None
     )
     if header_line is None:
@@ -227,7 +290,7 @@ def extract_table(
       header_line.bbox[0],
       header_line.bbox[1],
       header_line.bbox[2],
-      table_rect[3]
+      table_rect[3],
     )
   else:
     header_bbox = (
@@ -250,7 +313,8 @@ def extract_table(
   header_row = extract_row(
     table_elems=inside_schedule,
     bbox=header_bbox,
-    vertical_dividers=vertical_dividers
+    vertical_dividers=vertical_dividers,
+    padding=table_padding
   )
 
   rows: typing.List[typing.List[ExtractedRowElem]] = []
@@ -263,8 +327,14 @@ def extract_table(
       break
     row = extract_row(
       table_elems=inside_schedule,
-      bbox=(top_divider.bbox[0], bottom_divider.bbox[1], top_divider.bbox[2], top_divider.bbox[3]),
-      vertical_dividers=vertical_dividers
+      bbox=(
+        top_divider.bbox[0],
+        bottom_divider.bbox[1],
+        top_divider.bbox[2],
+        top_divider.bbox[3]
+      ),
+      vertical_dividers=vertical_dividers,
+      padding=table_padding
     )
     rows.append(row)
 

@@ -7,6 +7,14 @@ import rtree
 
 from . import ltjson, pdfelemtransforms
 
+# TODO: Connection strengths
+# a toilet symbol highly effects what kind of room it is
+# an area being a schedule box highly effects the symbols inside of it
+# TODO: PdfRegionSearch
+# 1. Rtree subdivide regions
+# 2. Lowest level symbols, lines, characters identified
+# 3. Merge lower levels to form higher levels (ex: words, sentences, rooms) using connection strengths and merge rules
+# 4. Repeat 1. passing down high level votes (ex: a schedule box makes the lighting symbol inside of it no longer an instance)
 class PdfRegion(enum.Enum):
   SCHEDULE = 1
   FLOOR_PLAN = 2

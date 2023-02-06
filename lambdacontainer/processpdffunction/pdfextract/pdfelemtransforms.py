@@ -11,26 +11,28 @@ def get_underlying_parent_links_impl(
   elem: pdfminer.layout.LTComponent,
   elem_parent_idx: typing.Union[None, int],
 ):
+  add_containers = True
   if isinstance(elem, pdfminer.layout.LTContainer):
-    # Add the container
-    out.append(
-      LTJson(
-        elem=typing.cast(pdfminer.layout.LTComponent, elem),
-        parent_idx=elem_parent_idx
+    child_parent_idx = None
+    if add_containers:
+      out.append(
+        LTJson(
+          elem=typing.cast(pdfminer.layout.LTComponent, elem),
+          parent_idx=elem_parent_idx
+        )
       )
-    )
-    if isinstance(elem, pdfminer.layout.LTText):
-      # takes 20ms out of 150ms
-      text = elem.get_text()
-      out[-1].text = text
-    child_parent_idx = len(out) - 1 # Get the container's idx
+      if isinstance(elem, pdfminer.layout.LTText):
+        # takes 20ms out of 150ms
+        text = elem.get_text()
+        out[-1].text = text
+      child_parent_idx = len(out) - 1 # Get the container's idx
     for child in typing.cast(typing.Iterable[pdfminer.layout.LTComponent], elem):
       # Add the first child
       # Get the first child's idx
       # Add the first child's children - recurse
       get_underlying_parent_links_impl(out=out, elem=child, elem_parent_idx=child_parent_idx)
   elif isinstance(elem, pdfminer.layout.LTChar):
-    if elem_parent_idx is None:
+    if add_containers and elem_parent_idx is None:
       print("LTChar without parent:", elem, elem_parent_idx)
     out.append(LTJson(elem, parent_idx=elem_parent_idx))
   elif isinstance(elem, pdfminer.layout.LTAnno):
