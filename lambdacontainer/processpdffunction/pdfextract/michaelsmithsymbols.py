@@ -291,7 +291,6 @@ def findlighting():
   for row in rows:
     for r in row:
       row_elems.extend(r.elems)
-  print([e.text for e in row_elems])
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   drawer.draw_elems(elems=row_elems, draw_buttons=False, align_top_left=True)
   drawer.show("Below")

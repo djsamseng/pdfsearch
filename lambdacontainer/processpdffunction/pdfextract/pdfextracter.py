@@ -165,9 +165,11 @@ def get_line_splits(elems: typing.List[LTJson]) -> typing.List[float]:
 
 def join_line_split(elems: typing.List[LTJson]) -> str:
   out = ""
+  has_no_text = True
+  if len(elems) > 0 and elems[0].text is not None:
+    out += elems[0].text
+    has_no_text = False
   for idx in range(1, len(elems)):
-    if idx == 1 and elems[0].text is not None:
-      out += elems[0].text
     last_elem = elems[idx-1]
     elem = elems[idx]
     elem_width = max(elem.bbox[2]-elem.bbox[0], last_elem.bbox[2]-last_elem.bbox[0])
@@ -179,11 +181,12 @@ def join_line_split(elems: typing.List[LTJson]) -> str:
       out += "/"
     else:
       out += elem.text
+      has_no_text = False
+  if has_no_text:
+    return ""
   return out
 
 def join_text(elems: typing.List[LTJson]) -> str:
-  # 1. Try to figure out text lines (y0, y1). Only allow a text line if it does not divide a character in half
-  # 2. Left to right join letters into words for each line
   text_line_tops = get_line_splits(elems=elems)
   text_line_tops.sort()
   text_lines: typing.List[typing.List[LTJson]] = [[] for _ in range(len(text_line_tops))]
@@ -196,8 +199,6 @@ def join_text(elems: typing.List[LTJson]) -> str:
   for text_line in text_lines:
     text_line.sort(key=lambda e:e.bbox[0]) # left right
   text_lines.sort(key=lambda line_elems: line_elems[0].bbox[3], reverse=True) # top down
-  # TODO: Spaces
-  # TODO: / Curve
   text = " ".join([join_line_split(text_line) for text_line in text_lines])
   return text
 
@@ -207,9 +208,6 @@ def extract_row(
   vertical_dividers: typing.List[LTJson],
   padding: float
 ):
-  # FIXME: PAINT SKYLIGHT is interpreted as a single item
-  # even though there is a line between the two
-  # TODO: Manual joining of characters into words instead of looking at the parent
   bbox = (
     bbox[0] + padding,
     bbox[1] + padding,
