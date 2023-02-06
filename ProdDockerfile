@@ -9,7 +9,7 @@ RUN rm -rf ${LAMBDA_TASK_ROOT}/dataclasses*
 
 COPY lambdacontainer/processpdffunction/app.py ${LAMBDA_TASK_ROOT}
 COPY lambdacontainer/processpdffunction/*.py ${LAMBDA_TASK_ROOT}
-ADD pdfextract ${LAMBDA_TASK_ROOT}/pdfextract/
+ADD lambdacontainer/processpdffunction/pdfextract ${LAMBDA_TASK_ROOT}/pdfextract/
 
 COPY lambdacontainer/processpdffunction/symbols_michael_smith.json ${LAMBDA_TASK_ROOT}
 
