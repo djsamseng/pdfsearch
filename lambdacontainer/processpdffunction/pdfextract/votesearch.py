@@ -318,6 +318,44 @@ class ScheduleSearchRule(SearchRule):
   def get_results(self) -> PdfSummaryJson:
     return self.results
 
+  def __insert_row_item(
+    self,
+    page_number: int,
+    row_id: str,
+    row: typing.List[pdfextracter.ExtractedRowElem],
+    header_row: typing.List[pdfextracter.ExtractedRowElem],
+  ) -> int:
+    if page_number not in self.results["items"]:
+      self.results["items"][page_number] = {
+        "elems": {},
+        "cells": {},
+        "rows": {},
+      }
+    self.results["items"][page_number]["rows"][row_id] = {
+      "elems": [],
+      "cells": [],
+    }
+    elem_shape_symbol_col_idx = 0
+    for idx in range(len(header_row)):
+      if header_row[idx].text.lower().find("symbol") >= 0:
+        elem_shape_symbol_col_idx = idx
+      cell_id = get_uuid()
+      self.results["items"][page_number]["cells"][cell_id] = {
+        "key": header_row[idx].text,
+        "label": row[idx].text,
+        "bbox": row[idx].bbox,
+        "rowPtr": {
+          "page": page_number,
+          "id": row_id
+        },
+        "matchCriteria": None
+      }
+      self.results["items"][page_number]["rows"][row_id]["cells"].append({
+        "page": page_number,
+        "id": cell_id,
+      })
+    return elem_shape_symbol_col_idx
+
   def __insert_new_schedule(
     self,
     page_number: int,
@@ -333,6 +371,12 @@ class ScheduleSearchRule(SearchRule):
       },
       "rowsRowPtrs": []
     }
+    self.__insert_row_item(
+      page_number=page_number,
+      row_id=header_row_id,
+      row=header_row,
+      header_row=header_row
+    )
     for row in rows:
       id_col_value = row[0]
       row_id = get_uuid()
@@ -340,35 +384,13 @@ class ScheduleSearchRule(SearchRule):
         "page": page_number,
         "id": row_id
       })
-      if page_number not in self.results["items"]:
-        self.results["items"][page_number] = {
-          "elems": {},
-          "cells": {},
-          "rows": {},
-        }
-      self.results["items"][page_number]["rows"][row_id] = {
-        "elems": [],
-        "cells": [],
-      }
-      elem_shape_symbol_col_idx = 0
-      for idx in range(len(header_row)):
-        if header_row[idx].text.lower().find("symbol") >= 0:
-          elem_shape_symbol_col_idx = idx
-        cell_id = get_uuid()
-        self.results["items"][page_number]["cells"][cell_id] = {
-          "key": header_row[idx].text,
-          "label": row[idx].text,
-          "bbox": row[idx].bbox,
-          "rowPtr": {
-            "page": page_number,
-            "id": row_id
-          },
-          "matchCriteria": None
-        }
-        self.results["items"][page_number]["rows"][row_id]["cells"].append({
-          "page": page_number,
-          "id": cell_id,
-        })
+      elem_shape_symbol_col_idx = self.__insert_row_item(
+        page_number=page_number,
+        row_id=row_id,
+        row=row,
+        header_row=header_row
+      )
+
       elem_label_regex = None
       if self.elem_label_regex_maker is not None and len(id_col_value.text.strip()) > 0:
         elem_label_regex = "^(?P<label>{0})[\\n ]?$".format(
