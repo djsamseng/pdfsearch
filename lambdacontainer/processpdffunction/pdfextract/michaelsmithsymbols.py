@@ -20,7 +20,7 @@ from . import pdfindexer
 from . import pdftkdrawer
 from . import votesearch
 from . import dataprovider, pdfprocessor
-from .ltjson import LTJson, LTJsonEncoder
+from .ltjson import LTJson, LTJsonEncoder, BboxType
 
 def find_contains_with_room(
   indexer: pdfindexer.PdfIndexer,
@@ -302,11 +302,18 @@ def processlighting():
     table_text_key="lighting legend",
     destination=votesearch.ScheduleTypes.LIGHTING,
     elem_shape_matches=None,
-    elem_label_regex_maker=None
+    elem_label_regex_maker=lambda id_row_text: id_row_text
   )
   rule.process_page(page_number=2, elems=elems, indexer=indexer)
   results = rule.get_results()
-  print(results)
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  elems = [e for e in elems if not e.is_container]
+  drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=False)
+  for _, item in results["items"][2]["elems"].items():
+    drawer.draw_bbox(item["bbox"], color="blue")
+    drawer.app.canvas.insert_text(pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+
+  drawer.show("Below")
 
 def compare_windows_doors(
   a: votesearch.MultiClassSearchRuleResults,
@@ -360,7 +367,7 @@ def process_pdf_imp():
   print("process_pdf took:", t1-t0)
 
 def process_pdf():
-  profile = False
+  profile = True
   if profile:
     cProfile.run("process_pdf_imp()")
   else:

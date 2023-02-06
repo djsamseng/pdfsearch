@@ -8,7 +8,7 @@ import rtree
 import scipy.spatial # type: ignore
 
 from . import path_utils
-from .ltjson import LTJson
+from .ltjson import LTJson, BboxType
 
 LOG_TIME = False
 
@@ -58,6 +58,21 @@ class PdfIndexer:
       x0, y0, x1, y1 = bbox
       bbox = (x0, self.page_height - y1, x1, self.page_height - y0)
     result_idxes = self.find_by_position_rtree.contains(bbox)
+    if result_idxes is None:
+      return []
+    result_idxes = list(result_idxes)
+    results = [self.wrappers[idx] for idx in result_idxes]
+    return results
+
+  def find_intersection(
+    self,
+    bbox: BboxType,
+    y_is_down: bool = False,
+  ) -> typing.List[LTJson]:
+    if y_is_down:
+      x0, y0, x1, y1 = bbox
+      bbox = (x0, self.page_height - y1, x1, self.page_height - y0)
+    result_idxes = self.find_by_position_rtree.intersection(bbox)
     if result_idxes is None:
       return []
     result_idxes = list(result_idxes)

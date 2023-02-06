@@ -10,7 +10,7 @@ import uuid
 
 import rtree
 
-from . import pdfindexer, pdfextracter
+from . import pdfindexer, pdfextracter, pdfelemtransforms
 from .ltjson import LTJson, BboxType, PdfElem, PdfSchedule, PdfScheduleCell, PdfScheduleRow,\
    PdfScheduleCellMatchCriteria, PdfSummaryJson, PdfSummaryJsonItem, PdfSummaryJsonSchedules, \
     PdfItemPtr, ScheduleTypes
@@ -178,10 +178,25 @@ class ItemSearchRule(SearchRule):
     self.row_ptr = row_ptr
     self.regex = re.compile(regex) if regex is not None else None
     self.shape_matches = shape_matches
-    self.radius = max([max(s.width, s.height) for s in shape_matches])
     self.results: typing.List[PdfElem] = []
+    if len(self.shape_matches) == 0:
+      return
+
+    self.bounding_box = pdfelemtransforms.bounding_bbox(elems=self.shape_matches)
+    self.bounding_box = (
+      self.bounding_box[0] - self.shape_matches[0].bbox[0],
+      self.bounding_box[1] - self.shape_matches[0].bbox[1],
+      self.bounding_box[2] - self.shape_matches[0].bbox[0],
+      self.bounding_box[3] - self.shape_matches[0].bbox[1],
+    )
+    self.radius = max(
+      self.bounding_box[2] - self.bounding_box[0],
+      self.bounding_box[3] - self.bounding_box[1]
+    )
 
   def process_page(self, page_number: int, elems: typing.List[LTJson], indexer: pdfindexer.PdfIndexer):
+    if len(self.shape_matches) == 0:
+      return
     self.results = []
     for elem in elems:
       self.__process_elem(elem=elem, page_number=page_number, indexer=indexer)
@@ -191,23 +206,41 @@ class ItemSearchRule(SearchRule):
     return self.results
 
   def __process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
-    if elem.text is None:
-      return
-    if self.regex is None:
-      return
-    match = self.regex.search(elem.text)
-    if match is None:
-      return
-    groups = match.groupdict()
-    label = groups["label"]
-    if len(label) == 0:
-      return
-    around_bbox = (
-      elem.bbox[0] - self.radius,
-      elem.bbox[1] - self.radius,
-      elem.bbox[2] + self.radius,
-      elem.bbox[3] + self.radius,
-    )
+    if self.regex is not None:
+      if elem.text is None:
+        return
+      match = self.regex.search(elem.text)
+      if match is None:
+        return
+      groups = match.groupdict()
+      label = groups["label"]
+      if len(label) == 0:
+        return
+      around_bbox = (
+        elem.bbox[0] - self.radius,
+        elem.bbox[1] - self.radius,
+        elem.bbox[2] + self.radius,
+        elem.bbox[3] + self.radius,
+      )
+      # TODO: Need voting since regex for "C" can match "CO" and conflict
+    else:
+      return # TODO: Need merge filtering to remove similar shapes in odd places
+      # check if the elem matches the first shape match
+      label = ""
+      # the first shape must match to prevent duplicates
+      matching_curves = pdfindexer.find_similar_curves(
+        wrapper_to_find=self.shape_matches[0],
+        wrappers_to_search=[elem],
+        max_dist=2.
+      )
+      if len(matching_curves) == 0:
+        return
+      around_bbox = (
+        elem.bbox[0] + self.bounding_box[0],
+        elem.bbox[1] + self.bounding_box[1],
+        elem.bbox[2] + self.bounding_box[2],
+        elem.bbox[3] + self.bounding_box[3],
+      )
     #  30847    0.062    0.000    0.103    0.000 layout.py:360(__init__) LTChar
     #   8279    0.003    0.000    0.016    0.000 layout.py:483(__init__) LTTextContainer
     #  76655    0.112    0.000    0.184    0.000 ltjson.py:15(__init__)
@@ -217,20 +250,26 @@ class ItemSearchRule(SearchRule):
     # Maybe just making the regex more strict?
     # That gets us down to
     #    294    0.002    0.000    0.275    0.001 pdfindexer.py:50(find_contains)
-    around_elems = indexer.find_contains(bbox=around_bbox)
+    around_elems = indexer.find_intersection(bbox=around_bbox)
+    matched_elems: typing.List[LTJson] = []
     for shape in self.shape_matches:
+      # TODO: Only find similar curves that have not already been used (ex: double circle)
       matching_curves = pdfindexer.find_similar_curves(
         wrapper_to_find=shape,
         wrappers_to_search=around_elems,
         max_dist=2.
       )
-      if len(matching_curves) > 0:
-        pdf_elem: PdfElem = {
-          "label": label,
-          "bbox": elem.bbox,
-          "rowPtr": self.row_ptr
-        }
-        self.results.append(pdf_elem)
+      if len(matching_curves) == 0:
+        return
+      matched_elems.extend(matching_curves)
+    matched_elems.append(elem)
+    highlight_bbox = pdfelemtransforms.bounding_bbox(matched_elems)
+    pdf_elem: PdfElem = {
+      "label": label,
+      "bbox": highlight_bbox,
+      "rowPtr": self.row_ptr
+    }
+    self.results.append(pdf_elem)
 
   def __refine(self):
     self.results = remove_duplicate_bbox_orig(items=self.results)
@@ -329,15 +368,14 @@ class ScheduleSearchRule(SearchRule):
           "id": cell_id,
         })
       elem_label_regex = None
-      if self.elem_label_regex_maker is not None:
-        elem_label_regex = "^(?P<label>{0})".format(
+      if self.elem_label_regex_maker is not None and len(id_col_value.text.strip()) > 0:
+        elem_label_regex = "^(?P<label>{0})[\\n ]?$".format(
           self.elem_label_regex_maker(id_col_value.text)
         )
       if self.elem_shape_matches is not None:
         elem_shape_matches = self.elem_shape_matches
       else:
         elem_shape_matches = row[elem_shape_symbol_col_idx].elems
-      # TODO: have a single ItemSearchRule per schedule that maps to results
       self.item_search_rules.append(ItemSearchRule(
         row_ptr={
           "page": page_number,
@@ -408,7 +446,7 @@ class PdfSearcher:
         table_text_key="lighting legend",
         destination=ScheduleTypes.LIGHTING,
         elem_shape_matches=None,
-        elem_label_regex_maker=None
+        elem_label_regex_maker=lambda id_row_text: id_row_text # TODO: some lighting elements don't have this
       ),
     ]
 

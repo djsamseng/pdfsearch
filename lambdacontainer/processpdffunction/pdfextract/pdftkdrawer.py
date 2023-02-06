@@ -9,7 +9,7 @@ import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
 from . import pdfelemtransforms
-from .ltjson import LTJson, ElemListType
+from .ltjson import LTJson, ElemListType, BboxType
 
 class MousePositionTracker(tk.Frame):
     """ Tkinter Canvas mouse position widget. """
@@ -230,17 +230,17 @@ class ZoomCanvas(ttk.Frame):
       line_ids.append(line_id)
     return line_ids
 
-  def draw_rect(self, box: typing.Tuple[float, float, float, float]):
+  def draw_rect(self, box: typing.Tuple[float, float, float, float], color: str="black"):
     x0, y0, x1, y1 = box
     x0, y0 = self.rot_point(x0, y0)
     x1, y1 = self.rot_point(x1, y1)
-    rect_id = self.canvas.create_rectangle(x0, y0, x1, y1)
+    rect_id = self.canvas.create_rectangle(x0, y0, x1, y1, outline=color)
     return [rect_id]
 
-  def insert_text(self, pt: typing.Tuple[float, float], text: str, font_size:int=12):
+  def insert_text(self, pt: typing.Tuple[float, float], text: str, font_size:int=12, fill:str="black"):
     x, y = pt
     x, y = self.rot_point(x, y)
-    text_id = self.canvas.create_text(x, y, fill="black", font=("Arial", font_size), text=text)
+    text_id = self.canvas.create_text(x, y, fill=fill, font=("Arial", font_size), text=text)
     return [text_id]
 
   def scroll_y(self, *args, **kwargs):
@@ -568,6 +568,9 @@ class TkDrawer:
         #pass
         print("Unhandled draw", wrapper)
         #assert False, "Unhandled draw" + str(elem)
+
+  def draw_bbox(self, bbox: BboxType, color: str):
+    _ = self.app.canvas.draw_rect(bbox, color)
 
   def get_minx_miny(self, wrappers: typing.Iterable[LTJson]):
     xmin = self.page_width
