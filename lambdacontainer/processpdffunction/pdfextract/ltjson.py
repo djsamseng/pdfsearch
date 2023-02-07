@@ -205,47 +205,39 @@ class LTJsonEncoder(json.JSONEncoder):
       return o.as_dict()
     return None
 
-class PdfItemPtr(typing.TypedDict):
+
+class ScheduleTypes(str, enum.Enum):
+  DOORS = "doors"
+  WINDOWS = "windows"
+  LIGHTING = "lighting"
+
+class PdfRowPtr(typing.TypedDict):
+  schedule: ScheduleTypes
   page: int
-  id: str
-class PdfSchedulePtr(typing.TypedDict):
-  page: int
-  scheduleName: str
-class PdfElem(typing.TypedDict):
-  label: str
-  bbox: BboxType
-  rowPtr: PdfItemPtr
-class PdfScheduleRow(typing.TypedDict):
-  elems: typing.List[PdfItemPtr]
-  cells: typing.List[PdfItemPtr]
-class PdfSchedule(typing.TypedDict):
-  headerRowPtr: PdfItemPtr
-  rowsRowPtrs: typing.List[PdfItemPtr]
-class PdfScheduleCellMatchCriteria(typing.TypedDict):
-  schedulePtr: PdfSchedulePtr
-  matchCellKey: str
-  matchCellLabel: str
+  row: int
+
 class PdfScheduleCell(typing.TypedDict):
   key: str
   label: str
   bbox: BboxType
-  rowPtr: PdfItemPtr
-  matchCriteria: typing.Union[None, PdfScheduleCellMatchCriteria]
-class PdfSummaryJsonItem(typing.TypedDict):
-  elems: typing.Dict[str, PdfElem]
-  rows: typing.Dict[str, PdfScheduleRow]
-  cells: typing.Dict[str, PdfScheduleCell]
-class ScheduleTypes(enum.Enum):
-  DOORS = "doors"
-  WINDOWS = "windows"
-  LIGHTING = "lighting"
-class PdfSummaryJsonSchedules(typing.TypedDict):
+  rowPtr: PdfRowPtr
+
+class PdfElem(typing.TypedDict):
+  label: str
+  bbox: BboxType
+  rowPtr: PdfRowPtr
+
+class PdfScheduleRow(typing.TypedDict):
+  elems: typing.List[PdfElem]
+  cells: typing.List[PdfScheduleCell]
+class PdfSchedule(typing.TypedDict):
+  headerRow: PdfScheduleRow
+  rows: typing.List[PdfScheduleRow]
+
+class PdfSummaryJson(typing.TypedDict):
   doors: typing.Dict[int, PdfSchedule]
   windows: typing.Dict[int, PdfSchedule]
   lighting: typing.Dict[int, PdfSchedule]
-class PdfSummaryJson(typing.TypedDict):
-  items: typing.Dict[int, PdfSummaryJsonItem]
-  schedules: PdfSummaryJsonSchedules
   houseName: str
   architectName: str
   pageNames: typing.Dict[int, str]

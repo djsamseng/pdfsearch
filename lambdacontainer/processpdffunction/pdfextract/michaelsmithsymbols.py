@@ -20,7 +20,7 @@ from . import pdfindexer
 from . import pdftkdrawer
 from . import votesearch
 from . import dataprovider, pdfprocessor
-from .ltjson import LTJson, LTJsonEncoder, BboxType
+from .ltjson import LTJson, LTJsonEncoder, BboxType, ScheduleTypes
 
 def find_contains_with_room(
   indexer: pdfindexer.PdfIndexer,
@@ -309,10 +309,12 @@ def processlighting():
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   elems = [e for e in elems if not e.is_container]
   drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=False)
-  for _, item in results["items"][2]["elems"].items():
-    drawer.draw_bbox(item["bbox"], color="blue")
-    drawer.app.canvas.insert_text(
-      pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+  # TODO: Compare circular paths
+  for row in results["lighting"][2]["rows"]:
+    for item in row["elems"]:
+      drawer.draw_bbox(item["bbox"], color="blue")
+      drawer.app.canvas.insert_text(
+        pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
 
   drawer.show("Below")
 
@@ -373,10 +375,15 @@ def process_pdf_imp():
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   elems = [e for e in elems if not e.is_container]
   drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=False)
-  for _, item in ltjson_results["items"][page_idx]["elems"].items():
-    drawer.draw_bbox(item["bbox"], color="blue")
-    drawer.app.canvas.insert_text(
-      pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+  for schedule in [ScheduleTypes.DOORS, ScheduleTypes.WINDOWS, ScheduleTypes.LIGHTING]:
+    for page in ltjson_results[schedule.value].keys():
+      if page != page_idx:
+        continue
+      for row in ltjson_results[schedule.value][page]["rows"]:
+        for item in row["elems"]:
+          drawer.draw_bbox(item["bbox"], color="blue")
+          drawer.app.canvas.insert_text(
+            pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
   drawer.show("Found")
 
 def process_pdf():

@@ -12,8 +12,7 @@ import rtree
 
 from . import pdfindexer, pdfextracter, pdfelemtransforms
 from .ltjson import LTJson, BboxType, PdfElem, PdfSchedule, PdfScheduleCell, PdfScheduleRow,\
-   PdfScheduleCellMatchCriteria, PdfSummaryJson, PdfSummaryJsonItem, PdfSummaryJsonSchedules, \
-    PdfItemPtr, ScheduleTypes
+   PdfSummaryJson, PdfRowPtr, ScheduleTypes
 
 def get_uuid() -> str:
   return uuid.uuid4().hex
@@ -157,12 +156,9 @@ class SearchRule(metaclass=ABCMeta):
 
 def make_empty_pdfsummarryjson() -> PdfSummaryJson:
   return {
-    "items": {},
-    "schedules": {
-      "doors": {},
-      "windows": {},
-      "lighting": {},
-    },
+    "doors": {},
+    "windows": {},
+    "lighting": {},
     "houseName": "",
     "architectName": "",
     "pageNames": {}
@@ -171,7 +167,7 @@ def make_empty_pdfsummarryjson() -> PdfSummaryJson:
 class ItemSearchRule(SearchRule):
   def __init__(
     self,
-    row_ptr: PdfItemPtr,
+    row_ptr: PdfRowPtr,
     regex: typing.Union[None, str],
     shape_matches: typing.List[LTJson] # TODO: Replace with just the shape
   ) -> None:
@@ -306,7 +302,6 @@ class ScheduleSearchRule(SearchRule):
     if header_row is not None and rows is not None:
       self.__insert_new_schedule(page_number=page_number, header_row=header_row, rows=rows)
 
-    print(self.destination, len(self.item_search_rules))
     for item_search_rule in self.item_search_rules:
       self.__process_search_rule(
         item_search_rule=item_search_rule,
@@ -318,43 +313,27 @@ class ScheduleSearchRule(SearchRule):
   def get_results(self) -> PdfSummaryJson:
     return self.results
 
-  def __insert_row_item(
+  def __get_row_cells(
     self,
     page_number: int,
-    row_id: str,
+    row_idx: int,
     row: typing.List[pdfextracter.ExtractedRowElem],
     header_row: typing.List[pdfextracter.ExtractedRowElem],
-  ) -> int:
-    if page_number not in self.results["items"]:
-      self.results["items"][page_number] = {
-        "elems": {},
-        "cells": {},
-        "rows": {},
-      }
-    self.results["items"][page_number]["rows"][row_id] = {
-      "elems": [],
-      "cells": [],
-    }
-    elem_shape_symbol_col_idx = 0
+  ) -> typing.List[PdfScheduleCell]:
+    out: typing.List[PdfScheduleCell] = []
     for idx in range(len(header_row)):
-      if header_row[idx].text.lower().find("symbol") >= 0:
-        elem_shape_symbol_col_idx = idx
-      cell_id = get_uuid()
-      self.results["items"][page_number]["cells"][cell_id] = {
+      new_cell: PdfScheduleCell = {
         "key": header_row[idx].text,
         "label": row[idx].text,
         "bbox": row[idx].bbox,
         "rowPtr": {
+          "schedule": self.destination,
           "page": page_number,
-          "id": row_id
+          "row": row_idx,
         },
-        "matchCriteria": None
       }
-      self.results["items"][page_number]["rows"][row_id]["cells"].append({
-        "page": page_number,
-        "id": cell_id,
-      })
-    return elem_shape_symbol_col_idx
+      out.append(new_cell)
+    return out
 
   def __insert_new_schedule(
     self,
@@ -363,34 +342,33 @@ class ScheduleSearchRule(SearchRule):
     rows: typing.List[typing.List[pdfextracter.ExtractedRowElem]]
   ) -> None:
     self.item_search_rules = []
-    header_row_id = get_uuid()
-    self.results["schedules"][self.destination.value][page_number] = {
-      "headerRowPtr": {
-        "page": page_number,
-        "id": header_row_id,
+    self.results[self.destination.value][page_number] = {
+      "headerRow": {
+        "elems": [],
+        "cells": self.__get_row_cells(
+          page_number=page_number,
+          row_idx=-1,
+          row=header_row,
+          header_row=header_row,
+        ),
       },
-      "rowsRowPtrs": []
+      "rows": []
     }
-    self.__insert_row_item(
-      page_number=page_number,
-      row_id=header_row_id,
-      row=header_row,
-      header_row=header_row
-    )
-    for row in rows:
+    elem_shape_symbol_col_idx = 0
+    for idx in range(len(header_row)):
+      if header_row[idx].text.lower().find("symbol") >= 0:
+        elem_shape_symbol_col_idx = idx
+    for idx, row in enumerate(rows):
       id_col_value = row[0]
-      row_id = get_uuid()
-      self.results["schedules"][self.destination.value][page_number]["rowsRowPtrs"].append({
-        "page": page_number,
-        "id": row_id
+      self.results[self.destination.value][page_number]["rows"].append({
+        "elems": [],
+        "cells": self.__get_row_cells(
+          page_number=page_number,
+          row_idx=idx,
+          row=row,
+          header_row=header_row,
+        )
       })
-      elem_shape_symbol_col_idx = self.__insert_row_item(
-        page_number=page_number,
-        row_id=row_id,
-        row=row,
-        header_row=header_row
-      )
-
       elem_label_regex = None
       if self.elem_label_regex_maker is not None and len(id_col_value.text.strip()) > 0:
         elem_label_regex = "^(?P<label>{0})[\\n ]?$".format(
@@ -402,8 +380,9 @@ class ScheduleSearchRule(SearchRule):
         elem_shape_matches = row[elem_shape_symbol_col_idx].elems
       self.item_search_rules.append(ItemSearchRule(
         row_ptr={
+          "schedule": self.destination,
           "page": page_number,
-          "id": row_id,
+          "row": idx,
         },
         regex=elem_label_regex,
         shape_matches=elem_shape_matches,
@@ -420,19 +399,14 @@ class ScheduleSearchRule(SearchRule):
     item_results = item_search_rule.get_results()
     for item_result in item_results:
       row_ptr_page_number = item_result["rowPtr"]["page"]
-      row_ptr_id = item_result["rowPtr"]["id"]
-      item_id = get_uuid()
-      self.results["items"][row_ptr_page_number]["rows"][row_ptr_id]["elems"].append({
-        "page": page_number,
-        "id": item_id
-      })
-      if page_number not in self.results["items"]:
-        self.results["items"][page_number] = {
-          "elems": {},
-          "rows": {},
-          "cells": {},
-        }
-      self.results["items"][page_number]["elems"][item_id] = item_result
+      row_ptr_row_idx = item_result["rowPtr"]["row"]
+      row_ptr_schedule = item_result["rowPtr"]["schedule"]
+      self.results[row_ptr_schedule.value][row_ptr_page_number]["rows"][row_ptr_row_idx]["elems"].append({
+          "label": item_result["label"],
+          "bbox": item_result["bbox"],
+          # rowPtr from the schedule that created the rule not necessarily the current schedule rule
+          "rowPtr": item_result["rowPtr"]
+        })
 
 class PdfSearcher:
   '''
