@@ -172,15 +172,7 @@ class LTJson:
     path_lines = self.get_path_lines()
     if len(path_lines) == 0:
       return self.__zeroed_path_lines
-
-    (x0, y0), (x1, y1) = path_lines[0]
-    xmin = min(x0, x1)
-    ymin = min(y0, y1)
-    for (x0, y0), (x1, y1) in path_lines:
-      xmin = min(xmin, min(x0, x1))
-      ymin = min(ymin, min(y0, y1))
-    for (x0, y0), (x1, y1) in path_lines:
-      self.__zeroed_path_lines.append(((x0-xmin, y0-ymin), (x1-xmin, y1-ymin)))
+    self.__zeroed_path_lines = path_utils.get_zeroed_path_lines(path_lines=path_lines)
     return self.__zeroed_path_lines
 
   def get_zeroed_bbox(self):
@@ -210,23 +202,19 @@ class ScheduleTypes(str, enum.Enum):
   DOORS = "doors"
   WINDOWS = "windows"
   LIGHTING = "lighting"
-
 class PdfRowPtr(typing.TypedDict):
   schedule: ScheduleTypes
   page: int
   row: int
-
 class PdfScheduleCell(typing.TypedDict):
   key: str
   label: str
   bbox: BboxType
   rowPtr: PdfRowPtr
-
 class PdfElem(typing.TypedDict):
   label: str
   bbox: BboxType
   rowPtr: PdfRowPtr
-
 class PdfScheduleRow(typing.TypedDict):
   elems: typing.List[PdfElem]
   cells: typing.List[PdfScheduleCell]

@@ -11,9 +11,9 @@ import gzip
 import re
 
 import numpy as np
-import pdfminer.high_level
+import pdfminer.high_level, pdfminer.utils
 
-from . import debug_utils
+from . import debug_utils, path_utils
 from . import pdfelemtransforms
 from . import pdfextracter
 from . import pdfindexer
@@ -245,6 +245,63 @@ def line_slope(elem: LTJson):
   x0, y0, x1, y1 = elem.bbox
   return (y1 - y0) / x1 - x0
 
+def classify():
+  elems, width, height = get_pdf(which=1, page_number=2)
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+  header_row, rows = pdfextracter.extract_table(
+    indexer=indexer,
+    text_key="lighting legend",
+    has_header=True,
+    header_above_table=True,
+  )
+  if header_row is None or rows is None:
+    print("No header or no rows", header_row, rows)
+    return
+  curves = rows[0][1].elems
+  vert_line = curves[0]
+  horiz_line = curves[1]
+  inner_circle = curves[2]
+  outer_circle = curves[3]
+  zeroed_curves = [
+    path_utils.get_zeroed_path_lines(
+      path_utils.path_to_lines(path=c.original_path)
+    ) for c in curves if c.original_path is not None
+  ]
+
+  to_match = [
+    [
+      ('m', (1459.2, 937.17)),
+      ('c', (1459.2, 938.5783008), (1458.0583596, 939.7199999999999), (1456.6499999999999, 939.7199999999999)),
+      ('c', (1455.2416404, 939.7199999999999), (1454.1, 938.5783008), (1454.1, 937.17)),
+      ('c', (1454.1, 935.7616992), (1455.2416404, 934.62), (1456.6499999999999, 934.62)),
+      ('c', (1458.0583596, 934.62), (1459.2, 935.7616992), (1459.2, 937.17))
+    ],
+    [('m', (1460.04, 937.17)), ('c', (1460.04, 939.042246), (1458.5221878, 940.56), (1456.6499999999999, 940.56)), ('c', (1454.7778128, 940.56), (1453.26, 939.042246), (1453.26, 937.17)), ('c', (1453.26, 935.2977539999999), (1454.7778128, 933.78), (1456.6499999999999, 933.78)), ('c', (1458.5221878, 933.78), (1460.04, 935.2977539999999), (1460.04, 937.17))],
+    [('m', (1454.04, 937.14)), ('l', (1459.1399999999999, 937.14))],
+    [('m', (1456.62, 934.62)), ('l', (1456.62, 939.7199999999999))],
+  ]
+  match_inner_circle = to_match[0]
+  match_outer_circle = to_match[1]
+  match_horiz_line = to_match[2]
+  match_vert_line = to_match[3]
+  zeroed_to_match = [
+    path_utils.get_zeroed_path_lines(
+      path_utils.path_to_lines(path=typing.cast(typing.List[pdfminer.utils.PathSegment], c))
+    ) for c in [match_vert_line, match_horiz_line, match_inner_circle, match_outer_circle]
+  ]
+  for idx in range(len(zeroed_to_match)):
+    dist = pdfindexer.line_set_distance(zeroed_to_match[idx], zeroed_curves[idx], max_dist=2)
+    print(idx, dist)
+
+  return
+  row_elems: typing.List[LTJson] = []
+  for row in rows[0:1]:
+    for r in row[1:2]:
+      row_elems.extend(r.elems)
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=True)
+  drawer.show("Below")
+
 def findschedule():
   elems, width, height = get_pdf(which=1, page_number=1)
   indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
@@ -396,6 +453,7 @@ def process_pdf():
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--getall", dest="getall", default=False, action="store_true")
+  parser.add_argument("--classify", dest="classify", default=False, action="store_true")
   parser.add_argument("--test", dest="test", default=False, action="store_true")
   # Save the results to a file
   parser.add_argument("--save", dest="save", default=False, action="store_true")
@@ -419,6 +477,8 @@ def main():
   args = parse_args()
   if args.test:
     test_encode_decode()
+  elif args.classify:
+    classify()
   elif args.showall or args.page is not None:
     showall(args.page)
   elif args.x0 is not None and args.y0 is not None and args.x1 is not None and args.y1 is not None:

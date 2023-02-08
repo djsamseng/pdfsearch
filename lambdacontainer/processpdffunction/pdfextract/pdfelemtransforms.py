@@ -108,3 +108,19 @@ def bounding_bbox(elems: typing.List[LTJson]):
     xmax = max(xmax, x1)
     ymax = max(ymax, y1)
   return xmin, ymin, xmax, ymax
+
+def bbox_circumference(bbox: BboxType):
+  return 2 * (bbox[2] - bbox[0]) + 2 * (bbox[3] - bbox[1])
+
+def bounding_bbox_nested(nested: typing.List[typing.List[LTJson]]):
+  if len(nested) == 0:
+    return 0, 0, 1, 1
+  biggest = bounding_bbox(elems=nested[0])
+  biggest_circum = bbox_circumference(biggest)
+  for elems in nested:
+    potential = bounding_bbox(elems=elems)
+    circum = bbox_circumference(potential)
+    if circum > biggest_circum:
+      biggest = potential
+      biggest_circum = circum
+  return biggest

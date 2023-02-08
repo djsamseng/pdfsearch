@@ -70,3 +70,15 @@ def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
     else:
       print("Unhandled path point:", pt)
   return lines
+
+def get_zeroed_path_lines(path_lines: typing.List[LinePointsType]):
+  out: typing.List[LinePointsType] = []
+  (x0, y0), (x1, y1) = path_lines[0]
+  xmin = min(x0, x1)
+  ymin = min(y0, y1)
+  for (x0, y0), (x1, y1) in path_lines:
+    xmin = min(xmin, min(x0, x1))
+    ymin = min(ymin, min(y0, y1))
+  for (x0, y0), (x1, y1) in path_lines:
+    out.append(((x0-xmin, y0-ymin), (x1-xmin, y1-ymin)))
+  return out

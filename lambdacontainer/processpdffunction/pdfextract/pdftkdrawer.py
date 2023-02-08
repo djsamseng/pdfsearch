@@ -408,7 +408,7 @@ class TkDrawerMainWindow(ttk.Frame):
     self.master.rowconfigure(0, weight=1) # Expandable
     self.master.columnconfigure(0, weight=1)
     self.master.bind("<Key>", lambda event: self.master.after_idle(self.__keystroke, event))
-    self.controlPanel = TkDrawerControlPanel(root=self.master, controls_width=200, controls_height=1_000)
+    self.controlPanel = TkDrawerControlPanel(root=self.master, controls_width=300, controls_height=1_000)
     self.controlPanel.grid(row=0, column=1)
     self.canvas = ZoomCanvas(root=self.master, page_width=page_width, page_height=page_height, on_selection=on_selection)
     self.canvas.grid(row=0, column=0)
@@ -433,27 +433,39 @@ class TkDrawer:
     self.page_height = height
     self.app = TkDrawerMainWindow(root=root, window_width=1200, window_height=800, page_width=width, page_height=height, on_selection=self.on_selection)
     self.id_to_elem: typing.Dict[int, LTJson] = {}
+    self.selected_elems: typing.Dict[LTJson, bool] = {}
 
   def on_selection(
     self,
     line_ids: typing.List[int],
   ):
     self.app.controlPanel.clear_buttons()
+    def on_save():
+      for elem, selected in self.selected_elems.items():
+        if selected:
+          print(elem.bbox, elem.original_path)
+    self.app.controlPanel.add_button(text="save", callback=on_save)
     elems: typing.DefaultDict[LTJson, typing.List[int]] = collections.defaultdict(list)
+    self.selected_elems = {}
     for id in line_ids:
       if id in self.id_to_elem:
         elem = self.id_to_elem[id]
         elems[elem].append(id)
     for elem, ids in elems.items():
+      self.selected_elems[elem] = True
       text = ""
       if elem.text is not None:
         text += elem.text.replace("\n", " ")
       def on_press(ids: typing.List[int]):
+        for id in ids:
+          elem = self.id_to_elem[id]
+          self.selected_elems[elem] = not self.selected_elems[elem]
         self.app.canvas.set_item_visibility(ids)
 
       self.app.controlPanel.add_button(
-        text="{0} {1} {2}".format(text, pdfminer_class_name(elem), elem.original_path),
+        text="{0} {1} {2} {3}".format(text, pdfminer_class_name(elem), elem.bbox, elem.original_path),
         callback=lambda ids=ids: on_press(ids))
+    self.app.controlPanel.finish_draw()
 
 
   def insert_container(

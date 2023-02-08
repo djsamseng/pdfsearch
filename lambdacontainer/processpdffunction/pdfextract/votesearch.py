@@ -164,12 +164,32 @@ def make_empty_pdfsummarryjson() -> PdfSummaryJson:
     "pageNames": {}
   }
 
+def shape_group_matches(
+  shape_group: typing.List[LTJson],
+  to_search: typing.List[LTJson]
+) -> typing.List[LTJson]:
+  if len(shape_group) == 0 or len(to_search) == 0:
+    return []
+  all_matching_curves: typing.List[LTJson] = []
+  for shape in shape_group:
+    # TODO: Only find similar curves that have not already been used (ex: double circle)
+    matching_curves = pdfindexer.find_similar_curves(
+      wrapper_to_find=shape,
+      wrappers_to_search=to_search,
+      max_dist=2.
+    )
+    all_matching_curves.extend(matching_curves)
+    if len(matching_curves) == 0:
+      return []
+  return all_matching_curves
+
 class ItemSearchRule(SearchRule):
   def __init__(
     self,
     row_ptr: PdfRowPtr,
     regex: typing.Union[None, str],
-    shape_matches: typing.List[LTJson] # TODO: Replace with just the shape
+    # Match one of the outer list of all of the inner list
+    shape_matches: typing.List[typing.List[LTJson]]
   ) -> None:
     self.row_ptr = row_ptr
     self.regex = re.compile(regex) if regex is not None else None
@@ -178,17 +198,11 @@ class ItemSearchRule(SearchRule):
     if len(self.shape_matches) == 0:
       return
 
-    self.bounding_box = pdfelemtransforms.bounding_bbox(elems=self.shape_matches)
-    self.bounding_box = (
-      self.bounding_box[0] - self.shape_matches[0].bbox[0],
-      self.bounding_box[1] - self.shape_matches[0].bbox[1],
-      self.bounding_box[2] - self.shape_matches[0].bbox[0],
-      self.bounding_box[3] - self.shape_matches[0].bbox[1],
-    )
+    self.bounding_box = pdfelemtransforms.bounding_bbox_nested(nested=self.shape_matches)
     self.radius = max(
       self.bounding_box[2] - self.bounding_box[0],
       self.bounding_box[3] - self.bounding_box[1]
-    )
+    ) * 2
 
   def process_page(self, page_number: int, elems: typing.List[LTJson], indexer: pdfindexer.PdfIndexer):
     if len(self.shape_matches) == 0:
@@ -234,10 +248,10 @@ class ItemSearchRule(SearchRule):
       if len(matching_curves) == 0:
         return
       around_bbox = (
-        elem.bbox[0] + self.bounding_box[0],
-        elem.bbox[1] + self.bounding_box[1],
-        elem.bbox[2] + self.bounding_box[2],
-        elem.bbox[3] + self.bounding_box[3],
+        elem.bbox[0] - self.radius,
+        elem.bbox[1] - self.radius,
+        elem.bbox[2] + self.radius,
+        elem.bbox[3] + self.radius,
       )
     #  30847    0.062    0.000    0.103    0.000 layout.py:360(__init__) LTChar
     #   8279    0.003    0.000    0.016    0.000 layout.py:483(__init__) LTTextContainer
@@ -248,20 +262,38 @@ class ItemSearchRule(SearchRule):
     # Maybe just making the regex more strict?
     # That gets us down to
     #    294    0.002    0.000    0.275    0.001 pdfindexer.py:50(find_contains)
-    around_elems = indexer.find_intersection(bbox=around_bbox)
+    around_elems = indexer.find_contains(bbox=around_bbox)
     matched_elems: typing.List[LTJson] = []
-    for shape in self.shape_matches:
-      # TODO: Only find similar curves that have not already been used (ex: double circle)
-      matching_curves = pdfindexer.find_similar_curves(
-        wrapper_to_find=shape,
-        wrappers_to_search=around_elems,
-        max_dist=2.
-      )
-      if len(matching_curves) == 0:
-        return
-      matched_elems.extend(matching_curves)
-    matched_elems.append(elem)
-    highlight_bbox = pdfelemtransforms.bounding_bbox(matched_elems)
+
+    for shape_group in self.shape_matches:
+      # around_bbox = (1432.32, 952.4616762, 1464.70715226, 987.4784561999999)
+      # NEED TO FIND BBOXES =
+      # (1454.1, 934.62, 1459.2, 939.7199999999999)
+      # (1453.26, 933.78, 1460.04, 940.56)
+      # (1454.04, 937.14, 1459.1399999999999, 937.14)
+      # (1456.62, 934.62, 1456.62, 939.7199999999999)
+      # (1443.3, 937.14, 1456.62, 952.1999999999999)
+      # y0 is too small even though we are drawing them correctly?
+      if label == "A" and abs(elem.bbox[0] - 1400) < 100 and abs(elem.bbox[1]-966) < 10:
+        matching_curves = shape_group_matches(shape_group=shape_group, to_search=around_elems)
+        print("Found A:", len(matching_curves), elem.bbox, len(around_elems), around_bbox)
+        print(len(self.shape_matches))
+        for elem in self.shape_matches[0]:
+          print(elem.original_path)
+        print("====")
+        for elem in around_elems:
+          print(elem.original_path)
+        if len(matching_curves) > 0:
+          matched_elems.extend(matching_curves)
+          break
+
+    #matched_elems.append(elem)
+    highlight_bbox = (
+      elem.bbox[0] - self.radius,
+      elem.bbox[1] - self.radius,
+      elem.bbox[2] + self.radius,
+      elem.bbox[3] + self.radius
+    )# pdfelemtransforms.bounding_bbox(matched_elems)
     pdf_elem: PdfElem = {
       "label": label,
       "bbox": highlight_bbox,
@@ -277,7 +309,7 @@ class ScheduleSearchRule(SearchRule):
     self,
     table_text_key:str,
     destination: ScheduleTypes,
-    elem_shape_matches: typing.Union[None, typing.List[LTJson]],
+    elem_shape_matches: typing.Union[None, typing.List[typing.List[LTJson]]],
     elem_label_regex_maker: typing.Union[None, typing.Callable[[str], str]]
   ) -> None:
     self.table_text_key = table_text_key
@@ -377,7 +409,7 @@ class ScheduleSearchRule(SearchRule):
       if self.elem_shape_matches is not None:
         elem_shape_matches = self.elem_shape_matches
       else:
-        elem_shape_matches = row[elem_shape_symbol_col_idx].elems
+        elem_shape_matches = [row[elem_shape_symbol_col_idx].elems] # Need to match all of 1 option
       self.item_search_rules.append(ItemSearchRule(
         row_ptr={
           "schedule": self.destination,
@@ -431,13 +463,13 @@ class PdfSearcher:
       ScheduleSearchRule(
         table_text_key="door schedule",
         destination=ScheduleTypes.DOORS,
-        elem_shape_matches=[global_symbols["door_label"][0]],
+        elem_shape_matches=[global_symbols["door_label"][0:1]],
         elem_label_regex_maker=lambda id_row_text: id_row_text,
       ),
       ScheduleSearchRule(
         table_text_key="window schedule",
         destination=ScheduleTypes.WINDOWS,
-        elem_shape_matches=[global_symbols["window_label"][0]],
+        elem_shape_matches=[global_symbols["window_label"][0:1]],
         elem_label_regex_maker=lambda id_row_text: id_row_text.replace("##", "\\d\\d")
       ),
       ScheduleSearchRule(

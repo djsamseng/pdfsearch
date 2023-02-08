@@ -158,6 +158,7 @@ def line_set_distance(
   return total_dist
 
 # TODO: Search for union of multiple wrappers_to_find
+
 def find_similar_curves(
   wrapper_to_find: LTJson,
   wrappers_to_search: typing.List[LTJson],
@@ -165,25 +166,35 @@ def find_similar_curves(
 ) -> typing.List[LTJson]:
   lines_to_find = wrapper_to_find.get_zeroed_path_lines()
   if wrapper_to_find.width <= 0.1:
-    return []
-  to_find_h_w_ratio = wrapper_to_find.height / wrapper_to_find.width
+    to_find_h_w_ratio = 1000
+  else:
+    to_find_h_w_ratio = min(1000, wrapper_to_find.height / wrapper_to_find.width)
   if len(lines_to_find) == 0:
+    print("No to find")
     return []
 
   results: typing.List[LTJson] = []
+  best_dist = None
   for wrapper in wrappers_to_search:
     if wrapper.width <= 0.1:
-      continue
-    potential_h_w_ratio = wrapper.height / wrapper.width
+      potential_h_w_ratio = 1000
+    else:
+      potential_h_w_ratio = min(1000, wrapper.height / wrapper.width)
     if abs(to_find_h_w_ratio - potential_h_w_ratio) > 0.1:
-      continue
+      print("Ratio")
+      #continue
     potential_lines = wrapper.get_zeroed_path_lines()
     if len(potential_lines) == 0:
+      print("potential")
       continue
     # TODO: line distance by area drawn instead of just start/stop
     # TODO: size agnostic
     dist = line_set_distance(lines1=lines_to_find, lines2=potential_lines, max_dist=max_dist)
+    print("dist:", dist)
     if dist < max_dist:
-      results.append(wrapper)
+      if best_dist is None or dist < best_dist:
+        best_dist = dist
+        results = [wrapper]
+      #results.append(wrapper)
 
   return results
