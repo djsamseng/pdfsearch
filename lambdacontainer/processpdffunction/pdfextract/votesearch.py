@@ -25,45 +25,40 @@ def item_is_multiline_text(item: PdfElem):
     return item_multiline
   return False
 
-def remove_duplicate_bbox_orig(items: typing.List[PdfElem]):
-  bbox_indexer = rtree.index.Index()
-  idx = 0
-  radius = 0
-  out: typing.List[PdfElem] = []
-  should_swap_out: typing.List[bool] = []
-  for item in items:
-    results = bbox_indexer.intersection(item["bbox"])
-    if results is not None:
-      results = list(results)
-    if results is not None and len(results) == 1:
-      idx = results[0]
-      if should_swap_out[idx]:
-        out[idx] = item
-    if results is None or len(list(results)) == 0:
-      x0, y0, x1, y1 = item["bbox"]
-      bbox = (x0-radius, y0-radius, x1+radius, y1+radius)
-      bbox_indexer.insert(idx, bbox)
-      out.append(item)
-      should_swap_out.append(item_is_multiline_text(item=item))
-  return out
-
-def remove_duplicate_bbox(items: typing.List[LTJson]):
-  def item_size(item: LTJson):
-    x0, y0, x1, y1 = item.bbox
+def remove_duplicate_bbox(items: typing.List[PdfElem]):
+  def item_size(item: PdfElem):
+    x0, y0, x1, y1 = item["bbox"]
     return (x1-x0) * (y1-y0)
   items.sort(key=lambda x: item_size(x), reverse=True) # pylint:disable=unnecessary-lambda
 
   bbox_indexer = rtree.index.Index()
-  out: typing.List[LTJson] = []
+  out: typing.List[PdfElem] = []
   idx = 0
   radius = 0
+  def insert_item(item: PdfElem):
+    x0, y0, x1, y1 = item["bbox"]
+    bbox = (x0-radius, y0-radius, x1+radius, y1+radius)
+    bbox_indexer.insert(idx, bbox)
+    out.append(item)
   for item in items:
-    results = bbox_indexer.intersection(item.bbox)
-    if results is None or len(list(results)) == 0:
-      x0, y0, x1, y1 = item.bbox
-      bbox = (x0-radius, y0-radius, x1+radius, y1+radius)
-      bbox_indexer.insert(idx, bbox)
-      out.append(item)
+    results = bbox_indexer.intersection(item["bbox"])
+    if results is None:
+      insert_item(item)
+    else:
+      results = list(results)
+      if len(results) == 0:
+        insert_item(item)
+      else:
+        overlaps_a_result = False
+        for result in results:
+          overlap = pdfelemtransforms.bbox_intersection_area(a=out[result]["bbox"], b=item["bbox"])
+          width = item["bbox"][2] - item["bbox"][0]
+          height = item["bbox"][3] - item["bbox"][1]
+          if overlap > width * height * 0.9:
+            overlaps_a_result = True
+            break
+        if not overlaps_a_result:
+          insert_item(item)
   return out
 
 MultiClassSearchRuleResults = typing.DefaultDict[
@@ -93,11 +88,6 @@ def create_results_dict() -> MultiClassSearchRuleResults:
       )
     )
   )
-
-
-
-
-
 
 def read_symbols_from_json():
   dirpath = "./"
@@ -173,7 +163,7 @@ def shape_group_matches(
   all_matching_curves: typing.List[LTJson] = []
   for shape in shape_group:
     # TODO: Only find similar curves that have not already been used (ex: double circle)
-    matching_curves = pdfindexer.find_similar_curves(
+    matching_curves = pdfindexer.find_most_similar_curve(
       wrapper_to_find=shape,
       wrappers_to_search=to_search,
       max_dist=2.
@@ -202,7 +192,7 @@ class ItemSearchRule(SearchRule):
     self.radius = max(
       self.bounding_box[2] - self.bounding_box[0],
       self.bounding_box[3] - self.bounding_box[1]
-    ) * 2
+    ) + 10
 
   def process_page(self, page_number: int, elems: typing.List[LTJson], indexer: pdfindexer.PdfIndexer):
     if len(self.shape_matches) == 0:
@@ -216,6 +206,12 @@ class ItemSearchRule(SearchRule):
     return self.results
 
   def __process_elem(self, elem: LTJson, page_number: int, indexer: pdfindexer.PdfIndexer) -> None:
+    around_bbox = (
+      elem.bbox[0] - self.radius,
+      elem.bbox[1] - self.radius,
+      elem.bbox[2] + self.radius,
+      elem.bbox[3] + self.radius,
+    )
     if self.regex is not None:
       if elem.text is None:
         return
@@ -226,33 +222,14 @@ class ItemSearchRule(SearchRule):
       label = groups["label"]
       if len(label) == 0:
         return
-      around_bbox = (
-        elem.bbox[0] - self.radius,
-        elem.bbox[1] - self.radius,
-        elem.bbox[2] + self.radius,
-        elem.bbox[3] + self.radius,
-      )
+
       # TODO: Need voting since regex for "C" can match "CO" and conflict
       # TODO: D8 and D9 page 9 plan.pdf are missing
       # TODO: Need merge filtering to remove similar shapes in odd places
     else:
       return
       # check if the elem matches the first shape match
-      label = ""
-      # the first shape must match to prevent duplicates
-      matching_curves = pdfindexer.find_similar_curves(
-        wrapper_to_find=self.shape_matches[0],
-        wrappers_to_search=[elem],
-        max_dist=2.
-      )
-      if len(matching_curves) == 0:
-        return
-      around_bbox = (
-        elem.bbox[0] - self.radius,
-        elem.bbox[1] - self.radius,
-        elem.bbox[2] + self.radius,
-        elem.bbox[3] + self.radius,
-      )
+
     #  30847    0.062    0.000    0.103    0.000 layout.py:360(__init__) LTChar
     #   8279    0.003    0.000    0.016    0.000 layout.py:483(__init__) LTTextContainer
     #  76655    0.112    0.000    0.184    0.000 ltjson.py:15(__init__)
@@ -264,45 +241,23 @@ class ItemSearchRule(SearchRule):
     #    294    0.002    0.000    0.275    0.001 pdfindexer.py:50(find_contains)
     around_elems = indexer.find_contains(bbox=around_bbox)
     matched_elems: typing.List[LTJson] = []
-
     for shape_group in self.shape_matches:
-      # around_bbox = (1432.32, 952.4616762, 1464.70715226, 987.4784561999999)
-      # NEED TO FIND BBOXES =
-      # (1454.1, 934.62, 1459.2, 939.7199999999999)
-      # (1453.26, 933.78, 1460.04, 940.56)
-      # (1454.04, 937.14, 1459.1399999999999, 937.14)
-      # (1456.62, 934.62, 1456.62, 939.7199999999999)
-      # (1443.3, 937.14, 1456.62, 952.1999999999999)
-      # y0 is too small even though we are drawing them correctly?
-      if label == "A" and abs(elem.bbox[0] - 1400) < 100 and abs(elem.bbox[1]-966) < 10:
-        matching_curves = shape_group_matches(shape_group=shape_group, to_search=around_elems)
-        print("Found A:", len(matching_curves), elem.bbox, len(around_elems), around_bbox)
-        print(len(self.shape_matches))
-        for elem in self.shape_matches[0]:
-          print(elem.original_path)
-        print("====")
-        for elem in around_elems:
-          print(elem.original_path)
-        if len(matching_curves) > 0:
-          matched_elems.extend(matching_curves)
-          break
-
-    #matched_elems.append(elem)
-    highlight_bbox = (
-      elem.bbox[0] - self.radius,
-      elem.bbox[1] - self.radius,
-      elem.bbox[2] + self.radius,
-      elem.bbox[3] + self.radius
-    )# pdfelemtransforms.bounding_bbox(matched_elems)
-    pdf_elem: PdfElem = {
-      "label": label,
-      "bbox": highlight_bbox,
-      "rowPtr": self.row_ptr
-    }
-    self.results.append(pdf_elem)
+      matching_curves = shape_group_matches(shape_group=shape_group, to_search=around_elems)
+      if len(matching_curves) > 0:
+        matched_elems.extend(matching_curves)
+        break
+    if len(matched_elems) > 0:
+      matched_elems.append(elem)
+      highlight_bbox = pdfelemtransforms.bounding_bbox(matched_elems)
+      pdf_elem: PdfElem = {
+        "label": label,
+        "bbox": highlight_bbox,
+        "rowPtr": self.row_ptr
+      }
+      self.results.append(pdf_elem)
 
   def __refine(self):
-    self.results = remove_duplicate_bbox_orig(items=self.results)
+    self.results = remove_duplicate_bbox(items=self.results)
 
 class ScheduleSearchRule(SearchRule):
   def __init__(

@@ -174,7 +174,7 @@ def door_labels_should_match():
   print("=== Lines 2 ===")
   print(curve2.get_zeroed_path_lines())
 
-  matches = pdfindexer.find_similar_curves(wrapper_to_find=curve, wrappers_to_search=[curve2], max_dist=2)
+  matches = pdfindexer.find_most_similar_curve(wrapper_to_find=curve, wrappers_to_search=[curve2], max_dist=2)
   print("Matches:", len(matches))
   return
 
@@ -501,5 +501,5 @@ def main():
 
 
 if __name__ == "__main__":
-  # python3 -m pdfextract.michaelsmithsymbols --process
+  # python3 -m pdfextract.test --process
   main()

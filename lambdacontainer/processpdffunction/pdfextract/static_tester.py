@@ -105,12 +105,9 @@ def extract_window_key(args: typing.Any):
   # Match by shape then search for text inside - works only if shape matches
   print("Count from shapes:", len(draw_wrappers), "Count by text:", len(found_by_text)/2)
 
-  indexer = pdfindexer.PdfIndexer(wrappers=elem_wrappers, page_width=width, page_height=height)
-  indexer_found_shapes = indexer.find_similar_shapes(wrapper_to_find=search_wrapper, query_radius=1)
-  print("Count from indexer no text:", len(indexer_found_shapes))
   if show_ui:
     drawer = pdftkdrawer.TkDrawer(width=width, height=height)
-    drawer.draw_elems(elems=indexer_found_shapes)
+    drawer.draw_elems(elems=draw_wrappers)
 
     drawer.show("First floor construction plan")
 

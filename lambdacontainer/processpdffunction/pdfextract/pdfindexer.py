@@ -106,27 +106,6 @@ class PdfIndexer:
     results = [self.wrappers[idx] for idx in result_idxes]
     return results
 
-  def find_similar_shapes(
-    self,
-    wrapper_to_find: LTJson,
-    query_radius: float,
-  ) -> typing.List[LTJson]:
-    t0 = time.time()
-    similar_height_width = self.find_similar_height_width(
-      width=wrapper_to_find.width,
-      height=wrapper_to_find.height,
-      query_radius=query_radius
-    )
-    t1 = time.time()
-    if wrapper_to_find.original_path is not None:
-      t2 = time.time()
-      ret = find_similar_curves(wrapper_to_find=wrapper_to_find, wrappers_to_search=similar_height_width, max_dist=query_radius)
-      t3 = time.time()
-      if LOG_TIME:
-        print("find_similar_shapes kdtree:", t1-t0, "loop reduce:", t3-t2)
-      return ret
-    return []
-
 def line_distance(
   linea: path_utils.LinePointsType,
   lineb: path_utils.LinePointsType,
@@ -159,19 +138,19 @@ def line_set_distance(
 
 # TODO: Search for union of multiple wrappers_to_find
 
-def find_similar_curves(
+def find_most_similar_curve(
   wrapper_to_find: LTJson,
   wrappers_to_search: typing.List[LTJson],
   max_dist: float,
 ) -> typing.List[LTJson]:
   lines_to_find = wrapper_to_find.get_zeroed_path_lines()
+  if len(lines_to_find) == 0:
+    return []
+
   if wrapper_to_find.width <= 0.1:
     to_find_h_w_ratio = 1000
   else:
     to_find_h_w_ratio = min(1000, wrapper_to_find.height / wrapper_to_find.width)
-  if len(lines_to_find) == 0:
-    print("No to find")
-    return []
 
   results: typing.List[LTJson] = []
   best_dist = None
@@ -181,20 +160,16 @@ def find_similar_curves(
     else:
       potential_h_w_ratio = min(1000, wrapper.height / wrapper.width)
     if abs(to_find_h_w_ratio - potential_h_w_ratio) > 0.1:
-      print("Ratio")
-      #continue
+      continue
     potential_lines = wrapper.get_zeroed_path_lines()
     if len(potential_lines) == 0:
-      print("potential")
       continue
     # TODO: line distance by area drawn instead of just start/stop
     # TODO: size agnostic
     dist = line_set_distance(lines1=lines_to_find, lines2=potential_lines, max_dist=max_dist)
-    print("dist:", dist)
     if dist < max_dist:
       if best_dist is None or dist < best_dist:
         best_dist = dist
         results = [wrapper]
-      #results.append(wrapper)
 
   return results
