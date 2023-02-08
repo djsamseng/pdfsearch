@@ -216,7 +216,7 @@ class PdfElem(typing.TypedDict):
   bbox: BboxType
   rowPtr: PdfRowPtr
 class PdfScheduleRow(typing.TypedDict):
-  elems: typing.List[PdfElem]
+  elems: typing.Dict[int, typing.List[PdfElem]]
   cells: typing.List[PdfScheduleCell]
 class PdfSchedule(typing.TypedDict):
   headerRow: PdfScheduleRow

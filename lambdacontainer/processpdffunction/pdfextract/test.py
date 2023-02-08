@@ -368,10 +368,11 @@ def processlighting():
   drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=False)
   # TODO: Compare circular paths
   for row in results["lighting"][2]["rows"]:
-    for item in row["elems"]:
-      drawer.draw_bbox(item["bbox"], color="blue")
-      drawer.app.canvas.insert_text(
-        pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+    for page in row["elems"].keys():
+      for item in row["elems"][page]:
+        drawer.draw_bbox(item["bbox"], color="blue")
+        drawer.app.canvas.insert_text(
+          pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
 
   drawer.show("Below")
 
@@ -425,6 +426,7 @@ def process_pdf_imp():
 
   # 17 seconds for doors, windows and lighting schedule
   # 18 second for doors, windows and lights
+  # 39 seconds after adding requiring match all shapes in the group not just the first
   print("process_pdf took:", t1-t0)
   page_idx = 2
   page = page_numbers[page_idx]
@@ -434,13 +436,15 @@ def process_pdf_imp():
   drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=False)
   for schedule in [ScheduleTypes.DOORS, ScheduleTypes.WINDOWS, ScheduleTypes.LIGHTING]:
     for page in ltjson_results[schedule.value].keys():
-      if page != page_idx:
-        continue
       for row in ltjson_results[schedule.value][page]["rows"]:
-        for item in row["elems"]:
-          drawer.draw_bbox(item["bbox"], color="blue")
-          drawer.app.canvas.insert_text(
-            pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+        for elem_page in row["elems"].keys():
+          if elem_page != page_idx:
+            continue
+          for item in row["elems"][elem_page]:
+            drawer.draw_bbox(item["bbox"], color="blue")
+            drawer.app.canvas.insert_text(
+              pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+  print("===== Missing D8 and D9 =====")
   drawer.show("Found")
 
 def process_pdf():

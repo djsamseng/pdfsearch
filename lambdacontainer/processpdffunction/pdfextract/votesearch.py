@@ -331,7 +331,7 @@ class ScheduleSearchRule(SearchRule):
     self.item_search_rules = []
     self.results[self.destination.value][page_number] = {
       "headerRow": {
-        "elems": [],
+        "elems": {},
         "cells": self.__get_row_cells(
           page_number=page_number,
           row_idx=-1,
@@ -348,7 +348,7 @@ class ScheduleSearchRule(SearchRule):
     for idx, row in enumerate(rows):
       id_col_value = row[0]
       self.results[self.destination.value][page_number]["rows"].append({
-        "elems": [],
+        "elems": {},
         "cells": self.__get_row_cells(
           page_number=page_number,
           row_idx=idx,
@@ -388,12 +388,15 @@ class ScheduleSearchRule(SearchRule):
       row_ptr_page_number = item_result["rowPtr"]["page"]
       row_ptr_row_idx = item_result["rowPtr"]["row"]
       row_ptr_schedule = item_result["rowPtr"]["schedule"]
-      self.results[row_ptr_schedule.value][row_ptr_page_number]["rows"][row_ptr_row_idx]["elems"].append({
-          "label": item_result["label"],
-          "bbox": item_result["bbox"],
-          # rowPtr from the schedule that created the rule not necessarily the current schedule rule
-          "rowPtr": item_result["rowPtr"]
-        })
+      res_row_ref = self.results[row_ptr_schedule.value][row_ptr_page_number]["rows"][row_ptr_row_idx]
+      if page_number not in res_row_ref["elems"]:
+        res_row_ref["elems"][page_number] = []
+      res_row_ref["elems"][page_number].append({
+        "label": item_result["label"],
+        "bbox": item_result["bbox"],
+        # rowPtr from the schedule that created the rule not necessarily the current schedule rule
+        "rowPtr": item_result["rowPtr"]
+      })
 
 class PdfSearcher:
   '''
