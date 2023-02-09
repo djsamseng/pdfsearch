@@ -224,7 +224,6 @@ class ItemSearchRule(SearchRule):
         return
 
       # TODO: Need voting since regex for "C" can match "CO" and conflict
-      # TODO: D8 and D9 page 9 plan.pdf are missing
       # TODO: Need merge filtering to remove similar shapes in odd places
     else:
       return
@@ -428,7 +427,7 @@ class PdfSearcher:
         table_text_key="window schedule",
         destination=ScheduleTypes.WINDOWS,
         elem_shape_matches=[global_symbols["window_label"][0:1]],
-        elem_label_regex_maker=lambda id_row_text: id_row_text.replace("##", "\\d\\d")
+        elem_label_regex_maker=lambda id_row_text: id_row_text.replace("##", "\\d\\d?")
       ),
       ScheduleSearchRule(
         table_text_key="lighting legend",

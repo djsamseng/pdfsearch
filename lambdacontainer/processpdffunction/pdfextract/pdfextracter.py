@@ -29,7 +29,8 @@ def extract_page_name(indexer: pdfindexer.PdfIndexer):
 
   no_parent.sort(key=lambda c: c.bbox[1], reverse=True)
 
-  page_key_regex = re.compile("[a-zA-Z]-\\d")
+  # TODO: Some pages don't have A-2 etc.
+  page_key_regex = re.compile("[a-zA-Z]-\\d\\d?")
   def is_page_name(text: typing.Union[None, str]):
     if text is None:
       return False

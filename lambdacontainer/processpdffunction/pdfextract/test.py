@@ -185,6 +185,32 @@ def door_labels_should_match():
 
   drawer.show("")
 
+def d8():
+  page_number = 9
+  elems, width, height = get_pdf(which=0, page_number=page_number)
+
+  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_width=width, page_height=height)
+
+  rule = votesearch.ItemSearchRule(
+    row_ptr={
+      "schedule": votesearch.ScheduleTypes.WINDOWS,
+      "page": -1,
+      "row": -1
+    },
+    regex="^(?P<label>{0})[\\n ]?$".format("D\\d\\d?"),
+    shape_matches=[votesearch.global_symbols["window_label"][0:1]])
+  rule.process_page(page_number=page_number, elems=elems, indexer=indexer)
+  results = rule.get_results()
+
+  drawer = pdftkdrawer.TkDrawer(width=width, height=height)
+  drawer.draw_elems(elems=elems, draw_buttons=False, draw_all_text=False)
+  for item in results:
+    drawer.draw_bbox(item["bbox"], color="blue")
+    drawer.app.canvas.insert_text(
+      pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
+
+  drawer.show("All")
+
 
 def showall(page: typing.Union[int, None] = None):
   elems, width, height = get_pdf(which=0, page_number=page)
@@ -366,7 +392,6 @@ def processlighting():
   drawer = pdftkdrawer.TkDrawer(width=width, height=height)
   elems = [e for e in elems if not e.is_container]
   drawer.draw_elems(elems=elems, draw_buttons=False, align_top_left=False)
-  # TODO: Compare circular paths
   for row in results["lighting"][2]["rows"]:
     for page in row["elems"].keys():
       for item in row["elems"][page]:
@@ -444,7 +469,7 @@ def process_pdf_imp():
             drawer.draw_bbox(item["bbox"], color="blue")
             drawer.app.canvas.insert_text(
               pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
-  print("===== Missing D8 and D9 =====")
+  print("Lighting elements found on non lighting page") # TODO
   drawer.show("Found")
 
 def process_pdf():
@@ -475,6 +500,7 @@ def parse_args():
   parser.add_argument("--x1", dest="x1", type=int, required=False)
   parser.add_argument("--y1", dest="y1", type=int, required=False)
   parser.add_argument("--page", dest="page", type=int, required=False)
+  parser.add_argument("--d8", dest="d8", default=False, action="store_true")
   return parser.parse_args()
 
 def main():
@@ -488,6 +514,8 @@ def main():
   elif args.x0 is not None and args.y0 is not None and args.x1 is not None and args.y1 is not None:
     # python3 michaelsmithsymbols.py --y0 306 --x0 549 --y1 329 --x1 579
     show_inside(y0=args.y0, x0=args.x0, y1=args.y1, x1=args.x1)
+  elif args.d8:
+    d8()
   elif args.getall:
     get_all_symbols(save=args.save)
   elif args.findmeta:
