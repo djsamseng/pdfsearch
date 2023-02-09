@@ -237,10 +237,11 @@ class ZoomCanvas(ttk.Frame):
     rect_id = self.canvas.create_rectangle(x0, y0, x1, y1, outline=color)
     return [rect_id]
 
-  def insert_text(self, pt: typing.Tuple[float, float], text: str, font_size:int=12, fill:str="black"):
+  def insert_text(self, pt: typing.Tuple[float, float], text: str, font_size:int=12, fill:str="black", upright:bool=True):
     x, y = pt
     x, y = self.rot_point(x, y)
-    text_id = self.canvas.create_text(x, y, fill=fill, font=("Arial", font_size), text=text)
+    angle = 0 if upright else 90
+    text_id = self.canvas.create_text(x, y, fill=fill, font=("Arial", font_size), text=text, angle=angle)
     return [text_id]
 
   def scroll_y(self, *args, **kwargs):
@@ -513,7 +514,7 @@ class TkDrawer:
       text += wrapper.text.replace("\n", " ")
       x0, y0, x1, y1 = wrapper.bbox
       font_size = 11
-      text_ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size))
+      text_ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size), upright=wrapper.upright)
     if draw_buttons:
       def on_press():
         self.app.canvas.set_item_visibility(ids)
@@ -535,7 +536,7 @@ class TkDrawer:
     font_size = elem.size or 11
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
     # y1 because we flip the point on the y axis
-    ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size))
+    ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size), upright=elem.upright)
     for id in ids:
       self.id_to_elem[id] = elem
     if draw_buttons:

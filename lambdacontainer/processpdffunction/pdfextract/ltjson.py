@@ -34,6 +34,7 @@ class LTJson:
     self.is_rect = False
     self.parent_idx = None
     self.children_idxes = []
+    self.upright = True
 
     # Prive unserialized
     self.__path_lines = None
@@ -57,6 +58,7 @@ class LTJson:
         self.text = elem.get_text()
         if isinstance(elem, pdfminer.layout.LTChar):
           self.size = elem.size
+          self.upright = elem.upright
       if isinstance(elem, pdfminer.layout.LTContainer):
         self.is_container = True
       if isinstance(elem, pdfminer.layout.LTAnno):
@@ -74,6 +76,8 @@ class LTJson:
         self.text = serialized_json["text"]
       if "size" in serialized_json:
         self.size = serialized_json["size"]
+      if "upright" in serialized_json:
+        self.upright = serialized_json["upright"]
       if "original_path" in serialized_json:
         self.original_path = serialized_json["original_path"]
       if "linewidth" in serialized_json:
