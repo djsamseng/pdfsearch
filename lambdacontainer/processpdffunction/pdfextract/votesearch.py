@@ -238,6 +238,16 @@ class ItemSearchRule(SearchRule):
     # Maybe just making the regex more strict?
     # That gets us down to
     #    294    0.002    0.000    0.275    0.001 pdfindexer.py:50(find_contains)
+
+    # Now with multi shape search
+    # 372    0.001    0.000   26.699    0.072 votesearch.py:377(__process_search_rule)
+    # 9659435    3.386    0.000   25.366    0.000 votesearch.py:208(__process_elem)
+    # 11251    0.064    0.000   17.120    0.002 pdfindexer.py:49(find_contains)
+    # 11251   16.752    0.001   16.895    0.002 index.py:599(contains)
+    # 6511582    2.139    0.000    2.139    0.000 {method 'search' of 're.Pattern' objects}
+    # 4    1.788    0.447   10.670    2.667 layout.py:868(group_textboxes)
+    # Only searching lighting on lighting pages
+    # 4528    0.025    0.000    5.296    0.001 pdfindexer.py:49(find_contains)
     around_elems = indexer.find_contains(bbox=around_bbox)
     matched_elems: typing.List[LTJson] = []
     for shape_group in self.shape_matches:
@@ -264,13 +274,15 @@ class ScheduleSearchRule(SearchRule):
     table_text_key:str,
     destination: ScheduleTypes,
     elem_shape_matches: typing.Union[None, typing.List[typing.List[LTJson]]],
-    elem_label_regex_maker: typing.Union[None, typing.Callable[[str], str]]
+    elem_label_regex_maker: typing.Union[None, typing.Callable[[str], str]],
+    reset_rules_on_page:  bool,
   ) -> None:
     self.table_text_key = table_text_key
     self.destination = destination
     self.elem_shape_matches = elem_shape_matches
     self.elem_label_regex_maker = elem_label_regex_maker
     self.item_search_rules: typing.List[ItemSearchRule] = []
+    self.reset_rules_on_page = reset_rules_on_page
     self.results: PdfSummaryJson = make_empty_pdfsummarryjson()
 
   def process_page(
@@ -279,6 +291,8 @@ class ScheduleSearchRule(SearchRule):
     elems: typing.List[LTJson],
     indexer: pdfindexer.PdfIndexer
   ) -> None:
+    if self.reset_rules_on_page:
+      self.item_search_rules = []
     header_row, rows = pdfextracter.extract_table(
       indexer=indexer,
       text_key=self.table_text_key,
@@ -422,18 +436,21 @@ class PdfSearcher:
         destination=ScheduleTypes.DOORS,
         elem_shape_matches=[global_symbols["door_label"][0:1]],
         elem_label_regex_maker=lambda id_row_text: id_row_text,
+        reset_rules_on_page=False,
       ),
       ScheduleSearchRule(
         table_text_key="window schedule",
         destination=ScheduleTypes.WINDOWS,
         elem_shape_matches=[global_symbols["window_label"][0:1]],
-        elem_label_regex_maker=lambda id_row_text: id_row_text.replace("##", "\\d\\d?")
+        elem_label_regex_maker=lambda id_row_text: id_row_text.replace("##", "\\d\\d?"),
+        reset_rules_on_page=False,
       ),
       ScheduleSearchRule(
         table_text_key="lighting legend",
         destination=ScheduleTypes.LIGHTING,
         elem_shape_matches=None,
-        elem_label_regex_maker=lambda id_row_text: id_row_text # TODO: some lighting elements don't have this
+        elem_label_regex_maker=lambda id_row_text: id_row_text, # TODO: some lighting elements don't have this
+        reset_rules_on_page=True,
       ),
     ]
 

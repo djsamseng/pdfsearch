@@ -198,7 +198,8 @@ def d8():
       "row": -1
     },
     regex="^(?P<label>{0})[\\n ]?$".format("D\\d\\d?"),
-    shape_matches=[votesearch.global_symbols["window_label"][0:1]])
+    shape_matches=[votesearch.global_symbols["window_label"][0:1]],
+  )
   rule.process_page(page_number=page_number, elems=elems, indexer=indexer)
   results = rule.get_results()
 
@@ -385,7 +386,8 @@ def processlighting():
     table_text_key="lighting legend",
     destination=votesearch.ScheduleTypes.LIGHTING,
     elem_shape_matches=None,
-    elem_label_regex_maker=lambda id_row_text: id_row_text
+    elem_label_regex_maker=lambda id_row_text: id_row_text,
+    reset_rules_on_page=True,
   )
   rule.process_page(page_number=2, elems=elems, indexer=indexer)
   results = rule.get_results()
@@ -452,6 +454,7 @@ def process_pdf_imp():
   # 17 seconds for doors, windows and lighting schedule
   # 18 second for doors, windows and lights
   # 39 seconds after adding requiring match all shapes in the group not just the first
+  # 24 seconds searching lighting only on lighting pages
   print("process_pdf took:", t1-t0)
   page_idx = 2
   page = page_numbers[page_idx]
@@ -470,6 +473,9 @@ def process_pdf_imp():
             drawer.app.canvas.insert_text(
               pt=(item["bbox"][0], item["bbox"][1]), text=item["label"], font_size=11, fill="blue")
   print("Lighting elements found on non lighting page") # TODO
+  # Decrease probability of a lighting element
+
+  # 1. Far away 2. No lighting legend 3. Letter is a part of a word / something else 4. Letter isn't a floating label
   drawer.show("Found")
 
 def process_pdf():
