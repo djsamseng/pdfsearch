@@ -58,4 +58,7 @@ COPY lambdacontainer/processpdffunction/symbols_michael_smith.json ${LAMBDA_TASK
 # Remove below for production
 COPY plan.pdf ${LAMBDA_TASK_ROOT}
 
+RUN echo "Update pdfminer to not analyze"
+RUN exit 1;
+
 CMD [ "app.handler" ]

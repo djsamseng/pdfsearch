@@ -12,9 +12,50 @@ from .ltjson import LTJson, BboxType
 
 LOG_TIME = False
 
+class PdfLineIndexer:
+  def __init__(
+    self,
+    elems: typing.List[LTJson]
+  ) -> None:
+    self.elems = elems
+    # Manually saving rtree_id_to_elem_idx
+    # 14464    0.026    0.000    0.820    0.000 pdfindexer.py:44(find_intersection)
+    # Saving elem_idx in the rtree and using objects="raw"
+    # 14464    0.034    0.000    5.196    0.000 pdfindexer.py:44(find_intersection)
+    self.rtree_id_to_elem_idx: typing.List[int] = []
+    def insertion_generator(elems: typing.List[LTJson], rtree_id_to_elem_idx: typing.List[int]):
+      rtree_id = 0
+      for elem_idx, elem in enumerate(elems):
+        lines = elem.get_path_lines()
+        if elem.text is not None and len(lines) == 0:
+          yield (rtree_id, elem.bbox, None)
+          rtree_id_to_elem_idx.append(elem_idx)
+          rtree_id += 1
+        else:
+          for line in lines:
+            (x0, y0,), (x1, y1,) = line
+            yield (rtree_id, (x0, y0, x1, y1), None)
+            rtree_id_to_elem_idx.append(elem_idx)
+            rtree_id += 1
+    self.find_by_position_rtree = rtree.index.Index(
+      insertion_generator(elems=elems, rtree_id_to_elem_idx=self.rtree_id_to_elem_idx),
+    )
+
+  def find_intersection(
+    self,
+    bbox: BboxType,
+  ) -> typing.List[LTJson]:
+    result_idxes = self.find_by_position_rtree.intersection(bbox, objects=False)
+    if result_idxes is None:
+      return []
+    result_idxes = typing.cast(typing.List[int], result_idxes)
+    results = [ self.elems[self.rtree_id_to_elem_idx[rtree_id]] for rtree_id in result_idxes ] #pylint: disable=not-an-iterable
+    return results
+
 class PdfIndexer:
   # To find contents inside shapes
   find_by_position_rtree: rtree.index.Index
+  line_indexer: PdfLineIndexer
   # To find similar shapes
   find_by_shape_kdtree: scipy.spatial.KDTree
   def __init__(
@@ -27,6 +68,9 @@ class PdfIndexer:
     self.page_width = page_width
     self.page_height = page_height
     self.wrappers = wrappers
+    tl0 = time.time()
+    self.line_indexer = PdfLineIndexer(elems=wrappers)
+    tl1 = time.time()
     def index_insertion_generator(elems: typing.List[LTJson]):
       for i, wrapper in enumerate(elems):
         yield (i, wrapper.bbox, i)
@@ -44,7 +88,8 @@ class PdfIndexer:
         key_text = elem.text.replace("\n", " ").lower().strip()
         self.text_lookup[key_text].append(elem)
     if LOG_TIME:
-      print("pdfindexer rtree:", t1-t0, "kdtree:", t3-t2, "total:", t3-tb)
+      # 0.25s 0.9s 0.009s total:1.2s
+      print("pdfindexer rtree:", t1-t0, "lineindexer:", tl1-tl0, "kdtree:", t3-t2, "total:", t3-tb)
 
   def find_contains(
     self,
@@ -72,12 +117,7 @@ class PdfIndexer:
     if y_is_down:
       x0, y0, x1, y1 = bbox
       bbox = (x0, self.page_height - y1, x1, self.page_height - y0)
-    result_idxes = self.find_by_position_rtree.intersection(bbox)
-    if result_idxes is None:
-      return []
-    result_idxes = list(result_idxes)
-    results = [self.wrappers[idx] for idx in result_idxes]
-    return results
+    return self.line_indexer.find_intersection(bbox)
 
   def find_top_left_in(
     self,

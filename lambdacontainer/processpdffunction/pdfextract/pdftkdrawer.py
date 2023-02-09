@@ -160,9 +160,17 @@ class ZoomCanvas(ttk.Frame):
   page_width: int - width of the underlying canvas cropped to parent size
   page_height: int - height of the underlying canvas cropped to parent size
   '''
-  def __init__(self, root: tk.Tk, page_width: int, page_height: int, on_selection: typing.Callable[[typing.List[int]], None]):
+  def __init__(
+    self,
+    root: tk.Tk,
+    page_width: int,
+    page_height: int,
+    on_selection: typing.Callable[[typing.List[int]], None],
+    select_intersection: bool,
+  ):
     self.width = page_width
     self.height = page_height
+    self.select_intersection = select_intersection
     self.master = ttk.Frame(root)
     # Vertical and horizontal scrollbars for canvas
     vbar = AutoScrollbar(self.master, orient='vertical')
@@ -201,11 +209,14 @@ class ZoomCanvas(ttk.Frame):
     self.on_selection = on_selection
     def on_drag(start, end, **kwarg):
       self.selection_obj.update(start, end)
-    def on_end(selection):
+    def on_end(selection: typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]):
       if self.on_selection is not None:
         (x0, y0), (x1, y1) = selection
-        enclosed = self.canvas.find_enclosed(x0, y0, x1, y1)
-        self.on_selection(enclosed)
+        if self.select_intersection:
+          selected = self.canvas.find_overlapping(x0, y0, x1, y1)
+        else:
+          selected = self.canvas.find_enclosed(x0, y0, x1, y1)
+        self.on_selection(selected)
     self.pos_tracker = MousePositionTracker(self.canvas, on_end=on_end)
     self.pos_tracker.autodraw(command=on_drag)
 
@@ -402,7 +413,16 @@ class TkDrawerControlPanel:
       self.canvas.yview_scroll(-1, what="units")
 
 class TkDrawerMainWindow(ttk.Frame):
-  def __init__(self, root: tk.Tk, window_width: int, window_height: int, page_width: int, page_height: int, on_selection: typing.Callable[[typing.List[int]], None]):
+  def __init__(
+    self,
+    root: tk.Tk,
+    window_width: int,
+    window_height: int,
+    page_width: int,
+    page_height: int,
+    on_selection: typing.Callable[[typing.List[int]], None],
+    select_intersection: bool,
+  ):
     ttk.Frame.__init__(self, master=root)
     self.master.title("Pdf Drawer")
     self.master.geometry("{0}x{1}".format(window_width, window_height))
@@ -411,7 +431,13 @@ class TkDrawerMainWindow(ttk.Frame):
     self.master.bind("<Key>", lambda event: self.master.after_idle(self.__keystroke, event))
     self.controlPanel = TkDrawerControlPanel(root=self.master, controls_width=300, controls_height=1_000)
     self.controlPanel.grid(row=0, column=1)
-    self.canvas = ZoomCanvas(root=self.master, page_width=page_width, page_height=page_height, on_selection=on_selection)
+    self.canvas = ZoomCanvas(
+      root=self.master,
+      page_width=page_width,
+      page_height=page_height,
+      on_selection=on_selection,
+      select_intersection=select_intersection
+    )
     self.canvas.grid(row=0, column=0)
 
   def __keystroke(self, event):
@@ -428,11 +454,19 @@ def pdfminer_class_name(elem: LTJson):
   return "Unknown" + str(elem.__dict__)
 
 class TkDrawer:
-  def __init__(self, width:int, height:int) -> None:
+  def __init__(self, width:int, height:int, select_intersection:bool = False) -> None:
     root = tk.Tk()
     self.page_width = width
     self.page_height = height
-    self.app = TkDrawerMainWindow(root=root, window_width=1200, window_height=800, page_width=width, page_height=height, on_selection=self.on_selection)
+    self.app = TkDrawerMainWindow(
+      root=root,
+      window_width=1200,
+      window_height=800,
+      page_width=width,
+      page_height=height,
+      on_selection=self.on_selection,
+      select_intersection=select_intersection,
+    )
     self.id_to_elem: typing.Dict[int, LTJson] = {}
     self.selected_elems: typing.Dict[LTJson, bool] = {}
 

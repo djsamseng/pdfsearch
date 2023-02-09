@@ -10,6 +10,8 @@ Download pdflib [Prebuilt (older browsers)](https://mozilla.github.io/pdf.js/get
 cd flaskapi && pip3 install -r requirements.txt
 pip3 install git+https://github.com/pdfminer/pdfminer.six
 ```
+- Edit /home/samuel/.local/lib/python3.8/site-packages/pdfminer/layout.py line 959 def analyze to return early
+  - This prevents text grouping into textboxes which doesn't work correctly anyway
 
 ```bash
 ln -s ~/dev/pdfsearch/pdfextract/ ~/dev/pdfsearch/lambdacontainer/processpdffunction/pdfextract

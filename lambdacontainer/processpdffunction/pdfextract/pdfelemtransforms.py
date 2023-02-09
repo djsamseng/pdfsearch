@@ -11,8 +11,10 @@ def get_underlying_parent_links_impl(
   elem: pdfminer.layout.LTComponent,
   elem_parent_idx: typing.Union[None, int],
 ):
-  add_containers = True
+  add_containers = False
   if isinstance(elem, pdfminer.layout.LTContainer):
+    if not add_containers:
+      print("Container found: Was .local/lib/python3.8/site-packages/pdfminer/layout.py line 959 def analyze to return early?")
     child_parent_idx = None
     if add_containers:
       out.append(
