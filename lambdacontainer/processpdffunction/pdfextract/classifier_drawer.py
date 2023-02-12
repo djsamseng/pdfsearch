@@ -209,16 +209,16 @@ class ZoomCanvas(ttk.Frame):
     self.has_zoomed = False
     self.selection_obj = SelectionObject(self.canvas, dict(dash=(2,2), stipple="gray25", fill="", outline="red"))
     self.on_selection = on_selection
-    def on_drag(start:typing.Any, end:typing.Any, **kwarg):
+    def on_drag(start:typing.Any, end:typing.Any):
       self.selection_obj.update(start, end)
-    def on_end(selection: typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]):
-      if self.on_selection is not None:
+    def on_end(selection: typing.Union[None, typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]]):
+      if selection is not None:
         (x0, y0), (x1, y1) = selection
         if self.select_intersection:
           selected = self.canvas.find_overlapping(x0, y0, x1, y1)
         else:
           selected = self.canvas.find_enclosed(x0, y0, x1, y1)
-        self.on_selection(selected)
+        self.on_selection(typing.cast(typing.List[int], selected))
     self.pos_tracker = MousePositionTracker(self.canvas, on_end=on_end)
     self.pos_tracker.autodraw(command=on_drag)
 
@@ -473,6 +473,7 @@ class ClassifierDrawer:
       select_intersection=select_intersection,
     )
     self.id_to_elem: typing.Dict[int, ClassificationNode] = {}
+    self.elem_to_elem_idx: typing.Dict[ClassificationNode, int] = {}
     self.selected_elems: typing.Dict[ClassificationNode, bool] = {}
 
   def on_selection(
@@ -481,13 +482,16 @@ class ClassifierDrawer:
   ):
     self.app.controlPanel.clear_buttons()
     def on_save():
+      idxes = []
       for elem, selected in self.selected_elems.items():
         if selected:
           if isinstance(elem.elem, pdfminer.layout.LTCurve, ):
             original_path = elem.elem.original_path
           else:
             original_path = None
-          print(elem.bbox, original_path)
+          idxes.append(self.elem_to_elem_idx[elem])
+          # print(self.elem_to_elem_idx[elem], elem.bbox, original_path)
+      print("Idxes:", idxes)
     self.app.controlPanel.add_button(text="save", callback=on_save)
     elems: typing.DefaultDict[ClassificationNode, typing.List[int]] = collections.defaultdict(list)
     self.selected_elems = {}
@@ -618,21 +622,22 @@ class ClassifierDrawer:
       xmin, ymin = self.get_minx_miny(wrappers=elems)
     else:
       xmin, ymin = 0, 0
-    for wrapper in elems:
-      if False and wrapper.is_container:
+    for idx, elem in enumerate(elems):
+      self.elem_to_elem_idx[elem] = idx
+      if False and elem.is_container:
         # Children always come immediately after container so indentation will be underneath parent
-        self.insert_container(elem=wrapper, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
-        if draw_all_text and wrapper.text is not None:
-          self.insert_text(elem=wrapper, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
-      elif wrapper.line is not None:
-        if isinstance(wrapper.elem, pdfminer.layout.LTCurve):
-          linewidth = wrapper.elem.linewidth
+        self.insert_container(elem=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+        if draw_all_text and elem.text is not None:
+          self.insert_text(elem=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+      elif elem.line is not None:
+        if isinstance(elem.elem, pdfminer.layout.LTCurve):
+          linewidth = elem.elem.linewidth
         else:
           linewidth = 1
         if linewidth > 0:
-          self.draw_path(wrapper=wrapper, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
-      elif wrapper.text is not None:
-        self.insert_text(elem=wrapper, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+          self.draw_path(wrapper=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+      elif elem.text is not None:
+        self.insert_text(elem=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
 
   def draw_bbox(self, bbox: Bbox, color: str):
     _ = self.app.canvas.draw_rect(bbox, color)

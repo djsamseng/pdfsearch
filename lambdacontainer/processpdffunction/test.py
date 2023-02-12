@@ -2,6 +2,8 @@
 
 import collections
 import cProfile
+import dataclasses
+import heapq
 import functools
 import os
 import math
@@ -240,13 +242,22 @@ def vote_test():
   drawer.draw_elems(elems=draw_elems, align_top_left=True, draw_buttons=False)
   drawer.show("Vote test")
 
-def leafgrid_test():
-  _, celems, width, height = get_pdf(which=0, page_number=9)
-  step_size = 5
-  def coord_for(x: float) -> int:
-    return math.floor(x / step_size)
-  GridType = typing.List[typing.List[typing.List[int]]]
-  grid: GridType = [[[] for _ in range(coord_for(width)+1)] for _ in range(coord_for(height)+1)]
+GridType = typing.List[typing.List[typing.List[int]]]
+def coord_for_step_size(x: float, step_size: int) -> int:
+  return math.floor(x / step_size)
+def make_leafgrid(
+  celems: typing.List[ClassificationNode],
+  step_size: int,
+  width: int,
+  height: int,
+):
+
+  coord_for = functools.partial(coord_for_step_size, step_size=step_size)
+  grid: GridType = [
+    [
+      [] for _ in range(coord_for(width)+1)]
+    for _ in range(coord_for(height)+1)
+  ]
   # 1    0.227    0.227    0.331    0.331 test.py:267(insert_elems) step size 1
   # 1    0.094    0.094    0.159    0.159 test.py:266(insert_elems) step size 5
   def insert_elems(grid: GridType, celems: typing.List[ClassificationNode]):
@@ -264,6 +275,147 @@ def leafgrid_test():
           for x in range(x0, x1+1):
             grid[y][x].append(idx)
   insert_elems(grid=grid, celems=celems)
+  return grid
+
+def leafgrid_test():
+  _, celems, width, height = get_pdf(which=0, page_number=9)
+  step_size = 5
+  leafgrid = make_leafgrid(celems=celems, step_size=step_size, width=width, height=height)
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=celems, draw_buttons=False)
+  drawer.show("ClassifierDrawer")
+
+def get_rounded_bbox(bbox: Bbox):
+  return (
+    math.floor(bbox[0]),
+    math.floor(bbox[1]),
+    math.ceil(bbox[2]),
+    math.ceil(bbox[3]),
+  )
+
+@dataclasses.dataclass(order=True)
+class QTextNode():
+  score: float = dataclasses.field(compare=True)
+  def __init__(
+    self,
+    text:str,
+    bbox:Bbox,
+    score: float=0,
+  ) -> None:
+    self.text = text
+    self.bbox = bbox
+    self.score = score
+
+  def __repr__(self) -> str:
+    return self.__str__()
+
+  def __str__(self) -> str:
+    return json.dumps(self.as_dict())
+
+  def as_dict(self):
+    out: typing.Dict[str, typing.Any] = dict()
+    for key in self.__dict__.keys():
+      if not key.startswith("_{0}__".format(self.__class__.__name__)):
+        out[key] = self.__dict__[key]
+    return out
+
+def get_distance_between(a: QTextNode, b: QTextNode, vert: bool=False):
+  if vert:
+    idx0 = 1
+    idx1 = 3
+  else:
+    idx0 = 0
+    idx1 = 2
+  if a.bbox[idx0] >= b.bbox[idx1]:
+    return a.bbox[idx0] - b.bbox[idx1]
+  elif b.bbox[idx0] >= a.bbox[idx1]:
+    return b.bbox[idx0] - a.bbox[idx1]
+  else:
+    return 0
+
+def get_length(a: QTextNode, vert: bool=False):
+  if vert:
+    idx0 = 1
+    idx1 = 3
+  else:
+    idx0 = 0
+    idx1 = 2
+  return a.bbox[idx1] - a.bbox[idx0]
+
+def get_overlaps(a: QTextNode, b:QTextNode, vert: bool=False):
+  if vert:
+    idx0 = 1
+    idx1 = 3
+  else:
+    idx0 = 0
+    idx1 = 2
+  if a.bbox[idx0] + 0.1 < b.bbox[idx1] and a.bbox[idx1] - 0.1 > b.bbox[idx0]:
+    return True
+  return False
+
+def make_joined_q_text_nodes(a: QTextNode, b: QTextNode, base_score: float=1):
+  horiz_distance = get_distance_between(a, b, vert=False)
+  vert_distance = get_distance_between(a, b, vert=True)
+  a_width = get_length(a, vert=False)
+  b_width = get_length(b, vert=False)
+
+  if vert_distance > 0:
+    score = 0.001
+  else:
+    score = 1 / (horiz_distance + 1)
+  if a.bbox[0] < b.bbox[0]:
+    left_node = a
+    right_node = b
+  else:
+    left_node = b
+    right_node = a
+  if horiz_distance > max(a_width, b_width) * 0.5:
+    space_str = " "
+  else:
+    space_str = ""
+  joined_text = left_node.text + space_str + right_node.text
+  joined_bbox = (
+    min(a.bbox[0], b.bbox[0]),
+    min(a.bbox[1], b.bbox[1]),
+    max(a.bbox[2], b.bbox[2]),
+    max(a.bbox[3], b.bbox[3]),
+  )
+  score *= base_score
+  score = 1 - score
+  if get_overlaps(a, b, vert=False):
+    score = 1 # Last
+  return QTextNode(text=joined_text, bbox=joined_bbox, score=score)
+
+def joinword_test():
+  _, celems, width, height = get_pdf(which=0, page_number=2)
+
+  char_elems = [
+    celems[idx] for idx in [
+      1543, 1544, 1545, 1546, 1547, 1548, 1549, 1550, 1551, 1552, 1553, 1554, 1555
+    ]
+  ]
+  char_elems = [QTextNode(text=c.text or "", bbox=c.bbox) for c in char_elems]
+  join_q: typing.List[QTextNode] = []
+  for elem in char_elems:
+    heapq.heappush(join_q, elem)
+  while len(join_q) >= 2:
+    new_nodes: typing.List[QTextNode] = []
+    for idxa, node_a in enumerate(join_q):
+      for idxb, node_b in enumerate(join_q):
+
+        if idxa != idxb:
+          new_node = make_joined_q_text_nodes(node_a, node_b, base_score=node_a.score * node_b.score)
+          new_nodes.append(new_node)
+          if node_a.text == "DO" and node_b.text == "OR":
+            print("HERE!", node_a, node_b)
+            print(new_node)
+            return
+    for node in new_nodes:
+      heapq.heappush(join_q, node)
+
+  print("Num left:", len(join_q))
+  print(join_q)
+
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=celems, draw_buttons=False)
   drawer.show("ClassifierDrawer")
@@ -275,6 +427,7 @@ def parse_args():
   parser.add_argument("--vote", dest="vote", default=False, action="store_true")
   parser.add_argument("--grid", dest="grid", default=False, action="store_true")
   parser.add_argument("--leafgrid", dest="leafgrid", default=False, action="store_true")
+  parser.add_argument("--joinword", dest="joinword", default=False, action="store_true")
   return parser.parse_args()
 
 def main():
@@ -286,6 +439,8 @@ def main():
     func = grid_test
   elif args.leafgrid:
     func = leafgrid_test
+  elif args.joinword:
+    func = joinword_test
   if func:
     if args.profile:
       cProfile.run("{0}()".format(func.__name__))
