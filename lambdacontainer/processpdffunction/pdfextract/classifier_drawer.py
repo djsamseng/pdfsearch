@@ -611,7 +611,7 @@ class ClassifierDrawer:
   def draw_elems(self,
     elems: typing.Iterable[ClassificationNode],
     align_top_left: bool=False,
-    draw_buttons: bool=True,
+    draw_buttons: bool=False,
     draw_all_text: bool=True):
     # Want to accept the hierarchy
     # If we get a container, we want to present the container in the control panel with its inner text

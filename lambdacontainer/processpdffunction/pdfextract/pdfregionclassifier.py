@@ -7,6 +7,13 @@ import rtree
 
 from . import ltjson, pdfelemtransforms
 
+# Order pdf elements from left to right top down
+# For rectangles we want the png image and the fill coordinates mapping back to the shape
+# go element by element and have it vote using reference frames as to what it is and what it is a part of
+# this forms the parents which then helps refine the children
+# I get to revote for the different situations I'm presented with
+# the one with highest agreement wins
+
 # TODO: Connection strengths
 # a toilet symbol highly effects what kind of room it is
 # an area being a schedule box highly effects the symbols inside of it
@@ -39,7 +46,7 @@ class PdfRegionClassifier():
     bbox: ltjson.BboxType,
   ) -> typing.DefaultDict[PdfRegion, float]:
     out: typing.DefaultDict[PdfRegion, float] = collections.defaultdict(float)
-    matches = self.box_classifier.intersection(bbox, objects=True)
+    matches = self.box_classifier.intersection(bbox, objects="raw") # TODO: raw is much slower than saving data ourselves
     if matches is None:
       return out
     for item in list(matches):

@@ -28,9 +28,19 @@ from pdfextract import pdftkdrawer, classifier_drawer
 from pdfextract import votesearch
 from pdfextract import dataprovider, pdfprocessor
 from pdfextract.ltjson import LTJson, LTJsonEncoder, ScheduleTypes
-from pdfextract.pdftypes import Bbox, ClassificationNode
+from pdfextract.pdftypes import Bbox, ClassificationNode, ClassificationType
 
-def get_pdf(which:int = 0, page_number:typing.Union[int, None]=None):
+def get_pdf(
+  which:int = 0,
+  page_number:typing.Union[int, None]=None,
+  overwrite: bool=False,
+):
+  filename = "{0}-{1}.pickle".format(which, page_number)
+  if not overwrite:
+    if os.path.isfile(filename):
+      with open(filename, "rb") as f:
+        elems, celems, width, height = pickle.load(f)
+      return elems, celems, width, height
   if which == 0:
     page_number = 9 if page_number is None else page_number
     page_gen = pdfminer.high_level.extract_pages(pdf_file="./plan.pdf", page_numbers=[page_number])
@@ -44,6 +54,14 @@ def get_pdf(which:int = 0, page_number:typing.Union[int, None]=None):
   elems = list(page)
   elem_wrappers = pdfelemtransforms.get_underlying_parent_links(elems=elems)
   celems = get_classification_nodes(elems=elems)
+
+  with open(filename, "wb") as f:
+    pickle.dump((
+      elem_wrappers,
+      celems,
+      width,
+      height,
+    ), f)
   return elem_wrappers, celems, width, height
 
 def get_curve_size(elem: LTJson):
@@ -620,24 +638,14 @@ def classify_this_text_celem(
   leafgrid: LeafGrid,
 ):
   next_elem_idx = leafgrid.next_elem(cur_elem_idx=cur_elem_idx, direction=Direction.RIGHT)
+  print(leafgrid.celems[cur_elem_idx])
   if next_elem_idx is not None:
     print(leafgrid.celems[next_elem_idx])
   print(None)
 
 def what_is_this_test():
-  load_pdf = False
-  filename = "what_is_this_test.pickle"
-  if load_pdf:
-    _, celems, width, height = get_pdf(which=0, page_number=2)
-    with open(filename, "wb") as f:
-      pickle.dump((
-        celems,
-        width,
-        height,
-      ), f)
-  else:
-    with open(filename, "rb") as f:
-      celems, width, height = pickle.load(f)
+  _, celems, width, height = get_pdf(which=0, page_number=2)
+
   step_size = 5
   leafgrid = LeafGrid(celems=celems, step_size=step_size, width=width, height=height)
   for gridy in range(len(leafgrid.grid)-1, -1, -1):
@@ -651,6 +659,37 @@ def what_is_this_test():
   return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
 
+def preload_activation_map(celems: typing.List[ClassificationNode]):
+  results: typing.Dict[ClassificationType, typing.DefaultDict[typing.Any, int]] = {}
+  # Ranges of slopes -> buckets -> map buckets to elems
+  for classification_type in ClassificationType:
+    results[classification_type] = collections.defaultdict(int) # number of times an activation score occurs
+  for elem in celems:
+    classifications = elem.get_classifications()
+    for ctype, value in classifications:
+      results[ctype][value] += 1
+  # Buckets of [ [0 < slope < 0.1], [0.1 < slope < 0.2], ...] where each bucket has about the same number of elements
+  # This is just for efficiency of finding close neighbors
+  # Then we can merge the set of results over multiple types
+  # Create a parent classification node with multiple lines that are physically close to each other
+  #   Add pointers from the children to the parent
+  # When matching, we match the child nodes (position independent)
+  # However the matched child nodes reactivate the parent node thus activating the memory
+  return results
+
+
+def shapememory_test():
+  _, celems, width, height = get_pdf(which=1, page_number=1)
+  window_label_with_pointer_line = [18952, 18953, 18954, 18955, 18956, 18957, 18959, 18961, 18962, 18963]
+  label_elems = [celems[idx] for idx in window_label_with_pointer_line]
+  activation_map = preload_activation_map(celems=celems)
+
+  for classification_type in ClassificationType:
+    print(classification_type)
+    values_present = activation_map[classification_type].keys()
+    print(len(values_present), min(values_present), max(values_present))
+
+
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -659,7 +698,8 @@ def parse_args():
   parser.add_argument("--grid", dest="grid", default=False, action="store_true")
   parser.add_argument("--leafgrid", dest="leafgrid", default=False, action="store_true")
   parser.add_argument("--joinword", dest="joinword", default=False, action="store_true")
-  parser.add_argument("--what", dest="what", default=False, action="store_true")
+  parser.add_argument("--what", dest="what", default=False, action="store_true") # TODO: continue to form words
+  parser.add_argument("--shapememory", dest="shapememory", default=False, action="store_true")
   return parser.parse_args()
 
 def main():
@@ -675,6 +715,8 @@ def main():
     func = joinword_test
   elif args.what:
     func = what_is_this_test
+  elif args.shapememory:
+    func = shapememory_test
   if func:
     if args.profile:
       cProfile.run("{0}()".format(func.__name__))
