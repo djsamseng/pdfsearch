@@ -99,6 +99,24 @@ def bbox_intersection_area(a: BboxType, b: BboxType):
     return (right - left) * (top - bottom)
   return 0
 
+def get_distance_between(a: BboxType, b: BboxType, vert: bool):
+  if vert:
+    idx0 = 1
+    idx1 = 3
+  else:
+    idx0 = 0
+    idx1 = 2
+  if a[idx0] >= b[idx1]:
+    return a[idx0] - b[idx1]
+  elif b[idx0] >= a[idx1]:
+    return b[idx0] - a[idx1]
+  else:
+    return 0
+
+def get_aligns_in_direction(a: BboxType, b: BboxType, vert: bool):
+  distance_perpendicular = get_distance_between(a=a, b=b, vert=not vert)
+  return distance_perpendicular == 0
+
 def bounding_bbox(elems: typing.List[LTJson]):
   if len(elems) == 0:
     return 0, 0, 1, 1
