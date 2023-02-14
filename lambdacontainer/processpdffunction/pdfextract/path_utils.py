@@ -11,7 +11,7 @@ BezierPoints = typing.Tuple[
   typing.Tuple[float,float]
 ]
 
-LinePointsType = typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]
+LinePointsType = typing.Tuple[float, float, float, float]
 OffsetType = typing.Tuple[float, float]
 
 Bbox = typing.Tuple[float, float, float, float]
@@ -37,7 +37,11 @@ def bezier_to_lines(pts: BezierPoints):
   for t_idx in range(1, 10):
     t = t_idx / 10
     x, y = get_bezier_point(t=t, pts=pts)
-    lines.append(((x_prev, y_prev), (x, y)))
+    x0 = min(x_prev, x)
+    x1 = max(x_prev, x)
+    y0 = min(y_prev, y)
+    y1 = max(y_prev, y)
+    lines.append((x0, y0, x1, y1))
     x_prev, y_prev = x, y
   return lines
 
@@ -54,7 +58,7 @@ def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
     elif pt_type == "l":
       pt = typing.cast(typing.Tuple[str, typing.Tuple[float, float]], pt)
       x2, y2 = pt[1]
-      lines.append(((x, y), (x2, y2)))
+      lines.append((x, y, x2, y2))
       x, y = x2, y2
     elif pt_type == "c":
       pt = typing.cast(
@@ -69,23 +73,23 @@ def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
       (x2, y2), (x3, y3), (x4, y4) = pt[1:]
       bezier_lines = bezier_to_lines(pts=((x, y), (x2, y2), (x3, y3), (x4, y4)))
       lines.extend(bezier_lines)
-      x, y = bezier_lines[-1][-1]
+      x, y = bezier_lines[-1][2:4]
     elif pt_type == "h":
-      lines.append(((x, y), (x_start, y_start)))
+      lines.append((x, y, x_start, y_start))
     else:
       print("Unhandled path point:", pt)
   return lines
 
 def get_zeroed_path_lines(path_lines: typing.List[LinePointsType]):
   out: typing.List[LinePointsType] = []
-  (x0, y0), (x1, y1) = path_lines[0]
+  x0, y0, x1, y1 = path_lines[0]
   xmin = min(x0, x1)
   ymin = min(y0, y1)
-  for (x0, y0), (x1, y1) in path_lines:
-    xmin = min(xmin, min(x0, x1))
-    ymin = min(ymin, min(y0, y1))
-  for (x0, y0), (x1, y1) in path_lines:
-    out.append(((x0-xmin, y0-ymin), (x1-xmin, y1-ymin)))
+  for x0, y0, x1, y1 in path_lines:
+    xmin = min(xmin, x0, x1)
+    ymin = min(ymin, y0, y1)
+  for x0, y0, x1, y1 in path_lines:
+    out.append((x0-xmin, y0-ymin, x1-xmin, y1-ymin))
   return out
 
 def lines_bounding_bbox(
@@ -98,14 +102,14 @@ def lines_bounding_bbox(
     if offsets is None:
       return 0., 0.,
     return offsets[idx][0], offsets[idx][1]
-  (x0, y0), (x1, y1) = elems[0]
+  x0, y0, x1, y1 = elems[0]
   ox, oy = offset_for(idx=0)
   xmin = min(x0, x1) + ox
   ymin = min(y0, y1) + oy
   xmax = max(x0, x1) + ox
   ymax = max(y0, y1) + oy
   for idx, elem in enumerate(elems):
-    (x0, y0), (x1, y1) = elem
+    x0, y0, x1, y1 = elem
     ox, oy = offset_for(idx=idx)
     xmin = min(xmin, x0, x1) + ox
     ymin = min(ymin, y0, y1) + oy
@@ -113,14 +117,16 @@ def lines_bounding_bbox(
     ymax = max(ymax, y0, y1) + oy
   return xmin, ymin, xmax, ymax
 
-def zero_line(line: LinePointsType, bounding_box: Bbox):
+def zero_line(line: LinePointsType, bounding_box: Bbox) -> LinePointsType:
   return (
-    (line[0][0] - bounding_box[0], line[0][1] - bounding_box[1]),
-    (line[1][0] - bounding_box[0], line[1][1] - bounding_box[1]),
+    line[0] - bounding_box[0],
+    line[1] - bounding_box[1],
+    line[2] - bounding_box[0],
+    line[3] - bounding_box[1],
   )
 
 def line_slope(line: LinePointsType):
-  (x0, y0), (x1, y1) = line
+  x0, y0, x1, y1 = line
   rise = max(y0, y1) - min(y0, y1)
   run = max(x0, x1) - min(x0, x1)
   x_dir = x1 >= x0
@@ -133,5 +139,12 @@ def line_slope(line: LinePointsType):
   return slope_dir * slope_mag
 
 def line_length(line: LinePointsType):
-  (x0, y0), (x1, y1) = line
+  x0, y0, x1, y1 = line
   return math.sqrt((y1-y0) ** 2 + (x1-x0) ** 2)
+
+def line_pairwise_offsets(lines: typing.List[LinePointsType]):
+  out: typing.List[typing.List[typing.Tuple[OffsetType]]] = []
+  for line1 in lines:
+    line1_offsets = []
+    for line2 in lines:
+      pass

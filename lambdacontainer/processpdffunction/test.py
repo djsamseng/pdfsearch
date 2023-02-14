@@ -134,7 +134,7 @@ def get_classification_nodes(
         idxes: typing.List[int] = []
         line_nodes: typing.List[ClassificationNode] = []
         for line in lines:
-          (x0, y0), (x1, y1) = line
+          x0, y0, x1, y1 = line
           idxes.append(len(out))
           line_nodes.append(
             ClassificationNode(
@@ -293,7 +293,7 @@ class LeafGrid():
             for x in range(x0, x1+1):
               grid[y][x].append(idx)
         elif elem.line is not None:
-          (x0, y0), (x1, y1) = elem.line
+          x0, y0, x1, y1 = elem.line
           x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
           for y in range(y0, y1+1):
             for x in range(x0, x1+1):
@@ -481,7 +481,7 @@ def make_leafgrid(
           for x in range(x0, x1+1):
             grid[y][x].append(idx)
       elif elem.line is not None:
-        (x0, y0), (x1, y1) = elem.line
+        x0, y0, x1, y1 = elem.line
         x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
         for y in range(y0, y1+1):
           for x in range(x0, x1+1):
@@ -696,6 +696,11 @@ def shapememory_test():
 
   dslope = 0.1
   dlength = 0.3
+  # Walk the grid
+  # Find what activates and their relative offsets
+  # ShapeSymbol is offset by 0 but what if we don't have the first element
+  # Once we've filtered down to just a small subset of activated elems we can
+  # do pairwise offsets between all elements
   for elem in celems:
     symbols = line_indexer.intersection(
       line_slope=elem.slope,

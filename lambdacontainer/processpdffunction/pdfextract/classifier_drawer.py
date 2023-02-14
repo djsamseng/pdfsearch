@@ -5,10 +5,9 @@ import typing
 import tkinter as tk
 from tkinter import ttk
 
-import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
-from . import pdfelemtransforms
+from . import path_utils
 from .pdftypes import Bbox, ClassificationNode
 
 # pyright: reportPrivateUsage=false, reportUnknownMemberType=false
@@ -211,9 +210,9 @@ class ZoomCanvas(ttk.Frame):
     self.on_selection = on_selection
     def on_drag(start:typing.Any, end:typing.Any):
       self.selection_obj.update(start, end)
-    def on_end(selection: typing.Union[None, typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]]):
+    def on_end(selection: typing.Union[None, path_utils.LinePointsType]):
       if selection is not None:
-        (x0, y0), (x1, y1) = selection
+        x0, y0, x1, y1 = selection
         if self.select_intersection:
           selected = self.canvas.find_overlapping(x0, y0, x1, y1)
         else:
@@ -235,7 +234,7 @@ class ZoomCanvas(ttk.Frame):
     color = "black"
     line = wrapper.line
     if line is not None:
-      (x0, y0), (x1, y1) = line
+      x0, y0, x1, y1 = line
       x0, y0 = self.rot_point(x0-xmin, y0+ymin)
       x1, y1 = self.rot_point(x1-xmin, y1+ymin)
       line_id = self.canvas.create_line(x0, y0, x1, y1, fill=color)
@@ -485,10 +484,6 @@ class ClassifierDrawer:
       idxes = []
       for elem, selected in self.selected_elems.items():
         if selected:
-          if isinstance(elem.elem, pdfminer.layout.LTCurve, ):
-            original_path = elem.elem.original_path
-          else:
-            original_path = None
           idxes.append(self.elem_to_elem_idx[elem])
           # print(self.elem_to_elem_idx[elem], elem.bbox, original_path)
       print("Idxes:", idxes)
@@ -648,7 +643,7 @@ class ClassifierDrawer:
     for wrapper in wrappers:
       if wrapper.line is not None:
         x0, y0, x1, y1 = wrapper.bbox
-        xmin = min(xmin, min(x0, x1))
-        ymax = max(ymax, max(y0, y1))
+        xmin = min(xmin, x0, x1)
+        ymax = max(ymax, y0, y1)
     return int(xmin), self.page_height - int(ymax)
 

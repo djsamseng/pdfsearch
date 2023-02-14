@@ -8,7 +8,7 @@ from tkinter import ttk
 import numpy as np
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
-from . import pdfelemtransforms
+from . import pdfelemtransforms, path_utils
 from .ltjson import LTJson, ElemListType, BboxType
 
 class MousePositionTracker(tk.Frame):
@@ -209,9 +209,9 @@ class ZoomCanvas(ttk.Frame):
     self.on_selection = on_selection
     def on_drag(start, end, **kwarg):
       self.selection_obj.update(start, end)
-    def on_end(selection: typing.Tuple[typing.Tuple[float, float], typing.Tuple[float, float]]):
+    def on_end(selection: path_utils.LinePointsType):
       if self.on_selection is not None:
-        (x0, y0), (x1, y1) = selection
+        x0, y0, x1, y1 = selection
         if self.select_intersection:
           selected = self.canvas.find_overlapping(x0, y0, x1, y1)
         else:
@@ -234,7 +234,7 @@ class ZoomCanvas(ttk.Frame):
     line_points = wrapper.get_path_lines()
     line_ids: typing.List[tk._CanvasItemId] = []
     for line in line_points:
-      (x0, y0), (x1, y1) = line
+      x0, y0, x1, y1 = line
       x0, y0 = self.rot_point(x0-xmin, y0+ymin)
       x1, y1 = self.rot_point(x1-xmin, y1+ymin)
       line_id = self.canvas.create_line(x0, y0, x1, y1, fill=color)

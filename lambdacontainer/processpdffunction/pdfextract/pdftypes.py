@@ -127,6 +127,7 @@ class BaseSymbol(metaclass=abc.ABCMeta):
   def height(self) -> float:
     pass
 
+class LeafSymbol(BaseSymbol):
   @abc.abstractmethod
   def activation(
     self,
@@ -134,7 +135,7 @@ class BaseSymbol(metaclass=abc.ABCMeta):
   ) -> typing.List[typing.Tuple[ClassificationType, float]]:
     pass
 
-class TextSymbol(BaseSymbol):
+class TextSymbol(LeafSymbol):
   def __init__(
     self,
     width: float,
@@ -168,17 +169,18 @@ class TextSymbol(BaseSymbol):
       (ClassificationType.SIZE, size_activation),
     ]
 
-class LineSymbol(BaseSymbol):
+class LineSymbol(LeafSymbol):
   def __init__(
     self,
     line: path_utils.LinePointsType
   ) -> None:
     bounding_box = path_utils.lines_bounding_bbox(elems=[line])
-    self.__line = path_utils.zero_line(line=line, bounding_box=bounding_box)
+    self.__line = line
+    self.__zero_line = path_utils.zero_line(line=line, bounding_box=bounding_box)
     self.__width = bounding_box[2] - bounding_box[0]
     self.__height = bounding_box[3] - bounding_box[1]
-    self.__slope = path_utils.line_slope(line=self.__line)
-    self.__length = path_utils.line_length(line=self.__line)
+    self.__slope = path_utils.line_slope(line=self.__zero_line)
+    self.__length = path_utils.line_length(line=self.__zero_line)
 
   @property
   def width(self):
@@ -214,10 +216,11 @@ class LineSymbol(BaseSymbol):
 class ShapeSymbol(BaseSymbol):
   def __init__(
     self,
-    zero_lines: typing.List[path_utils.LinePointsType],
-    offsets: typing.List[path_utils.OffsetType]
+    lines: typing.List[LineSymbol],
   ) -> None:
-    bounding_box = path_utils.lines_bounding_bbox(elems=zero_lines, offsets=offsets)
+    bounding_box = path_utils.lines_bounding_bbox(
+      elems=[sym.line for sym in lines],
+    )
     self.__width = bounding_box[2] - bounding_box[0]
     self.__height = bounding_box[3] - bounding_box[1]
 
@@ -229,9 +232,3 @@ class ShapeSymbol(BaseSymbol):
   def height(self):
     return self.__height
 
-  def activation(
-    self,
-    node: ClassificationNode
-  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
-    # TODO: Children activate me instead of external activation
-    return []

@@ -32,7 +32,7 @@ class PdfLineIndexer:
           rtree_id += 1
         else:
           for line in lines:
-            (x0, y0,), (x1, y1,) = line
+            x0, y0, x1, y1, = line
             yield (rtree_id, (x0, y0, x1, y1), None)
             rtree_id_to_elem_idx.append(elem_idx)
             rtree_id += 1
@@ -45,8 +45,6 @@ class PdfLineIndexer:
     bbox: BboxType,
   ) -> typing.List[LTJson]:
     result_idxes = self.find_by_position_rtree.intersection(bbox, objects=False)
-    if result_idxes is None:
-      return []
     result_idxes = typing.cast(typing.List[int], result_idxes)
     results = [ self.elems[self.rtree_id_to_elem_idx[rtree_id]] for rtree_id in result_idxes ] #pylint: disable=not-an-iterable
     return results
@@ -123,8 +121,6 @@ class PdfIndexer:
     bbox: typing.Tuple[float, float, float, float],
   ) -> typing.List[LTJson]:
     result_idxes = self.find_by_position_rtree.intersection(coordinates=bbox)
-    if result_idxes is None:
-      return []
     result_idxes = list(result_idxes)
     results = [ self.wrappers[idx] for idx in result_idxes ]
     def starts_inside_bbox(elem: LTJson, bbox: typing.Tuple[float, float, float, float]):
@@ -149,8 +145,8 @@ def line_distance(
   linea: path_utils.LinePointsType,
   lineb: path_utils.LinePointsType,
 ):
-  (x0a, y0a), (x1a, y1a) = linea
-  (x0b, y0b), (x1b, y1b) = lineb
+  x0a, y0a, x1a, y1a = linea
+  x0b, y0b, x1b, y1b = lineb
   dist_forward = abs(x0a-x0b) + abs(y0a-y0b) + abs(x1a-x1b) + abs(y1a-y1b)
   dist_backward = abs(x0a-x1b) + abs(y0a-y1b) + abs(x1a-x0b) + abs(y1a-y0b)
   return min(dist_forward, dist_backward)
