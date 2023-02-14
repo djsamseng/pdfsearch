@@ -697,19 +697,24 @@ def shapememory_test():
   dslope = 0.1
   dlength = 0.3
   # Walk the grid
-  # Find what activates and their relative offsets
-  # ShapeSymbol is offset by 0 but what if we don't have the first element
-  # Once we've filtered down to just a small subset of activated elems we can
-  # do pairwise offsets between all elements
+  # Look at the first line, activate it with all LineSymbols. If any matches, look at its parent symbol
+  # The use this to look for other children symbols
+  line_symbol_weights = {
+    pdftypes.ClassificationType.SLOPE: 1.,
+    pdftypes.ClassificationType.LENGTH: 1.,
+  }
   for elem in celems:
-    symbols = line_indexer.intersection(
+    matched_line_symbols = line_indexer.intersection(
       line_slope=elem.slope,
       line_length=elem.length,
       dslope=dslope,
       dlength=dlength
     )
-    for sym in symbols:
-      activations = sym.activation(node=elem)
+    for sym in matched_line_symbols:
+      activation = sym.activation(node=elem, weights=line_symbol_weights)
+      print(activation)
+      if activation > 0.9:
+        return
 
   return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)

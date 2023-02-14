@@ -11,7 +11,7 @@ import pdfminer.layout, pdfminer.utils
 from . import path_utils
 
 Bbox = path_utils.Bbox
-
+FLOAT_MIN = 0.001
 
 class ClassificationType(enum.Enum):
   SLOPE = 1
@@ -131,8 +131,16 @@ class LeafSymbol(BaseSymbol):
   @abc.abstractmethod
   def activation(
     self,
-    node: ClassificationNode
-  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
+    node: ClassificationNode,
+    weights: typing.Dict[ClassificationType, float],
+  ) -> float:
+    pass
+
+class ParentSymbol(BaseSymbol):
+  @abc.abstractmethod
+  def activation(
+    self,
+  ) -> float:
     pass
 
 class TextSymbol(LeafSymbol):
@@ -156,18 +164,22 @@ class TextSymbol(LeafSymbol):
 
   def activation(
     self,
-    node: ClassificationNode
-  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
+    node: ClassificationNode,
+    weights: typing.Dict[ClassificationType, float],
+  ):
     text_activation = 1. if self.text == node.text else 0. # TODO: mincut distance
     size_activation = abs(self.width - node.width()) + abs(self.height - node.height())
-    if size_activation < 0.001:
+    if size_activation < FLOAT_MIN:
       size_activation = 1
     else:
-      size_activation = min(1, 1 / size_activation)
-    return [
-      (ClassificationType.TEXT, text_activation),
-      (ClassificationType.SIZE, size_activation),
-    ]
+      size_activation *= FLOAT_MIN
+    text_weight = weights[ClassificationType.TEXT] if ClassificationType.TEXT in weights else 0.
+    size_weight = weights[ClassificationType.SIZE] if ClassificationType.SIZE in weights else 0.
+    divisor = text_weight + size_weight
+    if divisor == 0:
+      divisor = 1.
+    weighted_activation = text_activation * text_weight + size_activation * size_weight
+    return weighted_activation / divisor
 
 class LineSymbol(LeafSymbol):
   def __init__(
@@ -204,25 +216,59 @@ class LineSymbol(LeafSymbol):
 
   def activation(
     self,
-    node: ClassificationNode
-  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
-    slope_activation = abs(self.__slope - node.slope) / path_utils.MAX_SLOPE
-    length_activation = abs(self.__length - node.length) / max(self.__length, node.length)
-    return [
-      (ClassificationType.SLOPE, slope_activation),
-      (ClassificationType.LENGTH, length_activation),
-    ]
+    node: ClassificationNode,
+    weights: typing.Dict[ClassificationType, float],
+  ):
+    slope_activation = abs(self.__slope - node.slope)
+    if slope_activation < FLOAT_MIN:
+      slope_activation = 1
+    else:
+      slope_activation *= FLOAT_MIN
 
-class ShapeSymbol(BaseSymbol):
+    length_activation = abs(self.__length - node.length) / max(self.__length, node.length)
+    if length_activation < FLOAT_MIN:
+      length_activation = 1
+    else:
+      length_activation *= FLOAT_MIN
+
+    slope_weight = weights[ClassificationType.SLOPE] if ClassificationType.SLOPE in weights else 0.
+    length_weight = weights[ClassificationType.LENGTH] if ClassificationType.LENGTH in weights else 0.
+    divisor = slope_weight + length_weight
+    if divisor == 0:
+      divisor = 1.
+    weighted_activation = slope_activation * slope_weight + length_activation * length_weight
+    return weighted_activation / divisor
+
+  def __repr__(self) -> str:
+    return self.__str__()
+
+  def __str__(self) -> str:
+    return json.dumps(self.as_dict())
+
+  def as_dict(self):
+    out: typing.Dict[str, typing.Any] = dict()
+    split_token = "_{0}__".format(self.__class__.__name__)
+    for key in self.__dict__.keys():
+      if key.startswith(split_token):
+        str_key = key.split(split_token)[1]
+        out[str_key] = self.__dict__[key]
+      else:
+        out[key] = self.__dict__[key]
+    return out
+
+class ShapeSymbol(ParentSymbol):
   def __init__(
     self,
-    lines: typing.List[LineSymbol],
+    symbols: typing.List[LineSymbol],
   ) -> None:
+    self.__symbols = symbols
+    lines = [ sym.line for sym in symbols ]
     bounding_box = path_utils.lines_bounding_bbox(
-      elems=[sym.line for sym in lines],
+      elems=lines,
     )
     self.__width = bounding_box[2] - bounding_box[0]
     self.__height = bounding_box[3] - bounding_box[1]
+    self.__offsets = path_utils.line_pairwise_offsets(lines=lines)
 
   @property
   def width(self):
@@ -231,4 +277,9 @@ class ShapeSymbol(BaseSymbol):
   @property
   def height(self):
     return self.__height
+
+  def activation(
+    self,
+  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
+    return []
 

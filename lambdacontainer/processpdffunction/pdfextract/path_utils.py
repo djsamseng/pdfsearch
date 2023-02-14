@@ -146,9 +146,19 @@ def line_length(line: LinePointsType):
   x0, y0, x1, y1 = line
   return math.sqrt((y1-y0) ** 2 + (x1-x0) ** 2)
 
+def line_offset(a: LinePointsType, b: LinePointsType) -> OffsetType:
+  return (
+    a[0] - b[0],
+    a[1] - b[1]
+  )
+
 def line_pairwise_offsets(lines: typing.List[LinePointsType]):
-  out: typing.List[typing.List[typing.Tuple[OffsetType]]] = []
+  out: typing.List[typing.List[OffsetType]] = []
   for line1 in lines:
-    line1_offsets = []
+    line1_offsets: typing.List[OffsetType] = []
     for line2 in lines:
-      pass
+      line1_offsets.append(
+        line_offset(a=line1, b=line2)
+      )
+    out.append(line1_offsets)
+  return out
