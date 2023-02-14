@@ -28,7 +28,11 @@ class MousePositionTracker(tk.Frame):
     self.on_end = on_end
 
   def cur_selection(self):
-    return (self.start, self.end)
+    if self.start is not None and self.end is not None:
+      x0, y0 = self.start
+      x1, y1 = self.end
+      return (x0, y0, x1, y1)
+    return (0, 0, 1, 1)
 
   def begin(self, event:typing.Any):
     self.hide()

@@ -37,11 +37,11 @@ def bezier_to_lines(pts: BezierPoints):
   for t_idx in range(1, 10):
     t = t_idx / 10
     x, y = get_bezier_point(t=t, pts=pts)
-    x0 = min(x_prev, x)
-    x1 = max(x_prev, x)
-    y0 = min(y_prev, y)
-    y1 = max(y_prev, y)
-    lines.append((x0, y0, x1, y1))
+    swap_direction = x < x_prev
+    if swap_direction:
+      lines.append((x, y, x_prev, y_prev))
+    else:
+      lines.append((x_prev, y_prev, x, y))
     x_prev, y_prev = x, y
   return lines
 
@@ -58,7 +58,11 @@ def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
     elif pt_type == "l":
       pt = typing.cast(typing.Tuple[str, typing.Tuple[float, float]], pt)
       x2, y2 = pt[1]
-      lines.append((x, y, x2, y2))
+      swap_direction = x2 < x
+      if swap_direction:
+        lines.append((x2, y2, x, y))
+      else:
+        lines.append((x, y, x2, y2))
       x, y = x2, y2
     elif pt_type == "c":
       pt = typing.cast(
