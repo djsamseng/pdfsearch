@@ -20,10 +20,10 @@ import re
 import pdfminer.high_level, pdfminer.utils, pdfminer.layout
 import rtree
 
-from pdfextract import debug_utils, path_utils
+from pdfextract import debug_utils, path_utils, pdftypes
 from pdfextract import pdfelemtransforms
 from pdfextract import pdfextracter
-from pdfextract import pdfindexer
+from pdfextract import pdfindexer, symbol_indexer
 from pdfextract import pdftkdrawer, classifier_drawer
 from pdfextract import votesearch
 from pdfextract import dataprovider, pdfprocessor
@@ -646,6 +646,9 @@ def classify_this_text_celem(
 def what_is_this_test():
   _, celems, width, height = get_pdf(which=0, page_number=2)
 
+  # Instance of "A" <-> Symbol "A"
+  #      |                     |
+  # Instance of "Alpha" -  Symbol "Alpha"
   step_size = 5
   leafgrid = LeafGrid(celems=celems, step_size=step_size, width=width, height=height)
   for gridy in range(len(leafgrid.grid)-1, -1, -1):
@@ -675,20 +678,37 @@ def preload_activation_map(celems: typing.List[ClassificationNode]):
   #   Add pointers from the children to the parent
   # When matching, we match the child nodes (position independent)
   # However the matched child nodes reactivate the parent node thus activating the memory
+  # Text is a superset where words and sentences form
   return results
 
 
 def shapememory_test():
   _, celems, width, height = get_pdf(which=1, page_number=1)
-  window_label_with_pointer_line = [18952, 18953, 18954, 18955, 18956, 18957, 18959, 18961, 18962, 18963]
-  label_elems = [celems[idx] for idx in window_label_with_pointer_line]
-  activation_map = preload_activation_map(celems=celems)
+  window_label_with_pointer_line_idxes = [18952, 18953, 18954, 18955, 18956, 18957, 18959, 18961, 18962, 18963]
+  window_label_with_pointer_line = [
+    celems[idx] for idx in window_label_with_pointer_line_idxes
+  ]
+  window_label_line_symbols = [
+    pdftypes.LineSymbol(line=elem.line) for elem in window_label_with_pointer_line if elem.line is not None
+  ]
+  line_symbols = [ *window_label_line_symbols ]
+  line_indexer = symbol_indexer.LineSymbolIndexer(symbols=line_symbols)
 
-  for classification_type in ClassificationType:
-    print(classification_type)
-    values_present = activation_map[classification_type].keys()
-    print(len(values_present), min(values_present), max(values_present))
+  dslope = 0.1
+  dlength = 0.3
+  for elem in celems:
+    symbols = line_indexer.intersection(
+      line_slope=elem.slope,
+      line_length=elem.length,
+      dslope=dslope,
+      dlength=dlength
+    )
+    for sym in symbols:
+      activations = sym.activation(node=elem)
 
+  return
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  # Draw elems that activated a symbol enough
 
 
 def parse_args():

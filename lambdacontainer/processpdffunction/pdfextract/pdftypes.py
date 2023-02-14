@@ -1,4 +1,6 @@
 
+import abc
+import collections
 import enum
 import json
 import math
@@ -8,8 +10,8 @@ import pdfminer.layout, pdfminer.utils
 
 from . import path_utils
 
-Bbox = typing.Tuple[float, float, float, float]
-MAX_SLOPE = 1000.
+Bbox = path_utils.Bbox
+
 
 class ClassificationType(enum.Enum):
   SLOPE = 1
@@ -39,7 +41,7 @@ class ClassificationNode():
     self.child_idxes = child_idxes
 
     self.parent_idxes: typing.List[int] = []
-    self.slope = self.__slope()
+    self.slope = path_utils.line_slope(line=line) if line is not None else 0.
     self.length = self.__length()
 
   def width(self):
@@ -53,7 +55,7 @@ class ClassificationNode():
     other: "ClassificationNode"
   ) -> typing.List[typing.Tuple[ClassificationType, float]]:
     if self.line is not None and other.line is not None:
-      slope_activation = abs(self.slope - other.slope) / MAX_SLOPE
+      slope_activation = abs(self.slope - other.slope) / path_utils.MAX_SLOPE
       length_activation = abs(self.length - other.length) / max(self.length, other.length)
       return [
         (ClassificationType.SLOPE, slope_activation),
@@ -88,25 +90,9 @@ class ClassificationNode():
       ]
     return []
 
-  def __slope(self):
-    if self.line is not None:
-      (x0, y0), (x1, y1) = self.line
-      rise = max(y0, y1) - min(y0, y1)
-      run = max(x0, x1) - min(x0, x1)
-      x_dir = x1 >= x0
-      y_dir = y1 >= y1
-      slope_dir = 1. if x_dir == y_dir else -1
-      if run < 1 / MAX_SLOPE:
-        slope_mag = MAX_SLOPE
-      else:
-        slope_mag =  min(MAX_SLOPE, rise/run)
-      return slope_dir * slope_mag
-    return 0.
-
   def __length(self):
     if self.line is not None:
-      (x0, y0), (x1, y1) = self.line
-      return math.sqrt((y1-y0) ** 2 + (x1-x0) ** 2)
+      return path_utils.line_length(line=self.line)
     elif self.text is not None:
       if self.upright:
         return self.bbox[2] - self.bbox[0]
@@ -129,3 +115,123 @@ class ClassificationNode():
       if not key.startswith("_{0}__".format(self.__class__.__name__)):
         out[key] = self.__dict__[key]
     return out
+
+class BaseSymbol(metaclass=abc.ABCMeta):
+  @property
+  @abc.abstractmethod
+  def width(self) -> float:
+    pass
+
+  @property
+  @abc.abstractmethod
+  def height(self) -> float:
+    pass
+
+  @abc.abstractmethod
+  def activation(
+    self,
+    node: ClassificationNode
+  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
+    pass
+
+class TextSymbol(BaseSymbol):
+  def __init__(
+    self,
+    width: float,
+    height: float,
+    text: str
+  ):
+    self.__width = width
+    self.__height = height
+    self.text = text
+
+  @property
+  def width(self):
+    return self.__width
+
+  @property
+  def height(self):
+    return self.__height
+
+  def activation(
+    self,
+    node: ClassificationNode
+  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
+    text_activation = 1. if self.text == node.text else 0. # TODO: mincut distance
+    size_activation = abs(self.width - node.width()) + abs(self.height - node.height())
+    if size_activation < 0.001:
+      size_activation = 1
+    else:
+      size_activation = min(1, 1 / size_activation)
+    return [
+      (ClassificationType.TEXT, text_activation),
+      (ClassificationType.SIZE, size_activation),
+    ]
+
+class LineSymbol(BaseSymbol):
+  def __init__(
+    self,
+    line: path_utils.LinePointsType
+  ) -> None:
+    bounding_box = path_utils.lines_bounding_bbox(elems=[line])
+    self.__line = path_utils.zero_line(line=line, bounding_box=bounding_box)
+    self.__width = bounding_box[2] - bounding_box[0]
+    self.__height = bounding_box[3] - bounding_box[1]
+    self.__slope = path_utils.line_slope(line=self.__line)
+    self.__length = path_utils.line_length(line=self.__line)
+
+  @property
+  def width(self):
+    return self.__width
+
+  @property
+  def height(self):
+    return self.__height
+
+  @property
+  def line(self):
+    return self.__line
+
+  @property
+  def slope(self):
+    return self.__slope
+
+  @property
+  def length(self):
+    return self.__length
+
+  def activation(
+    self,
+    node: ClassificationNode
+  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
+    slope_activation = abs(self.__slope - node.slope) / path_utils.MAX_SLOPE
+    length_activation = abs(self.__length - node.length) / max(self.__length, node.length)
+    return [
+      (ClassificationType.SLOPE, slope_activation),
+      (ClassificationType.LENGTH, length_activation),
+    ]
+
+class ShapeSymbol(BaseSymbol):
+  def __init__(
+    self,
+    zero_lines: typing.List[path_utils.LinePointsType],
+    offsets: typing.List[path_utils.OffsetType]
+  ) -> None:
+    bounding_box = path_utils.lines_bounding_bbox(elems=zero_lines, offsets=offsets)
+    self.__width = bounding_box[2] - bounding_box[0]
+    self.__height = bounding_box[3] - bounding_box[1]
+
+  @property
+  def width(self):
+    return self.__width
+
+  @property
+  def height(self):
+    return self.__height
+
+  def activation(
+    self,
+    node: ClassificationNode
+  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
+    # TODO: Children activate me instead of external activation
+    return []

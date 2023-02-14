@@ -3,7 +3,6 @@ import collections
 import time
 import typing
 
-import numpy as np
 import rtree
 import scipy.spatial # type: ignore
 
@@ -152,8 +151,8 @@ def line_distance(
 ):
   (x0a, y0a), (x1a, y1a) = linea
   (x0b, y0b), (x1b, y1b) = lineb
-  dist_forward = np.abs(x0a-x0b) + np.abs(y0a-y0b) + np.abs(x1a-x1b) + np.abs(y1a-y1b)
-  dist_backward = np.abs(x0a-x1b) + np.abs(y0a-y1b) + np.abs(x1a-x0b) + np.abs(y1a-y0b)
+  dist_forward = abs(x0a-x0b) + abs(y0a-y0b) + abs(x1a-x1b) + abs(y1a-y1b)
+  dist_backward = abs(x0a-x1b) + abs(y0a-y1b) + abs(x1a-x0b) + abs(y1a-y0b)
   return min(dist_forward, dist_backward)
 
 def line_set_distance(
