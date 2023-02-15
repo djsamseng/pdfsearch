@@ -127,7 +127,6 @@ class BaseSymbol(metaclass=abc.ABCMeta):
   def height(self) -> float:
     pass
 
-class LeafSymbol(BaseSymbol):
   @abc.abstractmethod
   def activation(
     self,
@@ -136,14 +135,7 @@ class LeafSymbol(BaseSymbol):
   ) -> float:
     pass
 
-class ParentSymbol(BaseSymbol):
-  @abc.abstractmethod
-  def activation(
-    self,
-  ) -> float:
-    pass
-
-class TextSymbol(LeafSymbol):
+class TextSymbol(BaseSymbol):
   def __init__(
     self,
     width: float,
@@ -181,7 +173,7 @@ class TextSymbol(LeafSymbol):
     weighted_activation = text_activation * text_weight + size_activation * size_weight
     return weighted_activation / divisor
 
-class LineSymbol(LeafSymbol):
+class LineSymbol(BaseSymbol):
   def __init__(
     self,
     line: path_utils.LinePointsType
@@ -256,19 +248,25 @@ class LineSymbol(LeafSymbol):
         out[key] = self.__dict__[key]
     return out
 
-class ShapeSymbol(ParentSymbol):
+class ShapeSymbol(BaseSymbol):
   def __init__(
     self,
     symbols: typing.List[LineSymbol],
+    dslope: float,
+    dlength: float,
   ) -> None:
-    self.__symbols = symbols
-    lines = [ sym.line for sym in symbols ]
+    self.__symbols = symbols # by ref
+    lines = [s.line for s in symbols]
     bounding_box = path_utils.lines_bounding_bbox(
       elems=lines,
     )
     self.__width = bounding_box[2] - bounding_box[0]
     self.__height = bounding_box[3] - bounding_box[1]
-    self.__offsets = path_utils.line_pairwise_offsets(lines=lines)
+    self.__offsets = [
+      (l[0] - bounding_box[0], l[1] - bounding_box[1]) for l in lines
+    ]
+    self.__dslope = dslope
+    self.__dlength = dlength
 
   @property
   def width(self):
@@ -280,6 +278,22 @@ class ShapeSymbol(ParentSymbol):
 
   def activation(
     self,
-  ) -> typing.List[typing.Tuple[ClassificationType, float]]:
+    node: ClassificationNode,
+    weights: typing.Dict[ClassificationType, float],
+  ):
+    matched_line_symbol_idxes = self.__line_indexer.intersection(
+      line_slope=node.slope,
+      line_length=node.length,
+      dslope=self.__dslope,
+      dlength=self.__dlength
+    )
+    for idx in matched_line_symbol_idxes:
+      sym = self.__symbols[idx]
+      offset = self.__offsets[idx]
+      x0, y0 = node.bbox[0] - offset[0], node.bbox[1] - offset[1]
+      score = sym.activation(node=node, weights=weights)
+    # Say I'm a horizontal line, I activate, I could be the bottom or the top of a rectangle
+    # So when I activate I tell my parent my position. If someone else activates with an offset to me
+    # that matches then the parent can activate
     return []
 

@@ -681,43 +681,29 @@ def preload_activation_map(celems: typing.List[ClassificationNode]):
   # Text is a superset where words and sentences form
   return results
 
-
 def shapememory_test():
   _, celems, width, height = get_pdf(which=1, page_number=1)
-  window_label_with_pointer_line_idxes = [18952, 18953, 18954, 18955, 18956, 18957, 18959, 18961, 18962, 18963]
+  window_label_with_pointer_line_idxes = [
+    18952, 18953, 18954, 18955, 18956, 18957, 18959, 18961, 18962, 18963
+  ]
   window_label_with_pointer_line = [
     celems[idx] for idx in window_label_with_pointer_line_idxes
   ]
-  window_label_line_symbols = [
-    pdftypes.LineSymbol(line=elem.line) for elem in window_label_with_pointer_line if elem.line is not None
-  ]
-  line_symbols = [ *window_label_line_symbols ]
-  line_indexer = symbol_indexer.LineSymbolIndexer(symbols=line_symbols)
+  shape_manager = symbol_indexer.ShapeManager()
+  shape_manager.add_shape(
+    lines=[l.line for l in window_label_with_pointer_line if l.line is not None]
+  )
 
-  dslope = 0.1
-  dlength = 0.3
-  # Walk the grid
-  # Look at the first line, activate it with all LineSymbols. If any matches, look at its parent symbol
-  # The use this to look for other children symbols
-  line_symbol_weights = {
-    pdftypes.ClassificationType.SLOPE: 1.,
-    pdftypes.ClassificationType.LENGTH: 1.,
-  }
-  for elem in celems:
-    matched_line_symbols = line_indexer.intersection(
-      line_slope=elem.slope,
-      line_length=elem.length,
-      dslope=dslope,
-      dlength=dlength
-    )
-    for sym in matched_line_symbols:
-      activation = sym.activation(node=elem, weights=line_symbol_weights)
-      print(activation)
-      if activation > 0.9:
-        return
+  should_match_idxes = [10491, 10492, 10493, 10494, 10495, 10496, 10498, 10500, 10501, 10502]
+  should_match_elems = [ celems[idx] for idx in should_match_idxes]
+  for elem in should_match_elems:
+    shape_manager.activate_leaf(node=elem)
+  shape_manager.get_activations()
 
   return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=celems)
+  drawer.show("C")
   # Draw elems that activated a symbol enough
 
 
