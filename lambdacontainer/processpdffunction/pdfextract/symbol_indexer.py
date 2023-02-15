@@ -120,9 +120,9 @@ class ShapeManager:
     self.dlength = 0.5
     self.shape_start_radius = 0.5
     self.weights = {
-    pdftypes.ClassificationType.SLOPE: 1.,
-    pdftypes.ClassificationType.LENGTH: 1.,
-  }
+      pdftypes.ClassificationType.SLOPE: 1.,
+      pdftypes.ClassificationType.LENGTH: 1.,
+    }
     self.shapes: typing.List[
       typing.Tuple[
         typing.List[pdftypes.LineSymbol],
@@ -133,7 +133,7 @@ class ShapeManager:
     # Found shape = x0, y0, [lines], [offsets]
     # Activations[(x0,y0)][shape_id][line_id] = score
     self.activation_lookup: SingletonIndexer[
-      typing.Tuple[int, int, float]
+      typing.Tuple[int, int, float, pdftypes.ClassificationNode]
     ] = SingletonIndexer()
 
 
@@ -180,30 +180,37 @@ class ShapeManager:
           x0 + self.shape_start_radius,
           y0 + self.shape_start_radius,
         )
-        self.activation_lookup.add(coords=coords, to_return=(shape_id, line_id, activation))
+        self.activation_lookup.add(coords=coords, to_return=(shape_id, line_id, activation, node))
 
   def get_activations(self):
+
+    nodes_used: typing.List[pdftypes.ClassificationNode] = []
     for idx, shape_start in enumerate(self.activation_lookup.stored):
+      pending_nodes: typing.List[pdftypes.ClassificationNode] = []
       activations: typing.DefaultDict[
         int, # shape_id
         typing.DefaultDict[
           int, # line_id
-          float,
+          typing.List[float],
         ]
-      ] = collections.defaultdict(lambda: collections.defaultdict(float))
+      ] = collections.defaultdict(lambda: collections.defaultdict(list))
       x0, y0, _, _ = self.activation_lookup.coords[idx]
       x0 += self.shape_start_radius
       y0 += self.shape_start_radius
-      # TODO: Source line should only contribute to one line in the shape
-      for shape_id, line_id, activation in shape_start:
-        activations[shape_id][line_id] += activation
+      for shape_id, line_id, activation, node in shape_start:
+        activations[shape_id][line_id].append(activation)
+        if activation > 0.9:
+          pending_nodes.append(node)
 
       for shape_id, shape_lines in activations.items():
-        shape_score = sum(shape_lines.values())
+        shape_score = sum([max(l) for l in shape_lines.values()])
         shape_total = len(self.shapes[shape_id][0])
         shape_activation = shape_score / shape_total
         if shape_activation > 0.9:
+          # TODO: Return x0, y0, self.shapes[shape_id]
           print("id:", shape_id, "score:", shape_score, "/", shape_total, "at:", (x0, y0))
+          nodes_used.extend(pending_nodes)
+    return nodes_used
 
   def __intersection(
     self,

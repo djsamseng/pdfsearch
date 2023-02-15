@@ -689,19 +689,20 @@ def shapememory_test():
   window_label_with_pointer_line = [
     celems[idx] for idx in window_label_with_pointer_line_idxes
   ]
+  window_labels = [*window_label_with_pointer_line[:6], *window_label_with_pointer_line[7:]]
   shape_manager = symbol_indexer.ShapeManager()
   shape_manager.add_shape(
-    lines=[l.line for l in window_label_with_pointer_line if l.line is not None]
+    lines=[l.line for l in window_labels if l.line is not None]
   )
 
   should_match_idxes = [10491, 10492, 10493, 10494, 10495, 10496, 10498, 10500, 10501, 10502]
   should_match_elems = [ celems[idx] for idx in should_match_idxes]
   for elem in celems:
     shape_manager.activate_leaf(node=elem)
-  shape_manager.get_activations()
+  nodes_used = shape_manager.get_activations()
 
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=celems)
+  drawer.draw_elems(elems=nodes_used)
   drawer.show("C")
   # Draw elems that activated a symbol enough
 

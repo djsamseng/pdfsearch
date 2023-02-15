@@ -1,6 +1,5 @@
 
 import abc
-import collections
 import enum
 import json
 import math
@@ -214,14 +213,7 @@ class LineSymbol(BaseSymbol):
     length_activation = 1 - math.tanh(
       abs(self.__length - node.length) / max(self.__length, node.length, FLOAT_MIN)
     )
-
-    slope_weight = weights[ClassificationType.SLOPE] if ClassificationType.SLOPE in weights else 0.
-    length_weight = weights[ClassificationType.LENGTH] if ClassificationType.LENGTH in weights else 0.
-    divisor = slope_weight + length_weight
-    if divisor < FLOAT_MIN:
-      divisor = 1.
-    weighted_activation = slope_activation * slope_weight + length_activation * length_weight
-    return weighted_activation / divisor
+    return min(slope_activation, length_activation)
 
   def __repr__(self) -> str:
     return self.__str__()
@@ -239,53 +231,3 @@ class LineSymbol(BaseSymbol):
       else:
         out[key] = self.__dict__[key]
     return out
-
-class ShapeSymbol(BaseSymbol):
-  def __init__(
-    self,
-    symbols: typing.List[LineSymbol],
-    dslope: float,
-    dlength: float,
-  ) -> None:
-    self.__symbols = symbols # by ref
-    lines = [s.line for s in symbols]
-    bounding_box = path_utils.lines_bounding_bbox(
-      elems=lines,
-    )
-    self.__width = bounding_box[2] - bounding_box[0]
-    self.__height = bounding_box[3] - bounding_box[1]
-    self.__offsets = [
-      (l[0] - bounding_box[0], l[1] - bounding_box[1]) for l in lines
-    ]
-    self.__dslope = dslope
-    self.__dlength = dlength
-
-  @property
-  def width(self):
-    return self.__width
-
-  @property
-  def height(self):
-    return self.__height
-
-  def activation(
-    self,
-    node: ClassificationNode,
-    weights: typing.Dict[ClassificationType, float],
-  ):
-    matched_line_symbol_idxes = self.__line_indexer.intersection(
-      line_slope=node.slope,
-      line_length=node.length,
-      dslope=self.__dslope,
-      dlength=self.__dlength
-    )
-    for idx in matched_line_symbol_idxes:
-      sym = self.__symbols[idx]
-      offset = self.__offsets[idx]
-      x0, y0 = node.bbox[0] - offset[0], node.bbox[1] - offset[1]
-      score = sym.activation(node=node, weights=weights)
-    # Say I'm a horizontal line, I activate, I could be the bottom or the top of a rectangle
-    # So when I activate I tell my parent my position. If someone else activates with an offset to me
-    # that matches then the parent can activate
-    return []
-
