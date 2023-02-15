@@ -160,15 +160,13 @@ class TextSymbol(BaseSymbol):
     weights: typing.Dict[ClassificationType, float],
   ):
     text_activation = 1. if self.text == node.text else 0. # TODO: mincut distance
-    size_activation = abs(self.width - node.width()) + abs(self.height - node.height())
-    if size_activation < FLOAT_MIN:
-      size_activation = 1
-    else:
-      size_activation *= FLOAT_MIN
+    size_activation = 1 - math.tanh(
+      abs(self.width - node.width()) + abs(self.height - node.height())
+    )
     text_weight = weights[ClassificationType.TEXT] if ClassificationType.TEXT in weights else 0.
     size_weight = weights[ClassificationType.SIZE] if ClassificationType.SIZE in weights else 0.
     divisor = text_weight + size_weight
-    if divisor == 0:
+    if divisor < FLOAT_MIN:
       divisor = 1.
     weighted_activation = text_activation * text_weight + size_activation * size_weight
     return weighted_activation / divisor
@@ -211,22 +209,16 @@ class LineSymbol(BaseSymbol):
     node: ClassificationNode,
     weights: typing.Dict[ClassificationType, float],
   ):
-    slope_activation = abs(self.__slope - node.slope)
-    if slope_activation < FLOAT_MIN:
-      slope_activation = 1
-    else:
-      slope_activation *= FLOAT_MIN
+    slope_activation = 1 - math.tanh(abs(self.__slope - node.slope))
 
-    length_activation = abs(self.__length - node.length) / max(self.__length, node.length)
-    if length_activation < FLOAT_MIN:
-      length_activation = 1
-    else:
-      length_activation *= FLOAT_MIN
+    length_activation = 1 - math.tanh(
+      abs(self.__length - node.length) / max(self.__length, node.length, FLOAT_MIN)
+    )
 
     slope_weight = weights[ClassificationType.SLOPE] if ClassificationType.SLOPE in weights else 0.
     length_weight = weights[ClassificationType.LENGTH] if ClassificationType.LENGTH in weights else 0.
     divisor = slope_weight + length_weight
-    if divisor == 0:
+    if divisor < FLOAT_MIN:
       divisor = 1.
     weighted_activation = slope_activation * slope_weight + length_activation * length_weight
     return weighted_activation / divisor

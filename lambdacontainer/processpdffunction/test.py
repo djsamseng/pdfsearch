@@ -696,11 +696,10 @@ def shapememory_test():
 
   should_match_idxes = [10491, 10492, 10493, 10494, 10495, 10496, 10498, 10500, 10501, 10502]
   should_match_elems = [ celems[idx] for idx in should_match_idxes]
-  for elem in should_match_elems:
+  for elem in celems:
     shape_manager.activate_leaf(node=elem)
   shape_manager.get_activations()
 
-  return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=celems)
   drawer.show("C")

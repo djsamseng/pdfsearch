@@ -500,9 +500,15 @@ class ClassifierDrawer:
         elems[elem].append(id)
     for elem, ids in elems.items():
       self.selected_elems[elem] = True
-      text = ""
+
       if elem.text is not None:
-        text += elem.text.replace("\n", " ")
+        text = elem.text.replace("\n", " ")
+      else:
+        text = pdfminer_class_name(elem)
+      if elem.line is not None:
+        if len(text) > 0 and text[-1] != " ":
+          text += " "
+        text += "{0:.3f} {1}".format(elem.slope, elem.length)
       def on_press(ids: typing.List[int]):
         for id in ids:
           elem = self.id_to_elem[id]
@@ -514,37 +520,10 @@ class ClassifierDrawer:
       else:
         original_path = None
       self.app.controlPanel.add_button(
-        text="{0} {1} {2} {3}".format(text, pdfminer_class_name(elem), elem.bbox, original_path),
+        text="{0} {1} {2}".format(text, elem.bbox, original_path),
         callback=lambda ids=ids: on_press(ids))
     self.app.controlPanel.finish_draw()
 
-
-  def insert_container(
-    self,
-    elem: ClassificationNode,
-    xmin: int,
-    ymin: int,
-    draw_buttons: bool,
-  ):
-    x0, y0, x1, y1 = elem.bbox
-    box = (x0-xmin, y0-ymin, x1-xmin, y1-ymin)
-    ids = self.app.canvas.draw_rect(box=box)
-    for id in ids:
-      self.id_to_elem[id] = elem
-    self.app.canvas.set_item_visibility(ids, visibility=False)
-    text = ""
-    if elem.text is not None:
-      text += elem.text.replace("\n", " ")
-    if draw_buttons:
-      def on_enter():
-        self.app.canvas.set_item_visibility(ids, visibility=True)
-      def on_leave():
-        self.app.canvas.set_item_visibility(ids, visibility=False)
-      self.app.controlPanel.add_button(
-        text="{0} {1} {2}".format(text, pdfminer_class_name(elem), box),
-        on_enter_cb=on_enter,
-        on_leave_cb=on_leave
-      )
   def draw_path(
     self,
     wrapper: ClassificationNode,
@@ -566,6 +545,10 @@ class ClassifierDrawer:
       else:
         upright = True
       text_ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size), upright=upright)
+    if wrapper.line is not None:
+      if len(text) > 0 and text[-1] != " ":
+        text += " "
+      text += "{0:.3f} {1}".format(wrapper.slope, wrapper.length)
     if draw_buttons:
       def on_press():
         self.app.canvas.set_item_visibility(ids)
@@ -623,12 +606,7 @@ class ClassifierDrawer:
       xmin, ymin = 0, 0
     for idx, elem in enumerate(elems):
       self.elem_to_elem_idx[elem] = idx
-      if False and elem.is_container:
-        # Children always come immediately after container so indentation will be underneath parent
-        self.insert_container(elem=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
-        if draw_all_text and elem.text is not None:
-          self.insert_text(elem=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
-      elif elem.line is not None:
+      if elem.line is not None:
         if isinstance(elem.elem, pdfminer.layout.LTCurve):
           linewidth = elem.elem.linewidth
         else:

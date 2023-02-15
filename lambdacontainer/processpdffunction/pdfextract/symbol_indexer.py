@@ -36,6 +36,37 @@ def text_symbol_to_coords(sym: pdftypes.TextSymbol):
   y = sym.width + sym.height
   return x, y, x, y
 
+S = typing.TypeVar("S")
+class SingletonIndexer(typing.Generic[S]):
+  def __init__(self) -> None:
+    self.rtree = rtree.index.Index()
+    self.stored: typing.List[typing.List[S]] = []
+    self.coords: typing.List[pdftypes.Bbox] = []
+
+  def add(
+    self,
+    coords: path_utils.Bbox,
+    to_return: S,
+  ):
+    idxes = self.rtree.intersection(coordinates=coords, objects=False)
+    idxes = list(idxes)
+    if len(idxes) > 0:
+      for match_idx in idxes:
+        self.stored[match_idx].append(to_return)
+    else:
+      idx = len(self.stored)
+      self.rtree.add(idx, coordinates=coords, obj=None)
+      self.stored.append([to_return])
+      self.coords.append(coords)
+
+  def intersection(
+    self,
+    coords: path_utils.Bbox,
+  ) -> typing.List[typing.List[S]]:
+    idxes = self.rtree.intersection(coordinates=coords, objects=False)
+    results = [ self.stored[idx] for idx in idxes] #pylint: disable=not-an-iterable
+    return results
+
 T = typing.TypeVar("T", pdftypes.LineSymbol, pdftypes.TextSymbol)
 class SymbolIndexer(typing.Generic[T]):
   ReturnType = typing.Tuple[int, int]
@@ -47,35 +78,36 @@ class SymbolIndexer(typing.Generic[T]):
     self.return_ids: typing.List[typing.List[SymbolIndexer.ReturnType]] = []
     self.rtree = rtree.index.Index()
     self.sym_to_coords = sym_to_coords
+    self.indexer: SingletonIndexer[SymbolIndexer.ReturnType] = SingletonIndexer()
 
   def add(
     self,
     symbol: T,
     return_id: ReturnType,
   ):
-    x0, y0, x1, y1 = self.sym_to_coords(symbol)
-    idxes = self.rtree.intersection((x0, y0, x1, y1), objects=False)
-    idxes = list(idxes)
-    if len(idxes) > 0:
-      for symbol_idx in idxes:
-        self.return_ids[symbol_idx].append(return_id)
-    else:
-      symbol_idx = len(self.symbols)
-      self.rtree.add(symbol_idx, (x0, y0, x1, y1), None)
-      self.symbols.append(symbol)
-      self.return_ids.append([return_id])
+    self.indexer.add(
+      coords=self.sym_to_coords(symbol),
+      to_return=return_id)
 
   def intersection(
     self,
-    x0:float,
-    y0:float,
-    x1:float,
-    y1:float
+    coords: pdftypes.Bbox,
   ) -> typing.List[typing.List[ReturnType]]:
     # return the symbol and the offset
     # multiple offsets per symbol
-    idxes = self.rtree.intersection((x0, y0, x1, y1), objects=False)
-    return [ self.return_ids[idx] for idx in idxes ] #pylint: disable=not-an-iterable
+    return self.indexer.intersection(coords=coords)
+
+ShapeActivationPosition = typing.DefaultDict[
+  int, # shape_id
+  typing.Dict[
+    int, # line_id
+    float
+  ]
+]
+ShapeActivations = typing.DefaultDict[
+  path_utils.OffsetType,
+  ShapeActivationPosition
+]
 
 class ShapeManager:
   def __init__(
@@ -86,6 +118,7 @@ class ShapeManager:
     )
     self.dslope = 0.1
     self.dlength = 0.5
+    self.shape_start_radius = 0.5
     self.weights = {
     pdftypes.ClassificationType.SLOPE: 1.,
     pdftypes.ClassificationType.LENGTH: 1.,
@@ -99,16 +132,10 @@ class ShapeManager:
     # Shape = [lines], [offsets]
     # Found shape = x0, y0, [lines], [offsets]
     # Activations[(x0,y0)][shape_id][line_id] = score
-    self.activations: typing.DefaultDict[
-      typing.Tuple[float, float], # (x0, y0)
-      typing.DefaultDict[
-        int, # shape_id
-        typing.Dict[
-          int, # line_id
-          float
-        ]
-      ]
-    ] = collections.defaultdict(lambda: collections.defaultdict(dict))
+    self.activation_lookup: SingletonIndexer[
+      typing.Tuple[int, int, float]
+    ] = SingletonIndexer()
+
 
   def add_shape(
     self,
@@ -140,28 +167,43 @@ class ShapeManager:
       line_length=node.length,
       dslope=self.dslope,
       dlength=self.dlength)
-    print("====")
-    # Maybe the slope is reversed?
-    # 2.2258065838951044e-05 (1125.72, 839.3399999999999)
-    # 1.5177679542674058e-05 (1125.72, 839.3399999999999)
-    # 1.0 (1125.72, 839.3399999999999)
     for leaf_match in matches:
       for shape_id, line_id in leaf_match:
         line_symbol = self.shapes[shape_id][0][line_id]
         offset = self.shapes[shape_id][1][line_id]
+        activation = line_symbol.activation(node=node, weights=self.weights)
         x0 = node.line[0] - offset[0]
         y0 = node.line[1] - offset[1]
-        activation = line_symbol.activation(node=node, weights=self.weights)
-        # 1.0 (1125.72, 839.3399999999999)
-        print(activation, (x0, y0))
-        self.activations[(x0, y0)][shape_id][line_id] = activation
+        coords=(
+          x0 - self.shape_start_radius,
+          y0 - self.shape_start_radius,
+          x0 + self.shape_start_radius,
+          y0 + self.shape_start_radius,
+        )
+        self.activation_lookup.add(coords=coords, to_return=(shape_id, line_id, activation))
 
   def get_activations(self):
-    for (x0, y0), shapes_dict in self.activations.items():
-      for shape_id in shapes_dict.keys():
-        shape_score = sum(shapes_dict[shape_id].values())
+    for idx, shape_start in enumerate(self.activation_lookup.stored):
+      activations: typing.DefaultDict[
+        int, # shape_id
+        typing.DefaultDict[
+          int, # line_id
+          float,
+        ]
+      ] = collections.defaultdict(lambda: collections.defaultdict(float))
+      x0, y0, _, _ = self.activation_lookup.coords[idx]
+      x0 += self.shape_start_radius
+      y0 += self.shape_start_radius
+      # TODO: Source line should only contribute to one line in the shape
+      for shape_id, line_id, activation in shape_start:
+        activations[shape_id][line_id] += activation
+
+      for shape_id, shape_lines in activations.items():
+        shape_score = sum(shape_lines.values())
         shape_total = len(self.shapes[shape_id][0])
-        print(shape_score, "/", shape_total, "at:", (x0, y0))
+        shape_activation = shape_score / shape_total
+        if shape_activation > 0.9:
+          print("id:", shape_id, "score:", shape_score, "/", shape_total, "at:", (x0, y0))
 
   def __intersection(
     self,
@@ -174,7 +216,7 @@ class ShapeManager:
     x1 = line_slope + dslope
     y0 = line_length - dlength
     y1 = line_length + dlength
-    return self.indexer.intersection(x0=x0, y0=y0, x1=x1, y1=y1)
+    return self.indexer.intersection(coords=(x0, y0, x1, y1))
 
 class TextSymbolIndexer:
   def __init__(
@@ -196,4 +238,4 @@ class TextSymbolIndexer:
     x1 = x0
     y0 = size - dsize
     y1 = size + dsize
-    return self.indexer.intersection(x0=x0, y0=y0, x1=x1, y1=y1)
+    return self.indexer.intersection(coords=(x0, y0, x1, y1))

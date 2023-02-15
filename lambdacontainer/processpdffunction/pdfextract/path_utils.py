@@ -131,16 +131,17 @@ def zero_line(line: LinePointsType, bounding_box: Bbox) -> LinePointsType:
 
 def line_slope(line: LinePointsType):
   x0, y0, x1, y1 = line
-  rise = max(y0, y1) - min(y0, y1)
-  run = max(x0, x1) - min(x0, x1)
-  x_dir = x1 >= x0
-  y_dir = y1 >= y1
-  slope_dir = 1. if x_dir == y_dir else -1
-  if run < 1 / MAX_SLOPE:
-    slope_mag = MAX_SLOPE
+  rise = y1 - y0
+  run = x1 - x0
+  if abs(run) < 1 / MAX_SLOPE:
+    slope = MAX_SLOPE * (1 if run > 0 else -1)
   else:
-    slope_mag =  min(MAX_SLOPE, rise/run)
-  return slope_dir * slope_mag
+    slope = rise / run
+  if slope > 0:
+    slope = min(slope, MAX_SLOPE)
+  else:
+    slope = max(slope, -MAX_SLOPE)
+  return slope
 
 def line_length(line: LinePointsType):
   x0, y0, x1, y1 = line
