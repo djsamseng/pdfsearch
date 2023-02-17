@@ -23,7 +23,7 @@ import rtree
 from pdfextract import debug_utils, path_utils, pdftypes
 from pdfextract import pdfelemtransforms
 from pdfextract import pdfextracter
-from pdfextract import pdfindexer, symbol_indexer, leaf_grid
+from pdfextract import pdfindexer, symbol_indexer, leafgrid
 from pdfextract import pdftkdrawer, classifier_drawer
 from pdfextract import votesearch
 from pdfextract import dataprovider, pdfprocessor
@@ -130,34 +130,34 @@ def get_classification_nodes(
       pass
     elif isinstance(child, pdfminer.layout.LTCurve):
       if child.original_path is not None:
-        lines = path_utils.path_to_lines(path=child.original_path)
-        idxes: typing.List[int] = []
-        line_nodes: typing.List[ClassificationNode] = []
-        for line in lines:
-          x0, y0, x1, y1 = line
-          idxes.append(len(out))
-          line_nodes.append(
+        if child.linewidth > 0:
+          lines = path_utils.path_to_lines(path=child.original_path)
+          idxes: typing.List[int] = []
+          line_nodes: typing.List[ClassificationNode] = []
+          for line in lines:
+            x0, y0, x1, y1 = line
+            idxes.append(len(out))
+            node = ClassificationNode(
+                elem=child,
+                bbox=(x0, y0, x1, y1),
+                line=line,
+                text=None,
+                child_idxes=[]
+              )
+            line_nodes.append(node)
+          parent_idx = len(out) + len(line_nodes)
+          for node in line_nodes:
+            node.parent_idxes = [parent_idx]
+          out.extend(line_nodes)
+          out.append(
             ClassificationNode(
-              elem=child,
-              bbox=(x0, y0, x1, y1),
-              line=line,
+              elem=None,
+              bbox=child.bbox,
+              line=None,
               text=None,
-              child_idxes=[]
+              child_idxes=idxes
             )
           )
-        parent_idx = len(out) + len(line_nodes)
-        for node in line_nodes:
-          node.parent_idxes = [parent_idx]
-        out.extend(line_nodes)
-        out.append(
-          ClassificationNode(
-            elem=None,
-            bbox=child.bbox,
-            line=None,
-            text=None,
-            child_idxes=idxes
-          )
-        )
 
     elif isinstance(child, pdfminer.layout.LTFigure):
       pass
@@ -269,15 +269,15 @@ def make_leafgrid(
   height: int,
 ):
 
-  coord_for = functools.partial(leaf_grid.coord_for_step_size, step_size=step_size)
-  grid: leaf_grid.GridType = [
+  coord_for = functools.partial(leafgrid.coord_for_step_size, step_size=step_size)
+  grid: leafgrid.GridType = [
     [
       [] for _ in range(coord_for(width)+1)]
     for _ in range(coord_for(height)+1)
   ]
   # 1    0.227    0.227    0.331    0.331 test.py:267(insert_elems) step size 1
   # 1    0.094    0.094    0.159    0.159 test.py:266(insert_elems) step size 5
-  def insert_elems(grid: leaf_grid.GridType, celems: typing.List[ClassificationNode]):
+  def insert_elems(grid: leafgrid.GridType, celems: typing.List[ClassificationNode]):
     for idx, elem in enumerate(celems):
       if elem.text is not None:
         x0, y0, x1, y1 = elem.bbox
@@ -297,7 +297,7 @@ def make_leafgrid(
 def leafgrid_test():
   _, celems, width, height = get_pdf(which=0, page_number=9)
   step_size = 5
-  leafgrid = make_leafgrid(celems=celems, step_size=step_size, width=width, height=height)
+  leaf_grid = make_leafgrid(celems=celems, step_size=step_size, width=width, height=height)
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=celems, draw_buttons=False)
   drawer.show("ClassifierDrawer")
@@ -440,12 +440,13 @@ def joinword_test():
 
 def classify_this_text_celem(
   cur_elem_idx: int,
-  leafgrid: leaf_grid.LeafGrid,
+  leaf_grid: leafgrid.LeafGrid,
 ):
-  next_grid_node = leafgrid.next_elem(cur_elem_idx=cur_elem_idx, direction=leaf_grid.Direction.RIGHT)
-  print(leafgrid.celems[cur_elem_idx])
+  print(cur_elem_idx)
+  next_grid_node = leaf_grid.next_elem(cur_elem_idx=cur_elem_idx, direction=leafgrid.Direction.RIGHT)
+  print(leaf_grid.celems[cur_elem_idx])
   if next_grid_node is not None:
-    print(leafgrid.celems[next_grid_node.node_id])
+    print(leaf_grid.celems[next_grid_node.node_id])
   print(None)
 
 def what_is_this_test():
@@ -455,17 +456,40 @@ def what_is_this_test():
   #      |                     |
   # Instance of "Alpha" -  Symbol "Alpha"
   step_size = 5
-  leafgrid = leaf_grid.LeafGrid(celems=celems, step_size=step_size, width=width, height=height)
-  for gridy in range(len(leafgrid.grid)-1, -1, -1):
-    for gridx in range(len(leafgrid.grid[gridy])):
-      for grid_node in leafgrid.grid[gridy][gridx]:
-        celem = grid_node.node
-        if celem.text is not None:
-          classify_this_text_celem(cur_elem_idx=grid_node.node_id, leafgrid=leafgrid)
-          return
+  leaf_grid = leafgrid.LeafGrid(celems=celems, step_size=step_size, width=width, height=height)
+  bbox = (0, 0, width, height)
+  first_text = leaf_grid.first_elem(bbox=bbox, text_only=True)
+  print("1:", first_text)
+  if first_text is None:
+    return
+  restrict_idxes = {
+    first_text.node_id: True,
+  }
+  x0, y0, x1, y1 = first_text.node.bbox
+  next_grid_node = leaf_grid.next_elem_for_coords(
+    x0=x0, y0=y0, x1=x1, y1=y1,
+    direction=leafgrid.Direction.RIGHT,
+    restrict_idxes=restrict_idxes
+  )
+  nodes_used: typing.List[leafgrid.GridNode] = [first_text]
+  # Process coords: (563, 414, 17, 418) 599
+  # Process coords: (586, 414, 17, 418) 126
+  while next_grid_node is not None:
+    if next_grid_node.node.text is not None:
+      print("2:", next_grid_node.node.text)
+    nodes_used.append(next_grid_node)
+    x0 = next_grid_node.node.bbox[0]
+    restrict_idxes[next_grid_node.node_id] = True
+    next_grid_node = leaf_grid.next_elem_for_coords(
+      x0=x0, y0=y0, x1=x1, y1=y1,
+      direction=leafgrid.Direction.RIGHT,
+      restrict_idxes=restrict_idxes
+    )
 
-  return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  draw = [n.node for n in nodes_used]
+  drawer.draw_elems(elems=celems, align_top_left=False)
+  drawer.show("What")
 
 def preload_activation_map(celems: typing.List[ClassificationNode]):
   results: typing.Dict[ClassificationType, typing.DefaultDict[typing.Any, int]] = {}
@@ -500,13 +524,14 @@ def shapememory_test():
     shape_id="window_label",
     lines=[l.line for l in window_labels if l.line is not None]
   )
-  text_manager = symbol_indexer.TextManager()
+  leaf_grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
+  text_manager = symbol_indexer.TextManager(leaf_grid=leaf_grid)
 
   should_match_idxes = [10491, 10492, 10493, 10494, 10495, 10496, 10498, 10500, 10501, 10502]
   should_match_elems = [ celems[idx] for idx in should_match_idxes]
   for elem in celems:
     shape_manager.activate_leaf(node=elem)
-    text_manager.activate_leaf(node=elem)
+  text_manager.process_region(bbox=(0,0,width,height))
   nodes_used = shape_manager.get_activations()
 
   return

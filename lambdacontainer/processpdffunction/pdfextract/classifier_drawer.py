@@ -616,6 +616,7 @@ class ClassifierDrawer:
           linewidth = elem.elem.linewidth
         else:
           linewidth = 1
+        linewidth = max(1, linewidth)
         if linewidth > 0:
           self.draw_path(wrapper=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
       elif elem.text is not None:

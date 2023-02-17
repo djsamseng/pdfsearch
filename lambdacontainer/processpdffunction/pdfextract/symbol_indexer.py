@@ -4,7 +4,9 @@ import typing
 
 import rtree
 
-from . import pdftypes, path_utils
+from . import pdftypes, path_utils, leafgrid
+
+import pdfminer.layout
 
 def line_symbol_to_coords(sym: pdftypes.LineSymbol):
   x = sym.slope
@@ -245,34 +247,48 @@ class ShapeManager:
     return self.indexer.intersection(coords=(x0, y0, x1, y1))
 
 class TextManager():
-  def __init__(self) -> None:
+  def __init__(
+    self,
+    leaf_grid: leafgrid.LeafGrid
+  ) -> None:
     # Store text nodes by position and bbox with extra boundary that makes them overlap
     # upon initially activating activate_leaf
     # Get activations joins into words
-    self.grid = []
+    self.leaf_grid = leaf_grid
 
-  def activate_leaf(
+  def process_region(
     self,
-    node: pdftypes.ClassificationNode
+    bbox: pdftypes.Bbox,
   ):
-    if node.text is None:
+    first_text = self.leaf_grid.first_elem(bbox=bbox, text_only=True)
+    print("1:", first_text)
+    if first_text is None:
       return
+    restrict_idxes = {
+      first_text.node_id: True,
+    }
+    x0, y0, x1, y1 = first_text.node.bbox
+    next_grid_node = self.leaf_grid.next_elem_for_coords(
+      x0=x0, y0=y0, x1=x1, y1=y1,
+      direction=leafgrid.Direction.RIGHT,
+      restrict_idxes=restrict_idxes
+    )
+    while next_grid_node is not None:
+      if next_grid_node.node.text is not None:
+        print("2:", next_grid_node.node.text)
+      x0 = next_grid_node.node.bbox[0]
+      restrict_idxes[next_grid_node.node_id] = True
+      next_grid_node = self.leaf_grid.next_elem_for_coords(
+        x0=x0, y0=y0, x1=x1, y1=y1,
+        direction=leafgrid.Direction.RIGHT,
+        restrict_idxes=restrict_idxes
+      )
+
+
     # Can't merge yet because there may be a line between the characters
-    self.text_elems.append(node)
 
   def get_activations(self):
-    def insertion_generator(nodes: typing.List[pdftypes.ClassificationNode]):
-      for idx, node in enumerate(nodes):
-        x0, y0, x1, y1 = node.bbox
-        x0 -= node.width / 2
-        x1 += node.width / 2
-        y0 -= node.width / 2
-        y1 += node.width / 2
-        yield (idx, ())
-    indexer = rtree.index.Index(
-
-    )
-
+    pass
 
 # TODO: Work like ShapeManager activating by position to form words
 class TextSymbolIndexer:
