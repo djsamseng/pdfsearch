@@ -23,7 +23,7 @@ import rtree
 from pdfextract import debug_utils, path_utils, pdftypes
 from pdfextract import pdfelemtransforms
 from pdfextract import pdfextracter
-from pdfextract import pdfindexer, symbol_indexer
+from pdfextract import pdfindexer, symbol_indexer, leaf_grid
 from pdfextract import pdftkdrawer, classifier_drawer
 from pdfextract import votesearch
 from pdfextract import dataprovider, pdfprocessor
@@ -261,202 +261,7 @@ def vote_test():
   drawer.draw_elems(elems=draw_elems, align_top_left=True, draw_buttons=False)
   drawer.show("Vote test")
 
-GridType = typing.List[typing.List[typing.List[int]]]
-class Direction(enum.Enum):
-  LEFT = 1
-  RIGHT = 2
-  UP = 3
-  DOWN = 4
 
-class LeafGrid():
-  def __init__(
-    self,
-    celems: typing.List[ClassificationNode],
-    width: int,
-    height: int,
-    step_size: int
-  ) -> None:
-    coord_for = functools.partial(coord_for_step_size, step_size=step_size)
-    self.coord_for = coord_for
-    self.celems = celems
-    self.grid: GridType = [
-      [
-        [] for _ in range(coord_for(width)+1)]
-      for _ in range(coord_for(height)+1)
-    ]
-    def insert_elems(grid: GridType, celems: typing.List[ClassificationNode]):
-      for idx, elem in enumerate(celems):
-        if elem.text is not None:
-          x0, y0, x1, y1 = elem.bbox
-          x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
-          for y in range(y0, y1+1):
-            for x in range(x0, x1+1):
-              grid[y][x].append(idx)
-        elif elem.line is not None:
-          x0, y0, x1, y1 = elem.line
-          x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
-          for y in range(y0, y1+1):
-            for x in range(x0, x1+1):
-              grid[y][x].append(idx)
-    def sort_grid(grid: GridType):
-      for y in range(len(grid)):
-        for x in range(len(grid[y])):
-          grid[y][x].sort(key=functools.cmp_to_key(self.sort_func_xy))
-
-    insert_elems(grid=self.grid, celems=celems)
-    sort_grid(grid=self.grid)
-
-  def next_elem(self, cur_elem_idx: int, direction: Direction):
-    cur_elem = self.celems[cur_elem_idx]
-    x0 = self.coord_for(cur_elem.bbox[0])
-    y0 = self.coord_for(cur_elem.bbox[1])
-    x1 = self.coord_for(cur_elem.bbox[2])
-    y1 = self.coord_for(cur_elem.bbox[3])
-
-    def process_coords(x0: int, y0: int, x1: int, y1: int):
-      in_this_box: typing.List[int] = []
-      if direction == Direction.LEFT:
-        for y in range(y1, y0-1, -1):
-          in_this_box = [
-            b for b in self.grid[y][x1] if
-              self.celems[b].bbox[2] <= x1 and # left of me
-              b != cur_elem_idx and # not me
-              pdfelemtransforms.get_aligns_in_direction( # vertical alignment
-                a=cur_elem.bbox,
-                b=self.celems[b].bbox,
-                vert=False
-              )
-          ]
-        sort_func = functools.partial(self.sort_func_custom, order=(2, 3, 1, 0))
-      elif direction == Direction.RIGHT:
-        for y in range(y1, y0-1, -1):
-          in_this_box = [
-            b for b in self.grid[y][x0] if
-              self.celems[b].bbox[0] >= x1 and # right of me
-              b != cur_elem_idx and # not me
-              pdfelemtransforms.get_aligns_in_direction( # vertical alignment
-                a=cur_elem.bbox,
-                b=self.celems[b].bbox,
-                vert=False
-              )
-          ]
-        sort_func = functools.partial(self.sort_func_custom, order=(0, 3, 1, 2))
-      elif direction == Direction.UP:
-        for x in range(x0, x1):
-          in_this_box = [
-            b for b in self.grid[y0][x] if
-              self.celems[b].bbox[1] >= y0 and # above me
-              b != cur_elem_idx and # not me
-              pdfelemtransforms.get_aligns_in_direction( # horizontal alignment
-                a=cur_elem.bbox,
-                b=self.celems[b].bbox,
-                vert=True
-              )
-          ]
-        sort_func = functools.partial(self.sort_func_custom, order=(1, 0, 2, 3))
-      elif direction == Direction.DOWN:
-        for x in range(x0, x1):
-          in_this_box = [
-            b for b in self.grid[y1][x] if
-              self.celems[b].bbox[3] <= y0 and # below me
-              b != cur_elem_idx and # not me
-              pdfelemtransforms.get_aligns_in_direction( # horizontal alignment
-                a=cur_elem.bbox,
-                b=self.celems[b].bbox,
-                vert=True
-              )
-          ]
-        sort_func = functools.partial(self.sort_func_custom, order=(3, 0, 2, 1))
-      in_this_box.sort(key=functools.cmp_to_key(sort_func), reverse=False)
-      print("Process coords:", (x0, y0, x1, y1), len(in_this_box))
-      if len(in_this_box) > 0:
-        return in_this_box[0]
-      return None
-
-    res = process_coords(x0=x0, y0=y0, x1=x1, y1=y1)
-    if res is not None:
-      return res
-
-    def step(x0: int,  y0: int, x1: int, y1: int):
-      if direction == Direction.LEFT:
-        x1 -= 1
-      elif direction == Direction.RIGHT:
-        x0 += 1
-      elif direction == Direction.UP:
-        y0 += 1
-      elif direction == Direction.DOWN:
-        y1 -= 1
-      return x0, y0, x1, y1
-
-    x0, y0, x1, y1 = step(x0=x0, y0=y0, x1=x1, y1=y1)
-
-    should_continue = y0 >= 0 and y1 <= len(self.grid) and x0 >=0 and x1 <= len(self.grid[y1])
-    while should_continue:
-      res = process_coords(x0=x0, y0=y0, x1=x1, y1=y1)
-      if res is not None:
-        return res
-      x0, y0, x1, y1 = step(x0=x0, y0=y0, x1=x1, y1=y1)
-      should_continue = y0 >= 0 and y1 <= len(self.grid) and x0 >=0 and x1 <= len(self.grid[y1])
-    return None
-
-  def intersection(self, x0:float, y0:float, x1:float, y1:float):
-    # Return sorted such that
-    # If intersects then sorted by x0 left right, y1 top down
-
-    out: typing.List[int] = []
-    already_in_out: typing.Dict[int, bool] = {}
-    for x in range(self.coord_for(x0), self.coord_for(x1)):
-      in_this_x: typing.List[int] = []
-      for y in range(self.coord_for(y0), self.coord_for(y1)):
-        for elem_idx in self.grid[y][x]:
-          if elem_idx in already_in_out:
-            continue
-          celem = self.celems[elem_idx]
-          if pdfelemtransforms.bbox_intersection_area(a=celem.bbox, b=(x0,y0,x1,y1)) > 0:
-            already_in_out[elem_idx] = True
-            in_this_x.append(elem_idx)
-      in_this_x.sort(key=functools.cmp_to_key(self.sort_func_xy))
-      out.extend(in_this_x)
-
-    return [self.celems[idx] for  idx in out]
-
-  def sort_func_custom(self, a_idx: int, b_idx: int, order: typing.Tuple[int, int, int, int]):
-    a = self.celems[a_idx]
-    b = self.celems[b_idx]
-    if a.bbox[order[0]] < b.bbox[order[0]]:
-      return -1
-    elif a.bbox[order[0]] == b.bbox[order[0]]:
-      if a.bbox[order[1]] > b.bbox[order[1]]:
-        return -1
-      elif a.bbox[order[1]] == b.bbox[order[1]]:
-        if a.bbox[order[2]] < b.bbox[order[2]]:
-          return -1
-        elif a.bbox[order[2]] == b.bbox[order[2]]:
-          if a.bbox[order[3]] > b.bbox[order[3]]:
-            return -1
-          elif a.bbox[order[3]] == b.bbox[order[3]]:
-            return 0
-          else:
-            return 1
-        else:
-          return 1
-      else:
-        return 1
-    else:
-      return 1
-
-  def sort_func_xy(self, a_idx: int, b_idx: int):
-    # return -1 if a_idx comes before b_idx
-    # Left right by x0, top down by y1, left right by x1, top down by y0
-    #                               |---|
-    #  |-----|    |---|       |---| | 4 |
-    #  |query|    | 1 | |---| | 3 | |---|
-    #  |-----|    |---| |-2-| |---|
-    #
-    return self.sort_func_custom(a_idx=a_idx, b_idx=b_idx, order=(0, 3, 2, 1))
-
-def coord_for_step_size(x: float, step_size: int) -> int:
-  return math.floor(x / step_size)
 def make_leafgrid(
   celems: typing.List[ClassificationNode],
   step_size: int,
@@ -464,15 +269,15 @@ def make_leafgrid(
   height: int,
 ):
 
-  coord_for = functools.partial(coord_for_step_size, step_size=step_size)
-  grid: GridType = [
+  coord_for = functools.partial(leaf_grid.coord_for_step_size, step_size=step_size)
+  grid: leaf_grid.GridType = [
     [
       [] for _ in range(coord_for(width)+1)]
     for _ in range(coord_for(height)+1)
   ]
   # 1    0.227    0.227    0.331    0.331 test.py:267(insert_elems) step size 1
   # 1    0.094    0.094    0.159    0.159 test.py:266(insert_elems) step size 5
-  def insert_elems(grid: GridType, celems: typing.List[ClassificationNode]):
+  def insert_elems(grid: leaf_grid.GridType, celems: typing.List[ClassificationNode]):
     for idx, elem in enumerate(celems):
       if elem.text is not None:
         x0, y0, x1, y1 = elem.bbox
@@ -635,12 +440,12 @@ def joinword_test():
 
 def classify_this_text_celem(
   cur_elem_idx: int,
-  leafgrid: LeafGrid,
+  leafgrid: leaf_grid.LeafGrid,
 ):
-  next_elem_idx = leafgrid.next_elem(cur_elem_idx=cur_elem_idx, direction=Direction.RIGHT)
+  next_grid_node = leafgrid.next_elem(cur_elem_idx=cur_elem_idx, direction=leaf_grid.Direction.RIGHT)
   print(leafgrid.celems[cur_elem_idx])
-  if next_elem_idx is not None:
-    print(leafgrid.celems[next_elem_idx])
+  if next_grid_node is not None:
+    print(leafgrid.celems[next_grid_node.node_id])
   print(None)
 
 def what_is_this_test():
@@ -650,13 +455,13 @@ def what_is_this_test():
   #      |                     |
   # Instance of "Alpha" -  Symbol "Alpha"
   step_size = 5
-  leafgrid = LeafGrid(celems=celems, step_size=step_size, width=width, height=height)
+  leafgrid = leaf_grid.LeafGrid(celems=celems, step_size=step_size, width=width, height=height)
   for gridy in range(len(leafgrid.grid)-1, -1, -1):
     for gridx in range(len(leafgrid.grid[gridy])):
-      for elem_idx in leafgrid.grid[gridy][gridx]:
-        celem = celems[elem_idx]
+      for grid_node in leafgrid.grid[gridy][gridx]:
+        celem = grid_node.node
         if celem.text is not None:
-          classify_this_text_celem(cur_elem_idx=elem_idx, leafgrid=leafgrid)
+          classify_this_text_celem(cur_elem_idx=grid_node.node_id, leafgrid=leafgrid)
           return
 
   return
@@ -692,19 +497,38 @@ def shapememory_test():
   window_labels = [*window_label_with_pointer_line[:6], *window_label_with_pointer_line[7:]]
   shape_manager = symbol_indexer.ShapeManager()
   shape_manager.add_shape(
+    shape_id="window_label",
     lines=[l.line for l in window_labels if l.line is not None]
   )
+  text_manager = symbol_indexer.TextManager()
 
   should_match_idxes = [10491, 10492, 10493, 10494, 10495, 10496, 10498, 10500, 10501, 10502]
   should_match_elems = [ celems[idx] for idx in should_match_idxes]
   for elem in celems:
     shape_manager.activate_leaf(node=elem)
+    text_manager.activate_leaf(node=elem)
   nodes_used = shape_manager.get_activations()
 
+  return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=nodes_used)
   drawer.show("C")
   # Draw elems that activated a symbol enough
+
+def sqft_test():
+  _, celems, width, height = get_pdf(which=1, page_number=1)
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=celems)
+  drawer.show("C")
+  x_start, y_start = 1022, 1002
+  wall_x0, wall_y0, wall_x1, wall_y1 = 886, 889, 1129, 1142
+  wall_idxes = [7835, 7837, 8069, 9224]
+  # Can't look so narrowly. Luckily with lines we can look more broadly
+  # See what lines are connected. Start with path following but protected by the whole context
+  # Ex: I don't want to go down that line yet because I saw a horizontal wall nearby that cuts it off
+  # 1. See the outside by whitespace
+  # 2. Classify the reference lines showing distances by the text
+  # 3. Thic
 
 
 def parse_args():
@@ -716,6 +540,7 @@ def parse_args():
   parser.add_argument("--joinword", dest="joinword", default=False, action="store_true")
   parser.add_argument("--what", dest="what", default=False, action="store_true") # TODO: continue to form words
   parser.add_argument("--shapememory", dest="shapememory", default=False, action="store_true")
+  parser.add_argument("--sqft", dest="sqft", default=False, action="store_true")
   return parser.parse_args()
 
 def main():
@@ -733,6 +558,8 @@ def main():
     func = what_is_this_test
   elif args.shapememory:
     func = shapememory_test
+  elif args.sqft:
+    func = sqft_test
   if func:
     if args.profile:
       cProfile.run("{0}()".format(func.__name__))

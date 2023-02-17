@@ -68,17 +68,17 @@ class SingletonIndexer(typing.Generic[S]):
     return results
 
 T = typing.TypeVar("T", pdftypes.LineSymbol, pdftypes.TextSymbol)
-class SymbolIndexer(typing.Generic[T]):
-  ReturnType = typing.Tuple[int, int]
+ReturnType = typing.TypeVar("ReturnType")
+class SymbolIndexer(typing.Generic[T, ReturnType]):
   def __init__(
     self,
     sym_to_coords: typing.Callable[[T], pdftypes.Bbox],
   ) -> None:
     self.symbols: typing.List[T] = []
-    self.return_ids: typing.List[typing.List[SymbolIndexer.ReturnType]] = []
+    self.return_ids: typing.List[typing.List[ReturnType]] = []
     self.rtree = rtree.index.Index()
     self.sym_to_coords = sym_to_coords
-    self.indexer: SingletonIndexer[SymbolIndexer.ReturnType] = SingletonIndexer()
+    self.indexer: SingletonIndexer[ReturnType] = SingletonIndexer()
 
   def add(
     self,
@@ -113,7 +113,10 @@ class ShapeManager:
   def __init__(
     self,
   ) -> None:
-    self.indexer = SymbolIndexer(
+    self.indexer: SymbolIndexer[
+      pdftypes.LineSymbol,
+      typing.Tuple[str, int]
+    ] = SymbolIndexer(
       sym_to_coords=line_symbol_to_coords
     )
     self.dslope = 0.1
@@ -123,26 +126,42 @@ class ShapeManager:
       pdftypes.ClassificationType.SLOPE: 1.,
       pdftypes.ClassificationType.LENGTH: 1.,
     }
-    self.shapes: typing.List[
+    self.shapes: typing.Dict[
+      str,
       typing.Tuple[
         typing.List[pdftypes.LineSymbol],
         typing.List[path_utils.OffsetType]
       ]
-    ] = []
+    ] = {}
     # Shape = [lines], [offsets]
     # Found shape = x0, y0, [lines], [offsets]
     # Activations[(x0,y0)][shape_id][line_id] = score
     self.activation_lookup: SingletonIndexer[
-      typing.Tuple[int, int, float, pdftypes.ClassificationNode]
+      typing.Tuple[str, int, float, pdftypes.ClassificationNode]
     ] = SingletonIndexer()
 
-
+  # TODO: Extend to more general entities
+  # For text offsets work for joining characters
+  # but we really want to move to a grid model where we join the grid
+  # as we join the grid, shapes/entities start to activate
+  # Activations show us how to join the grid
+  # EX: "W", "WI", "WIN", "WINDOW" - seeing a character makes us look to what is right
+  # EX: "A01" makes us look for a window symbol or to see if it's in a table
+  # EX: "BATHROOM" makes us look for the room boundary, sinks, etc.
+  # 1. Loop over all elems and assign priorities (ie sort)
+  #   - Text probably has the highest priority
+  #   - Large text first
+  #   - lines/rectangles are more for dividing lines than joining
+  # 2. Join characters into words and assign word priorities
+  #   - Ex: "BAR" has a "Indicates Center Line" line through it
+  # 3. Look for "WINDOW SCHEDULE", parse out the table.
+  #   - Now we have more entities to search for (ShapeSymbols and LineSymbols)
   def add_shape(
     self,
+    shape_id: str,
     lines: typing.List[path_utils.LinePointsType],
   ):
     bounding_box = path_utils.lines_bounding_bbox(elems=lines)
-    shape_id = len(self.shapes)
     shape: typing.Tuple[
       typing.List[pdftypes.LineSymbol],
       typing.List[path_utils.OffsetType]
@@ -153,7 +172,7 @@ class ShapeManager:
       self.indexer.add(symbol=line_symbol, return_id=(shape_id, line_id,))
       shape[0].append(line_symbol)
       shape[1].append(offset)
-    self.shapes.append(shape)
+    self.shapes[shape_id] = shape
 
   def activate_leaf(
     self,
@@ -188,7 +207,7 @@ class ShapeManager:
     for idx, shape_start in enumerate(self.activation_lookup.stored):
       pending_nodes: typing.List[pdftypes.ClassificationNode] = []
       activations: typing.DefaultDict[
-        int, # shape_id
+        str, # shape_id
         typing.DefaultDict[
           int, # line_id
           typing.List[float],
@@ -225,6 +244,37 @@ class ShapeManager:
     y1 = line_length + dlength
     return self.indexer.intersection(coords=(x0, y0, x1, y1))
 
+class TextManager():
+  def __init__(self) -> None:
+    # Store text nodes by position and bbox with extra boundary that makes them overlap
+    # upon initially activating activate_leaf
+    # Get activations joins into words
+    self.grid = []
+
+  def activate_leaf(
+    self,
+    node: pdftypes.ClassificationNode
+  ):
+    if node.text is None:
+      return
+    # Can't merge yet because there may be a line between the characters
+    self.text_elems.append(node)
+
+  def get_activations(self):
+    def insertion_generator(nodes: typing.List[pdftypes.ClassificationNode]):
+      for idx, node in enumerate(nodes):
+        x0, y0, x1, y1 = node.bbox
+        x0 -= node.width / 2
+        x1 += node.width / 2
+        y0 -= node.width / 2
+        y1 += node.width / 2
+        yield (idx, ())
+    indexer = rtree.index.Index(
+
+    )
+
+
+# TODO: Work like ShapeManager activating by position to form words
 class TextSymbolIndexer:
   def __init__(
     self,

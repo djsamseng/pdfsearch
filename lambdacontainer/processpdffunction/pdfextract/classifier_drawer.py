@@ -241,7 +241,12 @@ class ZoomCanvas(ttk.Frame):
       x0, y0, x1, y1 = line
       x0, y0 = self.rot_point(x0-xmin, y0+ymin)
       x1, y1 = self.rot_point(x1-xmin, y1+ymin)
-      line_id = self.canvas.create_line(x0, y0, x1, y1, fill=color)
+      if isinstance(wrapper.elem, pdfminer.layout.LTCurve):
+        linewidth = wrapper.elem.linewidth / 10
+        dash = wrapper.elem.dashing_style
+        if dash is not None:
+          print(dash)
+      line_id = self.canvas.create_line(x0, y0, x1, y1, fill=color, dash=dash, width=linewidth)
       return [line_id]
     return []
 
