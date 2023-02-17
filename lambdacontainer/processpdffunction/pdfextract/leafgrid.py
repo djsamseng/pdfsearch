@@ -109,14 +109,13 @@ class LeafGrid():
     y0 = self.coord_for(y0)
     x1 = self.coord_for(x1)
     y1 = self.coord_for(y1)
-    res = self.process_coords(
+    for res in self.process_coords(
       bbox=bbox,
       x0=x0, y0=y0, x1=x1, y1=y1,
       direction=direction,
       restrict_idxes=restrict_idxes,
-    )
-    if res is not None:
-      return res
+    ):
+      yield res
 
     def step(x0: int, y0: int, x1: int, y1: int):
       if direction == Direction.LEFT:
@@ -136,14 +135,13 @@ class LeafGrid():
        x0 >=0 and x0 < len(self.grid[y1]) and\
        x1 >= 0 and x1 < len(self.grid[y1])
     while should_continue:
-      res = self.process_coords(
+      for res in self.process_coords(
         bbox=bbox,
         x0=x0, y0=y0, x1=x1, y1=y1,
         direction=direction,
         restrict_idxes=restrict_idxes,
-      )
-      if res is not None:
-        return res
+      ):
+        yield res
       x0, y0, x1, y1 = step(x0=x0, y0=y0, x1=x1, y1=y1)
       should_continue = y0 >= 0 and y0 < len(self.grid) and\
        y1 >= 0 and y1 < len(self.grid) and\
@@ -230,8 +228,7 @@ class LeafGrid():
     in_this_box.sort(key=functools.cmp_to_key(sort_func), reverse=False)
     # print("Process coords:", (x0, y0, x1, y1), len(in_this_box))
     if len(in_this_box) > 0:
-      return in_this_box[0]
-    return None
+      yield in_this_box[0]
 
   def sort_func_custom(self, a: GridNode, b: GridNode, order: typing.Tuple[int, int, int, int]):
     return sort_func_node(a=a.node, b=b.node, order=order)

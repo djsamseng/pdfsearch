@@ -466,15 +466,12 @@ def what_is_this_test():
     first_text.node_id: True,
   }
   x0, y0, x1, y1 = first_text.node.bbox
-  next_grid_node = leaf_grid.next_elem_for_coords(
+  nodes_used: typing.List[leafgrid.GridNode] = [first_text]
+  for next_grid_node in leaf_grid.next_elem_for_coords(
     x0=x0, y0=y0, x1=x1, y1=y1,
     direction=leafgrid.Direction.RIGHT,
     restrict_idxes=restrict_idxes
-  )
-  nodes_used: typing.List[leafgrid.GridNode] = [first_text]
-  # Process coords: (563, 414, 17, 418) 599
-  # Process coords: (586, 414, 17, 418) 126
-  while next_grid_node is not None:
+  ):
     if next_grid_node.node.text is not None:
       print("2:", next_grid_node.node.text)
     nodes_used.append(next_grid_node)
