@@ -4,7 +4,7 @@ import typing
 
 import rtree
 
-from . import pdftypes, path_utils, leafgrid
+from . import pdftypes, path_utils, leafgrid, pdfelemtransforms
 
 import pdfminer.layout
 
@@ -69,6 +69,100 @@ class SingletonIndexer(typing.Generic[S]):
     results = [ self.stored[idx] for idx in idxes] #pylint: disable=not-an-iterable
     return results
 
+class TextJoiner():
+  def __init__(
+    self,
+    layer_nodes: typing.List[pdftypes.ClassificationNode],
+    layer_rtree: rtree.index.Index,
+  ) -> None:
+    self.layer_nodes = layer_nodes
+    self.layer_rtree = layer_rtree
+    self.join_rtree = rtree.index.Index()
+
+    self.nodes: typing.List[pdftypes.ClassificationNode] = []
+
+  def join(
+    self,
+  ):
+    def get_query_for_node(node: pdftypes.ClassificationNode):
+      x0, y0, x1, y1 = node.bbox
+      if isinstance(node.elem, pdfminer.layout.LTChar) and not node.elem.upright:
+        y0 -= node.elem.height
+        y1 += node.elem.height
+      else:
+        x0 -= node.width()
+        x1 += node.width()
+      query = (
+        x0,
+        y0,
+        x1,
+        y1,
+      )
+      return query
+    pending_nodes: typing.List[pdftypes.ClassificationNode] = []
+    node_ids_stranded: typing.Set[int] = set()
+    for node in self.layer_nodes:
+      if node.text is not None:
+        query = get_query_for_node(node=node)
+        joined_node = self.__add(query_coords=query, node=node, node_ids_stranded=node_ids_stranded)
+        if joined_node is not None:
+          pending_nodes.append(joined_node)
+
+    while len(pending_nodes) > 0:
+      node = pending_nodes.pop()
+      query = get_query_for_node(node=node)
+      joined_node = self.__add(query_coords=query, node=node, node_ids_stranded=node_ids_stranded)
+      if joined_node is not None:
+        pending_nodes.append(joined_node)
+    return [self.nodes[idx] for idx in node_ids_stranded]
+
+  def __add(
+    self,
+    query_coords: path_utils.Bbox,
+    node: pdftypes.ClassificationNode,
+    node_ids_stranded: typing.Set[int],
+  ) -> typing.Union[None, pdftypes.ClassificationNode]:
+    idxes = self.join_rtree.intersection(coordinates=query_coords, objects=False)
+    idxes = list(idxes)
+    if len(idxes) > 0:
+      connecting = [ self.nodes[idx] for idx in idxes ]
+      connecting.append(node)
+      if isinstance(node.elem, pdfminer.layout.LTChar) and not node.elem.upright:
+        connecting.sort(key=lambda n: n.bbox[1])
+      else:
+        connecting.sort(key=lambda n: n.bbox[0])
+
+      lines_idxes = self.layer_rtree.intersection(coordinates=query_coords, objects=False)
+      lines_idxes = list(lines_idxes)
+      lines = [
+        self.layer_nodes[idx] for idx in lines_idxes if self.layer_nodes[idx].line is not None
+      ]
+      joined_text = pdfelemtransforms.join_text_line(nodes=connecting)
+      joined_bbox = pdfelemtransforms.bounding_bbox(elems=connecting)
+      delete_idxes = idxes
+      for idx in delete_idxes:
+        self.join_rtree.delete(id=idx, coordinates=self.nodes[idx].bbox)
+        if idx in node_ids_stranded:
+          node_ids_stranded.remove(idx)
+      # TODO: Allow overlapping words
+      joined_node_id = len(self.nodes)
+      joined_node = pdftypes.ClassificationNode(
+        layer_idx=0,
+        in_layer_idx=joined_node_id,
+        elem=None,
+        bbox=joined_bbox,
+        line=None,
+        text=joined_text,
+        child_idxes=delete_idxes,
+      )
+      return joined_node
+    else:
+      idx = len(self.nodes)
+      self.join_rtree.add(idx, coordinates=node.bbox, obj=None)
+      self.nodes.append(node)
+      node_ids_stranded.add(idx)
+      return None
+
 T = typing.TypeVar("T", pdftypes.LineSymbol, pdftypes.TextSymbol)
 ReturnType = typing.TypeVar("ReturnType")
 class SymbolIndexer(typing.Generic[T, ReturnType]):
@@ -111,13 +205,17 @@ ShapeActivations = typing.DefaultDict[
   ShapeActivationPosition
 ]
 
+def insertion_generator(nodes: typing.List[pdftypes.ClassificationNode]):
+  for node_idx, node in enumerate(nodes):
+    yield (node_idx, node.bbox, None)
+
 ActivationLookupType = SingletonIndexer[typing.Tuple[str, int, float, pdftypes.ClassificationNode]]
 class ShapeManager:
   def __init__(
     self,
-    layers: typing.List[typing.List[pdftypes.ClassificationNode]]
+    leaf_layer: typing.List[pdftypes.ClassificationNode]
   ) -> None:
-    self.layers = layers
+    self.layers = [ leaf_layer ]
     self.indexer: SymbolIndexer[
       pdftypes.LineSymbol,
       typing.Tuple[str, int]
@@ -140,14 +238,8 @@ class ShapeManager:
     ] = {}
 
     self.layers_rtree: typing.List[rtree.index.Index] = []
-    def insertion_generator(nodes: typing.List[pdftypes.ClassificationNode]):
-      for node_idx, node in enumerate(nodes):
-        yield (node_idx, node.bbox, None)
     for layer in self.layers:
-      if len(layer) > 0:
-        self.layers_rtree.append(rtree.index.Index(insertion_generator(nodes=layer)))
-      else:
-        self.layers_rtree.append(rtree.index.Index())
+      self.layers_rtree.append(rtree.index.Index(insertion_generator(nodes=layer)))
 
     self.results: typing.DefaultDict[
       str, # shape_id
@@ -188,27 +280,61 @@ class ShapeManager:
       shape[1].append(offset)
     self.shapes[shape_id] = shape
 
+  def add_text(
+    self,
+    text_id: str,
+    regex: str,
+  ):
+    pass
+
   def activate_layers(self):
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
-    for layer_idx, layer in enumerate(self.layers):
-      # Shape = [lines], [offsets]
-      # Found shape = x0, y0, [lines], [offsets]
-      # Activations[(x0,y0)][shape_id][line_id] = score
-      activation_lookup: ActivationLookupType = SingletonIndexer()
-      for leaf in layer:
-        if len(leaf.parent_idxes) > 0:
-          continue
-        if leaf.line is not None:
-          self.__activate_line_leaf(node=leaf, activation_lookup=activation_lookup)
-        if leaf.text is not None:
-          # TODO: Join text
-          pass
-      nodes_used.extend(
-        self.__join_layer(
-          activation_lookup=activation_lookup,
-          next_layer_idx=layer_idx + 1,
-        )
+    for new_layer_idx in range(len(self.layers_rtree), len(self.layers)):
+      self.layers_rtree.append(
+        rtree.index.Index(insertion_generator(nodes=self.layers[new_layer_idx]))
       )
+    for layer_idx in range(len(self.layers)):
+      used_in_layer = self.__activate_layer(layer_idx=layer_idx)
+      nodes_used.extend(used_in_layer)
+
+    return nodes_used
+
+  def __activate_layer(self, layer_idx: int) -> typing.List[pdftypes.ClassificationNode]:
+    # Layer 0 is chars and lines
+    # Layer 1 is words and shapes/rects
+    # Layer 2 is text inside shapes / text inside schedules / text inside measurement lines
+    # Layer 3 is shapes inside shapes / rooms
+    # Layer 4 is sections of the page / different floors on the same page
+    if layer_idx == 0:
+      return self.__activate_leaf_layer(layer_idx=layer_idx)
+    return []
+
+  def __activate_leaf_layer(self, layer_idx: int):
+    layer = self.layers[layer_idx]
+    nodes_used: typing.List[pdftypes.ClassificationNode] = []
+    # Shape = [lines], [offsets]
+        # Found shape = x0, y0, [lines], [offsets]
+        # Activations[(x0,y0)][shape_id][line_id] = score
+    activation_lookup: ActivationLookupType = SingletonIndexer()
+    for node in layer:
+      if len(node.parent_idxes) > 0:
+        continue
+      if node.line is not None:
+        self.__activate_line_leaf(node=node, activation_lookup=activation_lookup)
+      if node.text is not None:
+        # TODO: Join text
+        # Keep a pending joined layer
+        # Check for text around me in the pending joined layer
+        # If so join and replace in pending joined layer
+        # Else add solo char to pending joined layer
+        pass
+    nodes_used = self.__join_layer(
+      activation_lookup=activation_lookup,
+      next_layer_idx=layer_idx + 1,
+    )
+    text_joiner = TextJoiner(layer_nodes=layer, layer_rtree=self.layers_rtree[layer_idx])
+    joined_text_nodes = text_joiner.join()
+    print([n.text for n in joined_text_nodes])
     return nodes_used
 
   def __activate_line_leaf(
@@ -271,7 +397,6 @@ class ShapeManager:
         if shape_activation > 0.9:
           if next_layer_idx >= len(self.layers):
             self.layers.append([])
-            self.layers_rtree.append(rtree.index.Index())
           child_idxes = [ n.in_layer_idx for n in shape_nodes ]
           shape_bbox = path_utils.lines_bounding_bbox(
             elems=[ n.line for n in shape_nodes if n.line is not None ],

@@ -4,6 +4,7 @@ import typing
 
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
+from . import pdftypes
 from .ltjson import LTJson, BboxType, LTJsonEncoder
 
 def get_underlying_parent_links_impl(
@@ -113,11 +114,39 @@ def get_distance_between(a: BboxType, b: BboxType, vert: bool):
   else:
     return 0
 
+def join_text_line(nodes: typing.List[pdftypes.ClassificationNode]) -> str:
+  out = ""
+  has_no_text = True
+  idx0 = 0
+  idx2 = 2
+  if len(nodes) > 0 and nodes[0].text is not None:
+    out += nodes[0].text
+    has_no_text = False
+    if isinstance(nodes[0], pdfminer.layout.LTChar) and not nodes[0].upright:
+      idx0 = 1
+      idx2 = 3
+  for idx in range(1, len(nodes)):
+    last_elem = nodes[idx-1]
+    elem = nodes[idx]
+    elem_width = max(elem.bbox[idx2]-elem.bbox[idx0], last_elem.bbox[idx2]-last_elem.bbox[idx0])
+    x_space = elem.bbox[idx0] - last_elem.bbox[idx2]
+    if x_space > 0.5 * elem_width:
+      out += ""
+    if elem.text is None:
+      # TODO: other kinds of shapes
+      out += "/"
+    else:
+      out += elem.text
+      has_no_text = False
+  if has_no_text:
+    return ""
+  return out
+
 def get_aligns_in_direction(a: BboxType, b: BboxType, vert: bool):
   distance_perpendicular = get_distance_between(a=a, b=b, vert=not vert)
   return distance_perpendicular == 0
 
-def bounding_bbox(elems: typing.List[LTJson]):
+def bounding_bbox(elems: typing.List[typing.Union[LTJson, pdftypes.ClassificationNode]]):
   if len(elems) == 0:
     return 0, 0, 1, 1
   x0, y0, x1, y1 = elems[0].bbox

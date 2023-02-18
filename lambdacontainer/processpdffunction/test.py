@@ -488,7 +488,7 @@ def shapememory_test():
     celems[idx] for idx in window_label_with_pointer_line_idxes
   ]
   window_labels = [*window_label_with_pointer_line[:6], *window_label_with_pointer_line[7:]]
-  shape_manager = symbol_indexer.ShapeManager(layers=layers)
+  shape_manager = symbol_indexer.ShapeManager(leaf_layer=layers[0])
   shape_manager.add_shape(
     shape_id="window_label",
     lines=[l.line for l in window_labels if l.line is not None]
@@ -510,8 +510,22 @@ def shapememory_test():
 def sqft_test():
   _, layers, width, height = get_pdf(which=1, page_number=1)
   celems = layers[0]
+  window_schedule_part_idxes = [
+    17102, 17105, 17107, 17108, 17120, 17122, 17131, 17132, 17133, 17134, 17135,
+    17136, 17137, 17138, 17139, 17140, 17141, 17142, 17143, 17144, 17145, 17146,
+    17147, 17148, 17149, 17150, 17151, 17152, 17153, 17154, 17204, 17205, 17206,
+    17207, 17208, 17209, 17210, 17211, 17212, 17213, 17214, 17215, 17216, 17217,
+    17218, 17219, 18078, 18079, 18080, 18081, 18082, 18083, 18084, 18085, 18086,
+    18087, 18088, 18089, 18090,
+    17103, 17104
+  ]
+  celems = [ celems[idx] for idx in window_schedule_part_idxes ]
+
+  manager = symbol_indexer.ShapeManager(leaf_layer=celems)
+  manager.activate_layers()
+
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=celems)
+  drawer.draw_elems(elems=celems, align_top_left=True)
   drawer.show("C")
   x_start, y_start = 1022, 1002
   wall_x0, wall_y0, wall_x1, wall_y1 = 886, 889, 1129, 1142
