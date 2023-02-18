@@ -111,10 +111,13 @@ ShapeActivations = typing.DefaultDict[
   ShapeActivationPosition
 ]
 
+ActivationLookupType = SingletonIndexer[typing.Tuple[str, int, float, pdftypes.ClassificationNode]]
 class ShapeManager:
   def __init__(
     self,
+    layers: typing.List[typing.List[pdftypes.ClassificationNode]]
   ) -> None:
+    self.layers = layers
     self.indexer: SymbolIndexer[
       pdftypes.LineSymbol,
       typing.Tuple[str, int]
@@ -135,12 +138,21 @@ class ShapeManager:
         typing.List[path_utils.OffsetType]
       ]
     ] = {}
-    # Shape = [lines], [offsets]
-    # Found shape = x0, y0, [lines], [offsets]
-    # Activations[(x0,y0)][shape_id][line_id] = score
-    self.activation_lookup: SingletonIndexer[
-      typing.Tuple[str, int, float, pdftypes.ClassificationNode]
-    ] = SingletonIndexer()
+
+    self.layers_rtree: typing.List[rtree.index.Index] = []
+    def insertion_generator(nodes: typing.List[pdftypes.ClassificationNode]):
+      for node_idx, node in enumerate(nodes):
+        yield (node_idx, node.bbox, None)
+    for layer in self.layers:
+      if len(layer) > 0:
+        self.layers_rtree.append(rtree.index.Index(insertion_generator(nodes=layer)))
+      else:
+        self.layers_rtree.append(rtree.index.Index())
+
+    self.results: typing.DefaultDict[
+      str, # shape_id
+      typing.List[pdftypes.ClassificationNode]
+    ] = collections.defaultdict(list)
 
   # TODO: Extend to more general entities
   # For text offsets work for joining characters
@@ -176,9 +188,33 @@ class ShapeManager:
       shape[1].append(offset)
     self.shapes[shape_id] = shape
 
-  def activate_leaf(
+  def activate_layers(self):
+    nodes_used: typing.List[pdftypes.ClassificationNode] = []
+    for layer_idx, layer in enumerate(self.layers):
+      # Shape = [lines], [offsets]
+      # Found shape = x0, y0, [lines], [offsets]
+      # Activations[(x0,y0)][shape_id][line_id] = score
+      activation_lookup: ActivationLookupType = SingletonIndexer()
+      for leaf in layer:
+        if len(leaf.parent_idxes) > 0:
+          continue
+        if leaf.line is not None:
+          self.__activate_line_leaf(node=leaf, activation_lookup=activation_lookup)
+        if leaf.text is not None:
+          # TODO: Join text
+          pass
+      nodes_used.extend(
+        self.__join_layer(
+          activation_lookup=activation_lookup,
+          next_layer_idx=layer_idx + 1,
+        )
+      )
+    return nodes_used
+
+  def __activate_line_leaf(
     self,
-    node: pdftypes.ClassificationNode
+    node: pdftypes.ClassificationNode,
+    activation_lookup: ActivationLookupType,
   ):
     if node.line is None:
       return
@@ -201,36 +237,61 @@ class ShapeManager:
           x0 + self.shape_start_radius,
           y0 + self.shape_start_radius,
         )
-        self.activation_lookup.add(coords=coords, to_return=(shape_id, line_id, activation, node))
+        activation_lookup.add(coords=coords, to_return=(shape_id, line_id, activation, node))
 
-  def get_activations(self):
-
+  def __join_layer(
+    self,
+    activation_lookup: ActivationLookupType,
+    next_layer_idx: int,
+  ):
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
-    for idx, shape_start in enumerate(self.activation_lookup.stored):
-      pending_nodes: typing.List[pdftypes.ClassificationNode] = []
+    for idx, shape_start in enumerate(activation_lookup.stored):
       activations: typing.DefaultDict[
         str, # shape_id
-        typing.DefaultDict[
+        typing.Dict[
           int, # line_id
-          typing.List[float],
+          typing.Tuple[float, pdftypes.ClassificationNode],
         ]
-      ] = collections.defaultdict(lambda: collections.defaultdict(list))
-      x0, y0, _, _ = self.activation_lookup.coords[idx]
+      ] = collections.defaultdict(dict)
+      x0, y0, _, _ = activation_lookup.coords[idx]
       x0 += self.shape_start_radius
       y0 += self.shape_start_radius
       for shape_id, line_id, activation, node in shape_start:
-        activations[shape_id][line_id].append(activation)
-        if activation > 0.9:
-          pending_nodes.append(node)
+        if line_id in activations[shape_id]:
+          if activation > activations[shape_id][line_id][0]:
+            activations[shape_id][line_id] = (activation, node)
+        else:
+          activations[shape_id][line_id] = (activation, node)
 
       for shape_id, shape_lines in activations.items():
-        shape_score = sum([max(l) for l in shape_lines.values()])
+        shape_nodes = [ t[1] for t in shape_lines.values() ]
+        shape_score = sum([t[0] for t in shape_lines.values()])
         shape_total = len(self.shapes[shape_id][0])
         shape_activation = shape_score / shape_total
         if shape_activation > 0.9:
-          # TODO: Return x0, y0, self.shapes[shape_id]
+          if next_layer_idx >= len(self.layers):
+            self.layers.append([])
+            self.layers_rtree.append(rtree.index.Index())
+          child_idxes = [ n.in_layer_idx for n in shape_nodes ]
+          shape_bbox = path_utils.lines_bounding_bbox(
+            elems=[ n.line for n in shape_nodes if n.line is not None ],
+          )
+          parent_idx = len(self.layers[next_layer_idx])
+          new_parent = pdftypes.ClassificationNode(
+            layer_idx=next_layer_idx,
+            in_layer_idx=parent_idx,
+            elem=None,
+            bbox=shape_bbox,
+            line=None,
+            text=None,
+            child_idxes=child_idxes
+          )
+          for node in shape_nodes:
+            node.parent_idxes.append(parent_idx)
+          self.layers[next_layer_idx].append(new_parent)
           print("id:", shape_id, "score:", shape_score, "/", shape_total, "at:", (x0, y0))
-          nodes_used.extend(pending_nodes)
+          nodes_used.extend(shape_nodes)
+          self.results[shape_id].append(new_parent)
     return nodes_used
 
   def __intersection(

@@ -117,12 +117,17 @@ def get_classification_nodes(
       ClassificationNode
     ]
   ] = [[], []]
+  # We don't want to create parents because
+  # we activate children in order to find similar parents
+  create_parents = False
   for child in elems:
     if isinstance(child, pdfminer.layout.LTContainer):
       assert False, "pdfminer/layout.py line 959 def analyze to return early"
     elif isinstance(child, pdfminer.layout.LTChar):
       layers[0].append(
         ClassificationNode(
+          layer_idx=0,
+          in_layer_idx=len(layers[0]),
           elem=child,
           bbox=child.bbox,
           line=None,
@@ -140,24 +145,31 @@ def get_classification_nodes(
           idxes: typing.List[int] = []
           for line in lines:
             x0, y0, x1, y1 = line
-            idxes.append(len(layers[0]))
+            child_idx = len(layers[0])
+            idxes.append(child_idx)
             node = ClassificationNode(
+              layer_idx=0,
+              in_layer_idx=child_idx,
               elem=child,
               bbox=(x0, y0, x1, y1),
               line=line,
               text=None,
               child_idxes=[],
             )
-            node.parent_idxes = [parent_idx]
+            if create_parents:
+              node.parent_idxes = [parent_idx]
             layers[0].append(node)
-          parent_node = ClassificationNode(
-            elem=None,
-            bbox=child.bbox,
-            line=None,
-            text=None,
-            child_idxes=idxes
-          )
-          layers[1].append(parent_node)
+          if create_parents:
+            parent_node = ClassificationNode(
+              layer_idx=1,
+              in_layer_idx=len(layers[1]),
+              elem=None,
+              bbox=child.bbox,
+              line=None,
+              text=None,
+              child_idxes=idxes
+            )
+            layers[1].append(parent_node)
 
     elif isinstance(child, pdfminer.layout.LTFigure):
       pass
@@ -470,28 +482,26 @@ def shapememory_test():
   _, layers, width, height = get_pdf(which=1, page_number=1)
   celems = layers[0]
   window_label_with_pointer_line_idxes = [
-    18952, 18953, 18954, 18955, 18956, 18957, 18959, 18961, 18962, 18963
+    6448, 6449, 6450, 6451, 6452, 6453, 6454, 6455, 6456, 6457
   ]
   window_label_with_pointer_line = [
     celems[idx] for idx in window_label_with_pointer_line_idxes
   ]
   window_labels = [*window_label_with_pointer_line[:6], *window_label_with_pointer_line[7:]]
-  shape_manager = symbol_indexer.ShapeManager()
+  shape_manager = symbol_indexer.ShapeManager(layers=layers)
   shape_manager.add_shape(
     shape_id="window_label",
     lines=[l.line for l in window_labels if l.line is not None]
   )
-  leaf_grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
-  text_manager = symbol_indexer.TextManager(leaf_grid=leaf_grid)
 
-  should_match_idxes = [10491, 10492, 10493, 10494, 10495, 10496, 10498, 10500, 10501, 10502]
-  should_match_elems = [ celems[idx] for idx in should_match_idxes]
-  for elem in celems:
-    shape_manager.activate_leaf(node=elem)
-  text_manager.process_region(bbox=(0,0,width,height))
-  nodes_used = shape_manager.get_activations()
+  print("Layers before:", [len(l) for l in layers])
+  nodes_used = shape_manager.activate_layers()
+  print("Layers after:", [len(l) for l in layers])
+  nodes_used_b = shape_manager.activate_layers()
+  assert len(nodes_used_b) == 0, "Second activation got nodes: {0}".format(nodes_used_b)
+  print("Layers after:", [len(l) for l in layers])
+  # TODO: use children_idxes of shape_manager.results to draw recursively
 
-  return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=nodes_used)
   drawer.show("C")

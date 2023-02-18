@@ -22,13 +22,16 @@ class ClassificationType(enum.Enum):
 class ClassificationNode():
   def __init__(
     self,
-    # For linewidth, size upright. Only set on leaf nodes
+    layer_idx: int,
+    in_layer_idx: int,
     elem: typing.Union[None, pdfminer.layout.LTComponent],
     bbox: Bbox,
     line: typing.Union[None, path_utils.LinePointsType],
     text: typing.Union[None, str],
     child_idxes: typing.List[int],
   ) -> None:
+    self.layer_idx = layer_idx
+    self.in_layer_idx = in_layer_idx
     self.elem = elem
     if isinstance(elem, pdfminer.layout.LTChar):
       self.upright = elem.upright
