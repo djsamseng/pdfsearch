@@ -86,12 +86,14 @@ class TextJoiner():
   ):
     def get_query_for_node(node: pdftypes.ClassificationNode):
       x0, y0, x1, y1 = node.bbox
+      divisor = len(node.text) if node.text is not None else 1
+      divisor = max(divisor, 1)
       if isinstance(node.elem, pdfminer.layout.LTChar) and not node.elem.upright:
-        y0 -= node.elem.height
-        y1 += node.elem.height
+        y0 -= node.elem.height / divisor
+        y1 += node.elem.height / divisor
       else:
-        x0 -= node.width()
-        x1 += node.width()
+        x0 -= node.width() / divisor
+        x1 += node.width() / divisor
       query = (
         x0,
         y0,
@@ -127,18 +129,20 @@ class TextJoiner():
     if len(idxes) > 0:
       connecting = [ self.nodes[idx] for idx in idxes ]
       connecting.append(node)
-      if isinstance(node.elem, pdfminer.layout.LTChar) and not node.elem.upright:
-        connecting.sort(key=lambda n: n.bbox[1])
-      else:
-        connecting.sort(key=lambda n: n.bbox[0])
-
+      # TODO: Figure out where to insert lines after full join instead of during to prevent double adds
       lines_idxes = self.layer_rtree.intersection(coordinates=query_coords, objects=False)
       lines_idxes = list(lines_idxes)
       lines = [
         self.layer_nodes[idx] for idx in lines_idxes if self.layer_nodes[idx].line is not None
       ]
+      upright = node.upright
+      if not upright:
+        connecting.sort(key=lambda n: n.bbox[1])
+      else:
+        connecting.sort(key=lambda n: n.bbox[0])
+
       joined_text = pdfelemtransforms.join_text_line(nodes=connecting)
-      joined_bbox = pdfelemtransforms.bounding_bbox(elems=connecting)
+      joined_bbox = pdfelemtransforms.bounding_bbox(elems=[c for c in connecting if c.text is not None])
       delete_idxes = idxes
       for idx in delete_idxes:
         self.join_rtree.delete(id=idx, coordinates=self.nodes[idx].bbox)
@@ -155,6 +159,7 @@ class TextJoiner():
         text=joined_text,
         child_idxes=delete_idxes,
       )
+      joined_node.upright = upright
       return joined_node
     else:
       idx = len(self.nodes)

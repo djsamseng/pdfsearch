@@ -114,7 +114,9 @@ def get_distance_between(a: BboxType, b: BboxType, vert: bool):
   else:
     return 0
 
-def join_text_line(nodes: typing.List[pdftypes.ClassificationNode]) -> str:
+def join_text_line(
+  nodes: typing.List[pdftypes.ClassificationNode],
+) -> str:
   out = ""
   has_no_text = True
   idx0 = 0
@@ -128,14 +130,21 @@ def join_text_line(nodes: typing.List[pdftypes.ClassificationNode]) -> str:
   for idx in range(1, len(nodes)):
     last_elem = nodes[idx-1]
     elem = nodes[idx]
-    elem_width = max(elem.bbox[idx2]-elem.bbox[idx0], last_elem.bbox[idx2]-last_elem.bbox[idx0])
+    elem_width = max(
+      elem.bbox[idx2]-elem.bbox[idx0],
+      last_elem.bbox[idx2]-last_elem.bbox[idx0]
+    )
     x_space = elem.bbox[idx0] - last_elem.bbox[idx2]
     if x_space > 0.5 * elem_width:
       out += ""
     if elem.text is None:
-      # TODO: other kinds of shapes
-      out += "/"
+      if len(out) > 0 and out[-1] != "/" and out[-1] != " ":
+        if elem.line and elem.slope < 3 and elem.slope > 0.75 and elem.length < 50:
+          # TODO: other kinds of shapes
+          out += "/"
     else:
+      if elem.text == '"' and len(out) > 0 and out[-1] == "/":
+        out = out[:-1]
       out += elem.text
       has_no_text = False
   if has_no_text:

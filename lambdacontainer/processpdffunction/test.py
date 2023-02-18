@@ -503,7 +503,7 @@ def shapememory_test():
   # TODO: use children_idxes of shape_manager.results to draw recursively
 
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=nodes_used)
+  drawer.draw_elems(elems=celems)
   drawer.show("C")
   # Draw elems that activated a symbol enough
 
