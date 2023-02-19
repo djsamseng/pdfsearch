@@ -193,13 +193,11 @@ def get_classification_nodes(
     elif isinstance(child, pdfminer.layout.LTChar):
       layers[0].append(
         ClassificationNode(
-          layer_idx=0,
-          in_layer_idx=len(layers[0]),
           elem=child,
           bbox=child.bbox,
           line=None,
           text=child.get_text(),
-          child_idxes=[]
+          child_ids=[]
         )
       )
     elif isinstance(child, pdfminer.layout.LTAnno):
@@ -208,39 +206,33 @@ def get_classification_nodes(
       if child.original_path is not None:
         if child.linewidth > 0:
           lines = path_utils.path_to_lines(path=child.original_path)
-          parent_idx = len(layers[1])
-          idxes: typing.List[int] = []
+          child_nodes: typing.List[ClassificationNode] = []
           for line in lines:
             x0, y0, x1, y1 = line
             xmin = min(x0, x1)
             xmax = max(x0, x1)
             ymin = min(y0, y1)
             ymax = max(y0, y1)
-            child_idx = len(layers[0])
-            idxes.append(child_idx)
             node = ClassificationNode(
-              layer_idx=0,
-              in_layer_idx=child_idx,
               elem=child,
               bbox=(xmin, ymin, xmax, ymax),
               line=line,
               text=None,
-              child_idxes=[],
+              child_ids=[],
             )
-            if create_parents:
-              node.parent_idxes = [parent_idx]
-            layers[0].append(node)
+            child_nodes.append(node)
           if create_parents:
             parent_node = ClassificationNode(
-              layer_idx=1,
-              in_layer_idx=len(layers[1]),
               elem=None,
               bbox=child.bbox,
               line=None,
               text=None,
-              child_idxes=idxes
+              child_ids=[n.node_id for n in child_nodes]
             )
+            for n in child_nodes:
+              n.parent_ids = [parent_node.node_id]
             layers[1].append(parent_node)
+          layers[0].extend(child_nodes)
 
     elif isinstance(child, pdfminer.layout.LTFigure):
       pass

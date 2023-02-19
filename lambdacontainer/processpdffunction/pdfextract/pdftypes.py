@@ -22,19 +22,19 @@ class ClassificationType(enum.Enum):
   UPRIGHT = 4
   SIZE = 5
 
+NodeId = int
 class ClassificationNode():
+  id_itr: NodeId = 0
   def __init__(
     self,
-    layer_idx: int,
-    in_layer_idx: int,
     elem: typing.Union[None, pdfminer.layout.LTComponent],
     bbox: Bbox,
     line: typing.Union[None, path_utils.LinePointsType],
     text: typing.Union[None, str],
-    child_idxes: typing.List[int],
+    child_ids: typing.List[int],
   ) -> None:
-    self.layer_idx = layer_idx
-    self.in_layer_idx = in_layer_idx
+    self.node_id = ClassificationNode.id_itr
+    ClassificationNode.id_itr += 1
     self.elem = elem
     if isinstance(elem, pdfminer.layout.LTChar):
       self.upright = elem.upright
@@ -43,9 +43,9 @@ class ClassificationNode():
     self.bbox = bbox
     self.line = line
     self.text = text
-    self.child_idxes = child_idxes
+    self.child_ids = child_ids
 
-    self.parent_idxes: typing.List[int] = []
+    self.parent_ids: typing.List[NodeId] = []
     self.slope = path_utils.line_slope(line=line) if line is not None else 0.
     self.length = self.__length()
 
@@ -128,8 +128,9 @@ class NodeManager():
   ) -> None:
     self.layers: typing.DefaultDict[
       int,
-      typing.List[ClassificationNode]
+      typing.List[NodeId]
     ] = collections.defaultdict(list)
+    self.nodes: typing.Dict[NodeId, ClassificationNode] = {}
 
     self.indexes: typing.Dict[
       int,
@@ -145,7 +146,9 @@ class NodeManager():
     ] = {}
     for idx, layer in enumerate(layers):
       self.create_layer(layer_idx=idx)
-      self.layers[idx] = layer
+      self.layers[idx] = [n.node_id for n in layer]
+      for node in layer:
+        self.nodes[node.node_id] = node
       self.index_layer(layer_idx=idx)
 
   def create_layer(self, layer_idx: int):
@@ -159,37 +162,36 @@ class NodeManager():
     bbox: Bbox,
     line: typing.Union[None, path_utils.LinePointsType],
     text: typing.Union[None, str],
-    child_idxes: typing.List[int],
+    child_ids: typing.List[int],
     layer_idx: int,
   ):
     if layer_idx not in self.layers:
       self.create_layer(layer_idx=layer_idx)
-    in_layer_idx = len(self.layers[layer_idx])
     node = ClassificationNode(
-      layer_idx=layer_idx,
-      in_layer_idx=in_layer_idx,
       elem=elem,
       bbox=bbox,
       line=line,
       text=text,
-      child_idxes=child_idxes,
+      child_ids=child_ids,
     )
-    self.layers[layer_idx].append(node)
+    self.layers[layer_idx].append(node.node_id)
+    self.nodes[node.node_id] = node
     if layer_idx in self.indexes:
-      self.indexes[layer_idx].add(id=in_layer_idx, coordinates=node.bbox, obj=None)
+      self.indexes[layer_idx].add(id=node.node_id, coordinates=node.bbox, obj=None)
 
   def index_layer(self, layer_idx: int):
     if layer_idx in self.indexes:
       print("=== Warning: Destroying existing index {0} ===".format(layer_idx))
     def insertion_generator(nodes: typing.List[ClassificationNode]):
-      for idx, node in enumerate(nodes):
-        yield (idx, node.bbox, None)
-    index = rtree.index.Index(insertion_generator(nodes=self.layers[layer_idx]))
+      for node in nodes:
+        yield (node.node_id, node.bbox, None)
+    layer_nodes = [self.nodes[node_id] for node_id in self.layers[layer_idx]]
+    index = rtree.index.Index(insertion_generator(nodes=layer_nodes))
     self.indexes[layer_idx] = index
 
   def intersection(self, layer_idx: int, bbox: Bbox):
-    idxes = self.indexes[layer_idx].intersection(coordinates=bbox, objects=False)
-    return [ self.layers[layer_idx][idx] for idx in idxes ]
+    node_ids = self.indexes[layer_idx].intersection(coordinates=bbox, objects=False)
+    return [ self.nodes[node_id] for node_id in node_ids ]
 
 class BaseSymbol(metaclass=abc.ABCMeta):
   @property
