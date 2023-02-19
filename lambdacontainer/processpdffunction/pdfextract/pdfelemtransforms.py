@@ -5,7 +5,7 @@ import typing
 
 import pdfminer, pdfminer.layout, pdfminer.high_level, pdfminer.utils
 
-from . import pdftypes
+from . import pdftypes, path_utils
 from .ltjson import LTJson, BboxType, LTJsonEncoder
 
 def get_underlying_parent_links_impl(
@@ -126,19 +126,92 @@ def bbox_intersection_area(a: BboxType, b: BboxType):
     return (right - left) * 0.1
   return 0
 
-def get_distance_between(a: BboxType, b: BboxType, vert: bool):
+def get_distance_between(
+  this: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  other: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  vert: bool
+):
+  idx0, idx1 = get_idx_for_vert(vert=vert)
+  selfmin = min(this[idx0], this[idx1])
+  selfmax = max(this[idx0], this[idx1])
+  othermin = min(other[idx0], other[idx1])
+  othermax = max(other[idx0], other[idx1])
+  if selfmin >= othermax:
+    return selfmin - othermax
+  elif othermin >= selfmax:
+    return othermin - selfmax
+  else:
+    return 0
+
+def get_idx_for_vert(vert: bool):
   if vert:
     idx0 = 1
     idx1 = 3
   else:
     idx0 = 0
     idx1 = 2
-  if a[idx0] >= b[idx1]:
-    return a[idx0] - b[idx1]
-  elif b[idx0] >= a[idx1]:
-    return b[idx0] - a[idx1]
+  return idx0, idx1
+
+def other_is_pos_gte(selfmin: float, selfmax: float, othermin:float, othermax: float):
+  if othermin >= selfmax:
+    return True
+  if othermin >= selfmin and othermax >= selfmax:
+    return True
+  return False
+
+def other_is_pos_lte(selfmin: float, selfmax: float, othermin:float, othermax: float):
+  if othermax <= selfmin:
+    return True
+  if othermax <= selfmax and othermin <= selfmin:
+    return True
+  return False
+
+def other_is_pos_gte_this(
+  this: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  other: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  vert: bool,
+  above: bool,
+):
+  idx0, idx1 = get_idx_for_vert(vert=vert)
+  selfmin = min(this[idx0], this[idx1])
+  selfmax = max(this[idx0], this[idx1])
+  othermin = min(other[idx0], other[idx1])
+  othermax = max(other[idx0], other[idx1])
+  if above:
+    return other_is_pos_gte(selfmin=selfmin, selfmax=selfmax, othermin=othermin, othermax=othermax)
   else:
-    return 0
+    return other_is_pos_lte(selfmin=selfmin, selfmax=selfmax, othermin=othermin, othermax=othermax)
+
+def other_is_pos_cmp(
+  node: pdftypes.ClassificationNode,
+  other: pdftypes.ClassificationNode,
+  vert: bool,
+  above: bool,
+):
+  if node.line is not None:
+    if other.line is not None:
+      return other_is_pos_gte_this(this=node.line, other=other.line, vert=vert, above=above)
+    else:
+      return other_is_pos_gte_this(this=node.line, other=other.bbox, vert=vert, above=above)
+  elif other.line is not None:
+    return other_is_pos_gte_this(this=node.bbox, other=other.line, vert=vert, above=above)
+  idx0, idx1 = get_idx_for_vert(vert=vert)
+  if above:
+    return other.bbox[idx0] >= node.bbox[idx1]
+  else:
+    return other.bbox[idx1] <= node.bbox[idx0]
+
+def get_aligns_in_direction(
+  this: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  other: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  vert: bool
+):
+  distance_perpendicular = get_distance_between(
+    this=this,
+    other=other,
+    vert=not vert
+  )
+  return distance_perpendicular == 0
 
 def join_text_line(
   nodes: typing.List[pdftypes.ClassificationNode],
@@ -176,10 +249,6 @@ def join_text_line(
   if has_no_text:
     return ""
   return out
-
-def get_aligns_in_direction(a: BboxType, b: BboxType, vert: bool):
-  distance_perpendicular = get_distance_between(a=a, b=b, vert=not vert)
-  return distance_perpendicular == 0
 
 def bounding_bbox(elems: typing.List[typing.Union[LTJson, pdftypes.ClassificationNode]]):
   if len(elems) == 0:

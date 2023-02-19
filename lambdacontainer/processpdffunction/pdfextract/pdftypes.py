@@ -117,7 +117,9 @@ class ClassificationNode():
     for key in self.__dict__.keys():
       if key == "elem":
         continue
-      if not key.startswith("_{0}__".format(self.__class__.__name__)):
+      elif key == "parent_ids" or key == "child_ids":
+        out[key] = list(self.__dict__[key])
+      elif not key.startswith("_{0}__".format(self.__class__.__name__)):
         out[key] = self.__dict__[key]
     return out
 

@@ -668,6 +668,45 @@ def sqft_test():
   # 3. Thic
 
 
+
+def connect_node_neighbors(
+  node: ClassificationNode,
+  neighbors: typing.List[ClassificationNode]
+):
+  # TODO: overlap
+  closest_above: typing.Union[ClassificationNode, None] = None
+  closest_above_space = 1000
+  closest_right: typing.Union[ClassificationNode, None] = None
+  closest_right_space = 1000
+  closest_below: typing.Union[ClassificationNode, None] = None
+  closest_below_space = 1000
+  closest_left: typing.Union[ClassificationNode, None] = None
+  closest_left_space = 1000
+  for other in neighbors:
+    is_above = pdfelemtransforms.other_is_pos_cmp(node=node, other=other, vert=True, above=True)
+    is_right = pdfelemtransforms.other_is_pos_cmp(node=node, other=other, vert=False, above=True)
+    is_below = pdfelemtransforms.other_is_pos_cmp(node=node, other=other, vert=True, above=False)
+    is_left = pdfelemtransforms.other_is_pos_cmp(node=node, other=other, vert=False, above=False)
+    distance_x = pdfelemtransforms.get_distance_between(this=node.bbox, other=other.bbox, vert=False)
+    distance_y = pdfelemtransforms.get_distance_between(this=node.bbox, other=other.bbox, vert=True)
+    if is_above and distance_x == 0:
+      if closest_above is None or distance_y < closest_above_space:
+        closest_above = other
+        closest_above_space = distance_y
+    if is_right and distance_y == 0:
+      if closest_right is None or distance_x < closest_right_space:
+        closest_right = other
+        closest_right_space = distance_x
+    if is_below and distance_x == 0:
+      if closest_below is None or distance_y < closest_below_space:
+        closest_below = other
+        closest_below_space = distance_y
+    if is_left and distance_y == 0:
+      if closest_left is None or distance_x < closest_left_space:
+        closest_left = other
+        closest_left_space = distance_x
+  return closest_left, closest_below, closest_right, closest_above
+
 def conn_test():
   _, celems, width, height = get_window_schedule_pdf()
 
@@ -675,20 +714,33 @@ def conn_test():
 
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
-  start_pos_x, start_pos_y = text_join_test[-2].bbox[:2] # 4 in 1 3/4"
-  for focus_radius in range(1, 5000):
-    search_bbox = (
-      start_pos_x - focus_radius,
-      start_pos_y - focus_radius,
-      start_pos_x + focus_radius,
-      start_pos_y + focus_radius,
-    )
+  start_node = text_join_test[-2]
+  start_pos_x, start_pos_y = start_node.bbox[:2] # 4 in 1 3/4"
+  focus_radius = 50
+  search_bbox = (
+    start_pos_x - focus_radius,
+    start_pos_y - focus_radius,
+    start_pos_x + focus_radius,
+    start_pos_y + focus_radius,
+  )
 
-    start_nodes = node_manager.intersection(
-      layer_idx=0,
-      bbox=search_bbox,
-    )
-  # TODO: overlap
+  start_nodes = node_manager.intersection(
+    layer_idx=0,
+    bbox=search_bbox,
+  )
+  #start_nodes = [start_nodes[idx] for idx in [21]]
+  cl, cb, cr, ca = connect_node_neighbors(node=start_node, neighbors=start_nodes)
+  print("Start:", start_node)
+  print("left:", cl)
+  print("below:", cb)
+  print("right:", cr)
+  print("above:", ca)
+  draw = [start_node, *[n for n in [cl, cb, cr, ca] if n is not None]]
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=draw, align_top_left=True)
+  drawer.show("C")
+
+
   # TODO: Not a grid, instead pointers
   # We can efficiently do this by dividing regions into groups
   # non-rectangular but simply lists of elements where each group is surrounded by space
