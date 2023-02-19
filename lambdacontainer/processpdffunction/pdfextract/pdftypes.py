@@ -1,5 +1,6 @@
 
 import abc
+import collections
 import enum
 import json
 import math
@@ -7,6 +8,7 @@ import re
 import typing
 
 import pdfminer.layout, pdfminer.utils
+import rtree, rtree.index
 
 from . import path_utils
 
@@ -118,6 +120,76 @@ class ClassificationNode():
       if not key.startswith("_{0}__".format(self.__class__.__name__)):
         out[key] = self.__dict__[key]
     return out
+
+class NodeManager():
+  def __init__(
+    self,
+    layers: typing.List[typing.List[ClassificationNode]],
+  ) -> None:
+    self.layers: typing.DefaultDict[
+      int,
+      typing.List[ClassificationNode]
+    ] = collections.defaultdict(list)
+
+    self.indexes: typing.Dict[
+      int,
+      rtree.index.Index
+    ] = {}
+    self.parent_connections: typing.Dict[
+      typing.Tuple[int, int],
+      typing.List[typing.Tuple[int, int]]
+    ] = {}
+    self.child_connections: typing.Dict[
+      typing.Tuple[int, int],
+      typing.List[typing.Tuple[int, int]]
+    ] = {}
+    for idx, layer in enumerate(layers):
+      self.create_layer(layer_idx=idx)
+      self.layers[idx] = layer
+      self.index_layer(layer_idx=idx)
+
+  def create_layer(self, layer_idx: int):
+    if layer_idx in self.layers:
+      print("=== Warning: Destroying existing layer {0} ===".format(layer_idx))
+    self.layers[layer_idx] = []
+
+  def add_node(
+    self,
+    elem: typing.Union[None, pdfminer.layout.LTComponent],
+    bbox: Bbox,
+    line: typing.Union[None, path_utils.LinePointsType],
+    text: typing.Union[None, str],
+    child_idxes: typing.List[int],
+    layer_idx: int,
+  ):
+    if layer_idx not in self.layers:
+      self.create_layer(layer_idx=layer_idx)
+    in_layer_idx = len(self.layers[layer_idx])
+    node = ClassificationNode(
+      layer_idx=layer_idx,
+      in_layer_idx=in_layer_idx,
+      elem=elem,
+      bbox=bbox,
+      line=line,
+      text=text,
+      child_idxes=child_idxes,
+    )
+    self.layers[layer_idx].append(node)
+    if layer_idx in self.indexes:
+      self.indexes[layer_idx].add(id=in_layer_idx, coordinates=node.bbox, obj=None)
+
+  def index_layer(self, layer_idx: int):
+    if layer_idx in self.indexes:
+      print("=== Warning: Destroying existing index {0} ===".format(layer_idx))
+    def insertion_generator(nodes: typing.List[ClassificationNode]):
+      for idx, node in enumerate(nodes):
+        yield (idx, node.bbox, None)
+    index = rtree.index.Index(insertion_generator(nodes=self.layers[layer_idx]))
+    self.indexes[layer_idx] = index
+
+  def intersection(self, layer_idx: int, bbox: Bbox):
+    idxes = self.indexes[layer_idx].intersection(coordinates=bbox, objects=False)
+    return [ self.layers[layer_idx][idx] for idx in idxes ]
 
 class BaseSymbol(metaclass=abc.ABCMeta):
   @property
@@ -282,6 +354,8 @@ class LookForElem():
 def make_word_matcher():
   # 1 1/3"
   # given an x,y is there a char here?
+  # If so grab it, assign its parent to me and continue
+  # If it doesn't pan out, destroy parent links
   pass
 
 def make_table_matcher():

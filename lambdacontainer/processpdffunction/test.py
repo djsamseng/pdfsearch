@@ -212,13 +212,17 @@ def get_classification_nodes(
           idxes: typing.List[int] = []
           for line in lines:
             x0, y0, x1, y1 = line
+            xmin = min(x0, x1)
+            xmax = max(x0, x1)
+            ymin = min(y0, y1)
+            ymax = max(y0, y1)
             child_idx = len(layers[0])
             idxes.append(child_idx)
             node = ClassificationNode(
               layer_idx=0,
               in_layer_idx=child_idx,
               elem=child,
-              bbox=(x0, y0, x1, y1),
+              bbox=(xmin, ymin, xmax, ymax),
               line=line,
               text=None,
               child_idxes=[],
@@ -589,15 +593,31 @@ def sqft_test():
   # If it doesn't pan out, destroy parent links
   #_, layers, width, height = get_pdf(which=1, page_number=1)
   _, celems, width, height = get_window_schedule_pdf()
+
+  node_manager = pdftypes.NodeManager(layers=[celems])
+
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
   start_pos_x, start_pos_y = text_join_test[-2].bbox[:2] # 4 in 1 3/4"
   focus_radius = 50
+  search_bbox = (
+    start_pos_x - focus_radius,
+    start_pos_y - focus_radius,
+    start_pos_x + focus_radius,
+    start_pos_y + focus_radius,
+  )
+
+  start_nodes = node_manager.intersection(
+    layer_idx=0,
+    bbox=search_bbox,
+  )
+
+
 
   grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
-  start_nodes = grid.intersection(
-    x0=start_pos_x-focus_radius, y0=start_pos_y-focus_radius, x1=start_pos_x+focus_radius, y1=start_pos_y+focus_radius
-  )
+  #start_nodes = grid.intersection(
+  #  x0=start_pos_x-focus_radius, y0=start_pos_y-focus_radius, x1=start_pos_x+focus_radius, y1=start_pos_y+focus_radius
+  #)
   # Recursively spread out in all 4 directions to find box
   # Unnatural to only look at one element at a time
   # Look at everything in parallel
@@ -626,7 +646,7 @@ def sqft_test():
     n for n in start_nodes if pdfelemtransforms.box_contains(outer=outer, inner=n.bbox)
   ]
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=inside, align_top_left=True)
+  drawer.draw_elems(elems=start_nodes, align_top_left=True)
   drawer.show("C")
   print([n.text for n in inside])
   return
