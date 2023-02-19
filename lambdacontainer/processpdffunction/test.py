@@ -230,7 +230,7 @@ def get_classification_nodes(
               child_ids=[n.node_id for n in child_nodes]
             )
             for n in child_nodes:
-              n.parent_ids = [parent_node.node_id]
+              n.parent_ids.add(parent_node.node_id)
             layers[1].append(parent_node)
           layers[0].extend(child_nodes)
 
@@ -604,13 +604,6 @@ def sqft_test():
     bbox=search_bbox,
   )
 
-
-
-  grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
-  #start_nodes = grid.intersection(
-  #  x0=start_pos_x-focus_radius, y0=start_pos_y-focus_radius, x1=start_pos_x+focus_radius, y1=start_pos_y+focus_radius
-  #)
-  # Recursively spread out in all 4 directions to find box
   # Unnatural to only look at one element at a time
   # Look at everything in parallel
   # If I'm looking at x,y and there's a line above, set a boundary there
@@ -625,22 +618,39 @@ def sqft_test():
       is_vertical = abs(node.slope) > path_utils.MAX_SLOPE - 1
       if is_horizontal:
         if node.bbox[1] > start_pos_y:
-          ytop = node.bbox[1]
+          ytop = min(ytop, node.bbox[1])
         elif node.bbox[1] < start_pos_y:
-          ybottom = node.bbox[1]
+          ybottom = max(ybottom, node.bbox[1])
       elif is_vertical:
         if node.bbox[0] > start_pos_x:
-          xright = node.bbox[0]
+          xright = min(xright, node.bbox[0])
         elif node.bbox[0] < start_pos_x:
-          xleft = node.bbox[0]
+          xleft = max(xleft, node.bbox[0])
   outer = (xleft, ybottom, xright, ytop)
   inside = [
     n for n in start_nodes if pdfelemtransforms.box_contains(outer=outer, inner=n.bbox)
   ]
+  inside.sort(key=lambda n: n.bbox[0])
+  text = pdfelemtransforms.join_text_line(nodes=inside)
+  parent_node = node_manager.add_node(
+    elem=None,
+    bbox=outer,
+    line=None,
+    text=text,
+    child_ids=[n.node_id for n in inside],
+    layer_idx=1,
+  )
+  for node in inside:
+    node.parent_ids.add(parent_node.node_id)
+  print(text)
+  # Words and known meanings - things start to make sense together
+  # Characters connected by position
+  # Table elements connected to column header and connected to a row
+  # Assign " to mean inches, MAHOG. to mean Mahogany
+  return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=start_nodes, align_top_left=True)
+  drawer.draw_elems(elems=inside, align_top_left=True)
   drawer.show("C")
-  print([n.text for n in inside])
   return
 
   manager = symbol_indexer.ShapeManager(leaf_layer=celems)
@@ -658,6 +668,41 @@ def sqft_test():
   # 3. Thic
 
 
+def conn_test():
+  _, celems, width, height = get_window_schedule_pdf()
+
+  node_manager = pdftypes.NodeManager(layers=[celems])
+
+  text_join_test_idxes = [118, 119, 120, 121, 122, 123]
+  text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
+  start_pos_x, start_pos_y = text_join_test[-2].bbox[:2] # 4 in 1 3/4"
+  for focus_radius in range(1, 5000):
+    search_bbox = (
+      start_pos_x - focus_radius,
+      start_pos_y - focus_radius,
+      start_pos_x + focus_radius,
+      start_pos_y + focus_radius,
+    )
+
+    start_nodes = node_manager.intersection(
+      layer_idx=0,
+      bbox=search_bbox,
+    )
+  # TODO: overlap
+  # TODO: Not a grid, instead pointers
+  # We can efficiently do this by dividing regions into groups
+  # non-rectangular but simply lists of elements where each group is surrounded by space
+  # Clustering algorithm?
+  # Humans pick a focus area and expand until a region is captured and ignore everything outside
+  # Don't optimize yet, just get something working first
+  # Given x, pointer to left, up, right, down given my width, height
+  # '3', '/', '8' grouped then '1', ' ', '3/8', '"'  grouped into '1 3/8"'
+  # because 3/8 takes precedence over 8"
+  # [                                    line                               ]
+  #      [line][      space       ][line][     space    ][line]
+  #      [line][space]1 3/4"[space][line][space]H4[space][line]
+  #      [line][      space       ][line][     space    ][line]
+
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--profile", dest="profile", default=False, action="store_true")
@@ -668,6 +713,7 @@ def parse_args():
   parser.add_argument("--what", dest="what", default=False, action="store_true") # TODO: continue to form words
   parser.add_argument("--shapememory", dest="shapememory", default=False, action="store_true")
   parser.add_argument("--sqft", dest="sqft", default=False, action="store_true")
+  parser.add_argument("--conn", dest="conn", default=False, action="store_true")
   return parser.parse_args()
 
 def main():
@@ -687,6 +733,8 @@ def main():
     func = shapememory_test
   elif args.sqft:
     func = sqft_test
+  elif args.conn:
+    func = conn_test
   if func:
     if args.profile:
       cProfile.run("{0}()".format(func.__name__))

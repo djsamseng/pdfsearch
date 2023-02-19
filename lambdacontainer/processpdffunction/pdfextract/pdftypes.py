@@ -43,9 +43,9 @@ class ClassificationNode():
     self.bbox = bbox
     self.line = line
     self.text = text
-    self.child_ids = child_ids
+    self.child_ids = set(child_ids)
 
-    self.parent_ids: typing.List[NodeId] = []
+    self.parent_ids: typing.Set[NodeId] = set()
     self.slope = path_utils.line_slope(line=line) if line is not None else 0.
     self.length = self.__length()
 
@@ -128,33 +128,25 @@ class NodeManager():
   ) -> None:
     self.layers: typing.DefaultDict[
       int,
-      typing.List[NodeId]
-    ] = collections.defaultdict(list)
+      typing.Set[NodeId]
+    ] = collections.defaultdict(set)
     self.nodes: typing.Dict[NodeId, ClassificationNode] = {}
 
     self.indexes: typing.Dict[
       int,
       rtree.index.Index
     ] = {}
-    self.parent_connections: typing.Dict[
-      typing.Tuple[int, int],
-      typing.List[typing.Tuple[int, int]]
-    ] = {}
-    self.child_connections: typing.Dict[
-      typing.Tuple[int, int],
-      typing.List[typing.Tuple[int, int]]
-    ] = {}
     for idx, layer in enumerate(layers):
       self.create_layer(layer_idx=idx)
-      self.layers[idx] = [n.node_id for n in layer]
       for node in layer:
+        self.layers[idx].add(node.node_id)
         self.nodes[node.node_id] = node
       self.index_layer(layer_idx=idx)
 
   def create_layer(self, layer_idx: int):
     if layer_idx in self.layers:
       print("=== Warning: Destroying existing layer {0} ===".format(layer_idx))
-    self.layers[layer_idx] = []
+    self.layers[layer_idx] = set()
 
   def add_node(
     self,
@@ -174,10 +166,11 @@ class NodeManager():
       text=text,
       child_ids=child_ids,
     )
-    self.layers[layer_idx].append(node.node_id)
+    self.layers[layer_idx].add(node.node_id)
     self.nodes[node.node_id] = node
     if layer_idx in self.indexes:
       self.indexes[layer_idx].add(id=node.node_id, coordinates=node.bbox, obj=None)
+    return node
 
   def index_layer(self, layer_idx: int):
     if layer_idx in self.indexes:
@@ -309,6 +302,42 @@ class LineSymbol(BaseSymbol):
       else:
         out[key] = self.__dict__[key]
     return out
+
+class ConnectionType(enum.Enum):
+  POSITION = 1
+  MEANING = 2
+
+class Connection():
+  def __init__(
+    self,
+    type: ConnectionType,
+    strength: float) -> None:
+    self.type = type
+    self.strength = strength
+
+class MSymbol():
+  def __init__(
+    self,
+    value: typing.Any,
+    desc: typing.Union[None, str] = None,
+  ) -> None:
+    self.value = value
+    self.desc = desc or str(value)
+    self.connections: typing.DefaultDict[
+      ConnectionType,
+      typing.List[Connection]
+    ] = collections.defaultdict(list)
+
+def make_symbols():
+  symbols = [
+    MSymbol(value="mahogony"),
+    MSymbol(value="mahog"), # should be learned
+    MSymbol(value='"'),
+    MSymbol(value="quotation mark"),
+    MSymbol(value="feet"),
+    MSymbol(value="inches"),
+    MSymbol(value="plural"),
+  ]
 
 
 class BaseMatcher(metaclass=abc.ABCMeta):
