@@ -1,5 +1,6 @@
 
 import collections
+import re
 import typing
 
 import rtree
@@ -68,6 +69,9 @@ class SingletonIndexer(typing.Generic[S]):
     idxes = self.rtree.intersection(coordinates=coords, objects=False)
     results = [ self.stored[idx] for idx in idxes] #pylint: disable=not-an-iterable
     return results
+
+
+
 
 class TextJoiner():
   def __init__(
@@ -285,13 +289,6 @@ class ShapeManager:
       shape[1].append(offset)
     self.shapes[shape_id] = shape
 
-  def add_text(
-    self,
-    text_id: str,
-    regex: str,
-  ):
-    pass
-
   def activate_layers(self):
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
     for new_layer_idx in range(len(self.layers_rtree), len(self.layers)):
@@ -337,6 +334,14 @@ class ShapeManager:
       activation_lookup=activation_lookup,
       next_layer_idx=layer_idx + 1,
     )
+    # Align, walk, box
+    # 1. Find text bbox and snap to the beginning of the next
+    #    - divide into smaller regions, we may transfer a region to a different group
+    #    - use the leafgrid to find large areas of whitespace
+    # 2. Walk in the direction of the text
+    #    - join the smaller regions
+    # 3. Narrow the final bbox
+    # 4. Repeat for all areas
     text_joiner = TextJoiner(layer_nodes=layer, layer_rtree=self.layers_rtree[layer_idx])
     joined_text_nodes = text_joiner.join()
     print([n.text for n in joined_text_nodes])
@@ -437,69 +442,3 @@ class ShapeManager:
     y1 = line_length + dlength
     return self.indexer.intersection(coords=(x0, y0, x1, y1))
 
-class TextManager():
-  def __init__(
-    self,
-    leaf_grid: leafgrid.LeafGrid
-  ) -> None:
-    # Store text nodes by position and bbox with extra boundary that makes them overlap
-    # upon initially activating activate_leaf
-    # Get activations joins into words
-    self.leaf_grid = leaf_grid
-
-  def process_region(
-    self,
-    bbox: pdftypes.Bbox,
-  ):
-    first_text = self.leaf_grid.first_elem(bbox=bbox, text_only=True)
-    print("1:", first_text)
-    if first_text is None:
-      return
-    restrict_idxes = {
-      first_text.node_id: True,
-    }
-    x0, y0, x1, y1 = first_text.node.bbox
-    next_grid_node = self.leaf_grid.next_elem_for_coords(
-      x0=x0, y0=y0, x1=x1, y1=y1,
-      direction=leafgrid.Direction.RIGHT,
-      restrict_idxes=restrict_idxes
-    )
-    while next_grid_node is not None:
-      if next_grid_node.node.text is not None:
-        print("2:", next_grid_node.node.text)
-      x0 = next_grid_node.node.bbox[0]
-      restrict_idxes[next_grid_node.node_id] = True
-      next_grid_node = self.leaf_grid.next_elem_for_coords(
-        x0=x0, y0=y0, x1=x1, y1=y1,
-        direction=leafgrid.Direction.RIGHT,
-        restrict_idxes=restrict_idxes
-      )
-
-
-    # Can't merge yet because there may be a line between the characters
-
-  def get_activations(self):
-    pass
-
-# TODO: Work like ShapeManager activating by position to form words
-class TextSymbolIndexer:
-  def __init__(
-    self,
-    symbols: typing.List[pdftypes.TextSymbol]
-  ) -> None:
-    self.indexer = SymbolIndexer(
-      symbols=symbols,
-      sym_to_coords=text_symbol_to_coords,
-    )
-
-  def intersection(
-    self,
-    text: str,
-    size: float,
-    dsize: float,
-  ) -> typing.Iterator[int]:
-    x0 = str_to_coord(s=text)
-    x1 = x0
-    y0 = size - dsize
-    y1 = size + dsize
-    return self.indexer.intersection(coords=(x0, y0, x1, y1))

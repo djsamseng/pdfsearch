@@ -34,7 +34,12 @@ def get_pdf(
   which:int = 0,
   page_number:typing.Union[int, None]=None,
   overwrite: bool=False,
-):
+) -> typing.Tuple[
+  typing.List[LTJson],
+  typing.List[typing.List[pdftypes.ClassificationNode]],
+  int,
+  int
+]:
   filename = "{0}-{1}.pickle".format(which, page_number)
   if not overwrite:
     if os.path.isfile(filename):
@@ -78,6 +83,68 @@ def sign(val: float) -> int:
     return -1
   return 1
 
+
+def get_window_schedule_pdf():
+  window_schedule_idxes = [
+    17102, 17103, 17105, 17106, 17107, 17108, 17109, 17110, 17111, 17112, 17113,
+    17114, 17120, 17122, 17123, 17124, 17125, 17126, 17127, 17128, 17129, 17130,
+    17131, 17132, 17133, 17134, 17135, 17136, 17137, 17138, 17139, 17140, 17141,
+    17142, 17143, 17144, 17145, 17146, 17147, 17148, 17149, 17150, 17151, 17152,
+    17153, 17154, 17155, 17156, 17157, 17158, 17159, 17160, 17161, 17162, 17163,
+    17164, 17165, 17166, 17167, 17168, 17169, 17170, 17171, 17172, 17173, 17174,
+    17175, 17176, 17177, 17178, 17179, 17180, 17181, 17182, 17183, 17184, 17185,
+    17186, 17187, 17188, 17189, 17190, 17191, 17192, 17193, 17194, 17195, 17196,
+    17197, 17198, 17199, 17200, 17201, 17202, 17203, 17204, 17205, 17206, 17207,
+    17208, 17209, 17210, 17211, 17212, 17213, 17214, 17215, 17216, 17217, 17218,
+    17219, 17220, 17221, 17222, 17223, 17224, 17225, 17226, 17227, 17228, 17229,
+    17230, 17231, 17232, 17233, 17234, 17235, 17236, 17237, 17238, 17239, 17240,
+    17241, 17242, 17243, 17244, 17245, 17246, 17247, 17248, 17249, 17250, 17251,
+    17252, 17253, 17254, 17255, 17256, 17257, 17258, 17259, 17260, 17261, 17262,
+    17263, 17264, 17265, 17266, 17267, 17268, 17269, 17270, 17271, 17272, 17273,
+    17274, 17275, 17276, 17277, 17278, 17279, 17280, 17281, 17282, 17283, 17284,
+    18078, 18079, 18080, 18081, 18082, 18083, 18084, 18085, 18086, 18087, 18088,
+    18089, 18090, 18244, 18245, 18246, 18247, 18248, 18249, 18250, 18251, 18252,
+    18253, 18254, 18255, 18256, 18257, 18258, 18259, 18260, 18261, 18262, 18263,
+    18264, 18265, 18266, 18267, 18268, 18269, 18270, 18271, 18272, 18273, 18274,
+    18275, 18276, 18277, 18278, 18279, 18280, 18281, 18282, 18283, 18284, 18285,
+    18286, 18287, 18288, 18289, 18290, 18291, 18292, 18293, 18294, 18295, 18296,
+    18297, 18298, 18299, 18300, 18301, 18302, 18303, 18304, 18305, 18306, 18307,
+    18308, 18309, 18310, 18311, 18312, 18313, 18314, 18315, 18316, 18317, 18318,
+    18319, 18320, 18321, 18322, 18323, 18324, 18325, 18326, 18327, 18328, 18329,
+    18330, 18331, 18332, 18333, 18334, 18335, 18336, 18337, 18338, 18339, 18340,
+    18341, 18342, 18343, 18344, 18345, 18346, 18347, 18348, 18349, 18350, 18351,
+    18352, 18353, 18354, 18355, 18356, 18357, 18358, 18359, 18360, 18361, 18362,
+    18363, 18364, 18365, 18366, 18367, 18368, 18369, 18370, 18371, 18372, 18373,
+    18374, 18375, 18376, 18377, 18378, 18379, 18380, 18381, 18382, 18383, 18384,
+    18385, 18386, 18387, 18388, 18389, 18390, 18391, 18392, 18393, 18394, 18395,
+    18396, 18397, 18398, 18399, 18400, 18401, 18402, 18403, 18404, 18405, 18406,
+    18407, 18408, 18409, 18410, 18411, 18412, 18413, 18414, 18415, 18416, 18417,
+    18418, 18419, 18420, 18421, 18422, 18423, 18424, 18425, 18426, 18427, 18428,
+    18429, 18430, 18431, 18432, 18433, 18434, 18435, 18436, 18437, 18438, 18439,
+    18440, 18441, 18442, 18443, 18444, 18445, 18446, 18447, 18448, 18449, 18450,
+    18451, 18452, 18453, 18454, 18455, 18456, 18457, 18458, 18459, 18460, 18461,
+    18462, 18463, 18464, 18465, 18466, 18467, 18468, 18469, 18470, 18471, 18472,
+    18473, 18474, 18475, 18476, 18477, 18478, 18479, 18480, 18481, 18482, 18483,
+    18484, 18485, 18486, 18487, 18488, 18489, 18490, 18491, 18492, 18493, 18494,
+    18495, 18496, 18497, 18498, 18499, 18500, 18501, 18539, 18540, 18541, 18542,
+    18543, 18544, 18545, 18546, 18547, 18548, 18549, 18550, 18551, 18552, 18553,
+    18554, 18555, 18556, 18557, 18558, 18559, 18560, 18561, 18562, 18563, 18564,
+    18565, 18566, 18567, 18568, 18569, 18570, 18571, 18572, 18573, 18574, 18575,
+    18576, 18582, 18583, 18584, 18585, 18586, 18587, 18588, 18589, 18590, 18591,
+    18592, 18593, 18594, 18595, 18596, 18597, 18598, 18599, 18600, 18601, 18602,
+    18603, 18604, 18605, 18606, 18607, 18608, 18609, 18610, 18611, 18612, 18613,
+    18614, 18615, 18616, 18617, 18618, 18619, 18620, 18621, 18622, 18623, 18624,
+    18625, 18626, 18627, 18628, 18629, 18630, 18631, 18632, 18633, 18634, 18635,
+    18636, 18637, 18638, 18639, 18640, 18641, 18642, 18643, 18644, 18645, 18646,
+    18647, 18648, 18649, 18650, 18651, 18652, 18653, 18654, 18655, 18656, 18657,
+    18658, 18659, 18660, 18661, 18662, 18663, 18664, 18665, 18666, 18667, 18668,
+    18669, 18670, 18671, 18672, 18673, 18674, 18675, 18676, 18677
+  ]
+  _, layers, width, height = get_pdf(which=1, page_number=1)
+  celems = layers[0]
+
+  celems = [ celems[idx] for idx in window_schedule_idxes ]
+  return layers[0], celems, width, height
 
 
 class PdfLeafIndexer:
@@ -420,39 +487,47 @@ def joinword_test():
   drawer.draw_elems(elems=celems, draw_buttons=False)
   drawer.show("ClassifierDrawer")
 
+def int_bbox(bbox: pdftypes.Bbox):
+  return (
+    int(bbox[0]),
+    int(bbox[1]),
+    int(bbox[2]),
+    int(bbox[3]),
+  )
+
 def what_is_this_test():
+  import numpy as np
   _, layers, width, height = get_pdf(which=0, page_number=2)
   celems = layers[0]
   # Instance of "A" <-> Symbol "A"
   #      |                     |
   # Instance of "Alpha" -  Symbol "Alpha"
   step_size = 5
+  grid_classified = np.zeros(shape=(height, width), dtype=bool)
   leaf_grid = leafgrid.LeafGrid(celems=celems, step_size=step_size, width=width, height=height)
   bbox = (0, 0, width, height)
   first_text = leaf_grid.first_elem(bbox=bbox, text_only=True)
   print("1:", first_text)
   if first_text is None:
     return
-  restrict_idxes = {
-    first_text.node_id: True,
-  }
+  restrict_idxes: typing.Dict[int, bool] = {}
   x0, y0, x1, y1 = first_text.node.bbox
   nodes_used: typing.List[leafgrid.GridNode] = [first_text]
+
+  x_right = x1
   for next_grid_node in leaf_grid.next_elem_for_coords(
     x0=x0, y0=y0, x1=x1, y1=y1,
     direction=leafgrid.Direction.RIGHT,
     restrict_idxes=restrict_idxes
   ):
-    if next_grid_node.node.text is not None:
-      print("2:", next_grid_node.node.text)
+    if next_grid_node.node.bbox[0] > x_right + 10:
+      break
+    print("2:", next_grid_node.node.text)
     nodes_used.append(next_grid_node)
-    x0 = next_grid_node.node.bbox[0]
+    x_right = next_grid_node.node.bbox[2]
     restrict_idxes[next_grid_node.node_id] = True
-    next_grid_node = leaf_grid.next_elem_for_coords(
-      x0=x0, y0=y0, x1=x1, y1=y1,
-      direction=leafgrid.Direction.RIGHT,
-      restrict_idxes=restrict_idxes
-    )
+    bx0, by0, bx1, by1 = int_bbox(next_grid_node.node.bbox)
+    grid_classified[by0:by1, bx0:bx1] = True
 
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   # draw = [n.node for n in nodes_used]
@@ -508,25 +583,58 @@ def shapememory_test():
   # Draw elems that activated a symbol enough
 
 def sqft_test():
-  _, layers, width, height = get_pdf(which=1, page_number=1)
-  celems = layers[0]
-  window_schedule_part_idxes = [
-    17102, 17105, 17107, 17108, 17120, 17122, 17131, 17132, 17133, 17134, 17135,
-    17136, 17137, 17138, 17139, 17140, 17141, 17142, 17143, 17144, 17145, 17146,
-    17147, 17148, 17149, 17150, 17151, 17152, 17153, 17154, 17204, 17205, 17206,
-    17207, 17208, 17209, 17210, 17211, 17212, 17213, 17214, 17215, 17216, 17217,
-    17218, 17219, 18078, 18079, 18080, 18081, 18082, 18083, 18084, 18085, 18086,
-    18087, 18088, 18089, 18090,
-    17103, 17104
+  # 1 3/4"
+  # given an x,y is there a char here?
+  # If so grab it, assign its parent to me and continue
+  # If it doesn't pan out, destroy parent links
+  #_, layers, width, height = get_pdf(which=1, page_number=1)
+  _, celems, width, height = get_window_schedule_pdf()
+  text_join_test_idxes = [118, 119, 120, 121, 122, 123]
+  text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
+  start_pos_x, start_pos_y = text_join_test[-2].bbox[:2] # 4 in 1 3/4"
+  focus_radius = 50
+
+  grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
+  start_nodes = grid.intersection(
+    x0=start_pos_x-focus_radius, y0=start_pos_y-focus_radius, x1=start_pos_x+focus_radius, y1=start_pos_y+focus_radius
+  )
+  # Recursively spread out in all 4 directions to find box
+  # Unnatural to only look at one element at a time
+  # Look at everything in parallel
+  # If I'm looking at x,y and there's a line above, set a boundary there
+  # I may need to move my focus
+  ytop = start_pos_y + focus_radius
+  ybottom = start_pos_y - focus_radius
+  xleft = start_pos_x - focus_radius
+  xright = start_pos_x + focus_radius
+  for node in start_nodes:
+    if node.line is not None:
+      is_horizontal = abs(node.slope) < 0.1
+      is_vertical = abs(node.slope) > path_utils.MAX_SLOPE - 1
+      if is_horizontal:
+        if node.bbox[1] > start_pos_y:
+          ytop = node.bbox[1]
+        elif node.bbox[1] < start_pos_y:
+          ybottom = node.bbox[1]
+      elif is_vertical:
+        if node.bbox[0] > start_pos_x:
+          xright = node.bbox[0]
+        elif node.bbox[0] < start_pos_x:
+          xleft = node.bbox[0]
+  outer = (xleft, ybottom, xright, ytop)
+  inside = [
+    n for n in start_nodes if pdfelemtransforms.box_contains(outer=outer, inner=n.bbox)
   ]
-  celems = [ celems[idx] for idx in window_schedule_part_idxes ]
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=inside, align_top_left=True)
+  drawer.show("C")
+  print([n.text for n in inside])
+  return
 
   manager = symbol_indexer.ShapeManager(leaf_layer=celems)
   manager.activate_layers()
 
-  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=celems, align_top_left=True)
-  drawer.show("C")
+
   x_start, y_start = 1022, 1002
   wall_x0, wall_y0, wall_x1, wall_y1 = 886, 889, 1129, 1142
   wall_idxes = [7835, 7837, 8069, 9224]

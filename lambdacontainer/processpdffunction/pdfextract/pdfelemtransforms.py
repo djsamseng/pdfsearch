@@ -1,4 +1,5 @@
 
+import enum
 import json
 import typing
 
@@ -91,13 +92,38 @@ def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: Bbox
 
   return out
 
+class LineType(enum.Enum):
+  VERT = 1
+  HORIZ = 2
+  NONE = 3
+
+def is_line(a: BboxType):
+  x0, y0, x1, y1 = a
+  if x1-x0 < 0.1:
+    if y1-y0 > 0.1:
+      return LineType.VERT
+  if y1 - y0 < 0.1:
+    if x1 - x0 > 0.1:
+      return LineType.HORIZ
+  return LineType.NONE
+
 def bbox_intersection_area(a: BboxType, b: BboxType):
+  a_top = max(a[1], a[3])
+  a_bottom = min(a[1], a[3])
+  b_top = max(b[1], b[3])
+  b_bottom = min(b[1], b[3])
+
   left = max(a[0], b[0])
   right = min(a[2], b[2])
-  bottom = max(a[1], b[1])
-  top = min(a[3], b[3])
+  bottom = max(a_bottom, b_bottom)
+  top = min(a_top, b_top)
+
   if left < right and bottom < top:
     return (right - left) * (top - bottom)
+  elif left == right:
+    return 0.1 * (top - bottom)
+  elif bottom == top:
+    return (right - left) * 0.1
   return 0
 
 def get_distance_between(a: BboxType, b: BboxType, vert: bool):

@@ -51,15 +51,24 @@ class LeafGrid():
               grid[y][x].append(GridNode(node_id=idx, node=elem))
         elif elem.line is not None:
           x0, y0, x1, y1 = elem.line
+
           x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
-          # WALK THE LINE instead of
-          if y1 - y0 > x1 - x0 and x1 - x0 > 0:
-            slope = (x1-x0) / (y1-y0)
-            for y in range(y0, y1+1):
-              dy = y - y0
-              x = x0 + dy * slope
-              x = int(x)
-              grid[y][x].append(GridNode(node_id=idx, node=elem))
+          if abs(y1 - y0) > x1 - x0:
+            if x1 - x0 > 0.1:
+              slope = (x1-x0) / y1-y0
+              y_begin = min(y0, y1)
+              y_end = max(y0, y1)
+              for y in range(y_begin, y_end+1):
+                dy = y - y0
+                x = x0 + dy * slope
+                x = int(x)
+                grid[y][x].append(GridNode(node_id=idx, node=elem))
+            else:
+              y_begin = min(y0, y1)
+              y_end = max(y0, y1)
+              for y in range(y_begin, y_end+1):
+                x = x0
+                grid[y][x].append(GridNode(node_id=idx, node=elem))
           elif x1 - x0 > 0:
             slope = (y1 - y0) / (x1 - x0)
             for x in range(x0, x1+1):
@@ -155,9 +164,9 @@ class LeafGrid():
 
     out: typing.List[GridNode] = []
     already_in_out: typing.Dict[int, bool] = {}
-    for x in range(self.coord_for(x0), self.coord_for(x1)):
+    for x in range(self.coord_for(x0), self.coord_for(x1)+1):
       in_this_x: typing.List[GridNode] = []
-      for y in range(self.coord_for(y0), self.coord_for(y1)):
+      for y in range(self.coord_for(y0), self.coord_for(y1)+1):
         for grid_node in self.grid[y][x]:
           if grid_node.node_id in already_in_out:
             continue

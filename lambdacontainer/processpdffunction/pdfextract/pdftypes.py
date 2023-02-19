@@ -3,6 +3,7 @@ import abc
 import enum
 import json
 import math
+import re
 import typing
 
 import pdfminer.layout, pdfminer.utils
@@ -234,3 +235,74 @@ class LineSymbol(BaseSymbol):
       else:
         out[key] = self.__dict__[key]
     return out
+
+
+class BaseMatcher(metaclass=abc.ABCMeta):
+  pass
+
+class ShapeMatcher(BaseMatcher):
+  def __init__(
+    self,
+    shape_id: str,
+    lines: typing.List[path_utils.LinePointsType],
+  ) -> None:
+    self.shape_id = shape_id
+    self.lines = lines
+
+class ApproximateShapeMatcher(BaseMatcher):
+  def __init__(
+    self
+  ) -> None:
+    pass
+
+class OffsetMatcher():
+  def __init__(self) -> None:
+    pass
+
+class TextMatcher(BaseMatcher):
+  def __init__(
+    self,
+    text_id: str,
+    regex: str
+  ) -> None:
+    self.text_id = text_id
+    self.regex = re.compile(regex)
+
+class LookForElem():
+  def __init__(
+    self,
+    text: typing.Union[None, TextMatcher],
+    shape: typing.Union[None, ShapeMatcher, ApproximateShapeMatcher],
+    children: typing.List[
+      typing.Tuple["LookForElem", OffsetMatcher]
+    ],
+  ):
+    pass
+
+def make_word_matcher():
+  # 1 1/3"
+  # given an x,y is there a char here?
+  pass
+
+def make_table_matcher():
+  # Do we have rows and columns?
+  pass
+
+def make_window_schedule_matcher():
+
+  # We might have a surrounding box we might now
+  # During search we find the leafs and they activate upward
+  # Certain things can be missing, we can still try to make the jump
+  # If we make the jump and it turns out to be correct, add a new connection
+  matcher = LookForElem(
+    text=TextMatcher(text_id="window schedule key", regex="^window$"),
+    shape=None,
+    children=[],
+  )
+  return matcher
+
+class MatcherManager():
+  def __init__(self) -> None:
+    self.searches: typing.List[LookForElem] =  [
+      make_window_schedule_matcher()
+    ]
