@@ -23,7 +23,7 @@ class ClassificationType(enum.Enum):
   UPRIGHT = 4
   SIZE = 5
 
-class LabelType(enum.Enum):
+class LabelType(int, enum.Enum):
   FRACTION = 1
   DISTANCE = 2
   NUMBER = 3
@@ -36,6 +36,7 @@ class LabelType(enum.Enum):
   INCHES = 10
   DECIMAL = 11
   INT = 12
+  FRACTION_LINE = 13
 
 decimal_regex_cap = re.compile("^[\\d]*\\.[\\d]+")
 int_regex_cap = re.compile("^\\d+")
@@ -70,6 +71,7 @@ def get_numeric_text_labels(
   s: str
 ) -> typing.List[typing.Tuple[LabelType, float]]:
   out: typing.List[typing.Tuple[LabelType, float]] = []
+
   decimal_span = text_has_decimal(s)
   fraction_span = text_has_fraction(s)
   int_span = text_has_int(s)
@@ -199,6 +201,9 @@ class ClassificationNode():
       text_labels = get_numeric_text_labels(s=self.text)
       for label, prob in text_labels:
         self.labels[label] = prob
+    if self.line is not None:
+      if 0.5 < self.slope and self.slope < 3:
+        self.labels[LabelType.FRACTION_LINE] = 0.1
 
   def __length(self):
     if self.line is not None:
@@ -227,7 +232,6 @@ class ClassificationNode():
       elif not key.startswith("_{0}__".format(self.__class__.__name__)):
         out[key] = self.__dict__[key]
     return out
-
 
 
 class NodeManager():

@@ -28,7 +28,7 @@ from pdfextract import pdftkdrawer, classifier_drawer
 from pdfextract import votesearch
 from pdfextract import dataprovider, pdfprocessor
 from pdfextract.ltjson import LTJson, LTJsonEncoder, ScheduleTypes
-from pdfextract.pdftypes import Bbox, ClassificationNode, ClassificationType
+from pdfextract.pdftypes import Bbox, ClassificationNode, ClassificationType, LabelType
 
 def get_pdf(
   which:int = 0,
@@ -725,22 +725,36 @@ def conn_test():
     start_pos_x + focus_radius,
     start_pos_y + focus_radius,
   )
+  start_node.labelize()
 
-  start_nodes = node_manager.intersection(
+  leaf_neighbors = node_manager.intersection(
     layer_idx=0,
     bbox=search_bbox,
   )
-  #start_nodes = [start_nodes[idx] for idx in [21]]
-  cl, cb, cr, ca = connect_node_neighbors(node=start_node, neighbors=start_nodes)
+  cl, cb, cr, ca = connect_node_neighbors(node=start_node, neighbors=leaf_neighbors)
+  for n in [cl, cb, cr, ca]:
+    if n is not None:
+      n.labelize()
+  if start_node.labels[LabelType.INT] > 0:
+    if cr is not None:
+      if cr.labels[LabelType.MEASUREMENT] > 0:
+        # check what is to the right of cr
+        pass
+    if cl is not None and cl == ca and cl.labels[LabelType.FRACTION_LINE] > 0:
+      cmp_height = cl.height() - start_node.height()
+      if 0 <= cmp_height and cmp_height < start_node.height() * 3:
+        print("Join /{0}".format(start_node.text))
+      # divisor keep looking left
+
+  draw = [start_node, *[n for n in [cl, cb, cr, ca] if n is not None]]
+  for d in leaf_neighbors:
+    d.labelize()
+    #print(d.text, d.labels)
   print("Start:", start_node)
   print("left:", cl)
   print("below:", cb)
   print("right:", cr)
   print("above:", ca)
-  draw = [start_node, *[n for n in [cl, cb, cr, ca] if n is not None]]
-  for d in start_nodes:
-    d.labelize()
-    print(d.text, d.labels)
   return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=draw, align_top_left=True)
