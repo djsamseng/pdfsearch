@@ -643,6 +643,8 @@ def sqft_test():
   for node in inside:
     node.parent_ids.add(parent_node.node_id)
   print(text)
+  parent_node.labelize()
+  print(parent_node.text, parent_node.labels)
   # Words and known meanings - things start to make sense together
   # Characters connected by position
   # Table elements connected to column header and connected to a row
@@ -736,6 +738,10 @@ def conn_test():
   print("right:", cr)
   print("above:", ca)
   draw = [start_node, *[n for n in [cl, cb, cr, ca] if n is not None]]
+  for d in start_nodes:
+    d.labelize()
+    print(d.text, d.labels)
+  return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=draw, align_top_left=True)
   drawer.show("C")

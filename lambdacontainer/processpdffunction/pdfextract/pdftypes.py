@@ -15,12 +15,108 @@ from . import path_utils
 Bbox = path_utils.Bbox
 FLOAT_MIN = 0.001
 
+
 class ClassificationType(enum.Enum):
   SLOPE = 1
   LENGTH = 2
   TEXT = 3
   UPRIGHT = 4
   SIZE = 5
+
+class LabelType(enum.Enum):
+  FRACTION = 1
+  DISTANCE = 2
+  NUMBER = 3
+  MEASUREMENT = 4
+  WORD = 5
+  BEDROOM = 6
+  BATHROOM = 7
+  ROOM = 8
+  FEET = 9
+  INCHES = 10
+  DECIMAL = 11
+  INT = 12
+
+decimal_regex_cap = re.compile("^[\\d]*\\.[\\d]+")
+int_regex_cap = re.compile("^\\d+")
+fraction_regex_cap = re.compile("[\\d]+/[\\d]+")
+measurement_regex_cap = re.compile("\"|'|feet|foot|inches|inch?$", flags=re.IGNORECASE)
+
+def text_has_decimal(s: str):
+  match = decimal_regex_cap.finditer(s)
+  for m in match:
+    return m.span()
+  return None
+
+def text_has_measurement(s: str):
+  match = measurement_regex_cap.finditer(s)
+  for m in match:
+    return m.span()
+  return None
+
+def text_has_fraction(s: str):
+  match = fraction_regex_cap.finditer(s)
+  for m in match:
+    return m.span()
+  return None
+
+def text_has_int(s: str):
+  match = int_regex_cap.finditer(s)
+  for m in match:
+    return m.span()
+  return None
+
+def get_numeric_text_labels(
+  s: str
+) -> typing.List[typing.Tuple[LabelType, float]]:
+  out: typing.List[typing.Tuple[LabelType, float]] = []
+  decimal_span = text_has_decimal(s)
+  fraction_span = text_has_fraction(s)
+  int_span = text_has_int(s)
+  measurement_span = text_has_measurement(s)
+
+  numeric_span = decimal_span or fraction_span or int_span
+  if numeric_span is None and measurement_span is None:
+    return []
+  measurement_prob = 0.2 if numeric_span is None else 1.
+
+  if measurement_span is not None:
+    out.append((LabelType.MEASUREMENT, measurement_prob))
+    text = s[measurement_span[0]: measurement_span[1]].lower()
+    if text == "feet" or text == "foot" or text == "'":
+      out.append((LabelType.FEET, measurement_prob))
+    elif text == "inches" or text == "inch" or text == "\"":
+      out.append((LabelType.INCHES, measurement_prob))
+
+    if numeric_span is None and measurement_span[0] != 0:
+      return []
+  if numeric_span is None:
+    return out
+
+  out.append((LabelType.NUMBER, 1.))
+
+  if decimal_span is not None:
+    out.append((LabelType.DECIMAL, 1.))
+  if fraction_span is not None:
+    out.append((LabelType.FRACTION, 1.))
+    if int_span is not None:
+      between = s[int_span[1]:fraction_span[0]]
+      if between != " ":
+        return []
+    elif fraction_span[0] != 0:
+      return []
+  elif int_span is not None:
+    out.append((LabelType.INT, 1.))
+
+
+  if measurement_span is not None:
+    between = s[numeric_span[1]:measurement_span[0]]
+  else:
+    between = s[numeric_span[1]:]
+  if between != "" and between != " ":
+    return []
+
+  return out
 
 NodeId = int
 class ClassificationNode():
@@ -43,6 +139,7 @@ class ClassificationNode():
     self.bbox = bbox
     self.line = line
     self.text = text
+    self.labels: typing.DefaultDict[LabelType, float] = collections.defaultdict(float)
     self.child_ids = set(child_ids)
 
     self.parent_ids: typing.Set[NodeId] = set()
@@ -95,6 +192,14 @@ class ClassificationNode():
       ]
     return []
 
+  def labelize(self):
+    if len(self.labels) > 0:
+      return
+    if self.text is not None:
+      text_labels = get_numeric_text_labels(s=self.text)
+      for label, prob in text_labels:
+        self.labels[label] = prob
+
   def __length(self):
     if self.line is not None:
       return path_utils.line_length(line=self.line)
@@ -122,6 +227,8 @@ class ClassificationNode():
       elif not key.startswith("_{0}__".format(self.__class__.__name__)):
         out[key] = self.__dict__[key]
     return out
+
+
 
 class NodeManager():
   def __init__(
