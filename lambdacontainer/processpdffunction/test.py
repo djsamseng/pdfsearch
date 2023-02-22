@@ -789,6 +789,46 @@ def conn_test():
   #      [line][space]1 3/4"[space][line][space]H4[space][line]
   #      [line][      space       ][line][     space    ][line]
 
+@dataclasses.dataclass(order=True)
+class AStarNode():
+  sort_score: float = dataclasses.field(compare=True)
+  def __init__(
+    self,
+    score: float,
+    label: pdftypes.LabelType,
+    node: pdftypes.ClassificationNode) -> None:
+    self.score = score
+    self.sort_score = -score
+    self.label = label
+    self.node = node
+
+def a_star_join(
+  start: pdftypes.ClassificationNode,
+  nodes: typing.List[pdftypes.ClassificationNode]
+):
+  q: typing.List[AStarNode] = []
+  start.labelize()
+  print("a_star_join", start.text)
+  for node in nodes:
+    node.labelize()
+  for label, score in start.labels.items():
+    if score > 0:
+      heapq.heappush(q, AStarNode(score=score, label=label, node=start))
+  stranded: typing.List[AStarNode] = []
+
+  while len(q) > 0:
+    item = heapq.heappop(q)
+    label = item.label
+    sort_by_distance_to = functools.partial(pdfelemtransforms.get_node_distance_to, src=item.node)
+    nodes.sort(key=sort_by_distance_to)
+    if label == LabelType.NUMBER or label == LabelType.MEASUREMENT:
+      for node in nodes:
+        if node.node_id == item.node.node_id:
+          continue
+        dist = pdfelemtransforms.get_node_distance_to(other=node, src=item.node)
+        print("Dist:", dist, "Text:", node.text,
+          "slope:{0:.2f} length:{1:.2f}".format(node.slope, node.length))
+
 def fraction_test():
   _, layers, width, height = get_pdf(which=1, page_number=1)
   node_manager = pdftypes.NodeManager(layers=[layers[0]])
@@ -803,15 +843,15 @@ def fraction_test():
   leaf_grid = leafgrid.LeafGrid(celems=layers[0], width=width, height=height, step_size=5)
 
   radius = 50
-  for radius in range(1, 50):
-    query = (
-      x0-radius,
-      y0-radius,
-      x1+radius,
-      y1+radius,
-    )
+  query = (
+    x0-radius,
+    y0-radius,
+    x1+radius,
+    y1+radius,
+  )
 
-    grid_elems = leaf_grid.intersection(query=query)
+  grid_elems = leaf_grid.intersection(query=query)
+  a_star_join(start=start_node, nodes=grid_elems)
   return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=grid_elems, align_top_left=True)

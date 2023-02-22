@@ -1,5 +1,6 @@
 
 import enum
+import math
 import json
 import typing
 
@@ -142,6 +143,73 @@ def get_distance_between(
     return othermin - selfmax
   else:
     return 0
+
+def get_distance_to(
+  src: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  other: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+):
+  vert_distance = get_distance_between(
+    this=src,
+    other=other,
+    vert=True
+  )
+  horiz_distance = get_distance_between(
+    this=src,
+    other=other,
+    vert=False
+  )
+  return math.sqrt(vert_distance ** 2 + horiz_distance ** 2)
+
+def get_node_distance_to(
+  other: pdftypes.ClassificationNode,
+  src: pdftypes.ClassificationNode,
+):
+  return get_distance_to(src=src.bbox, other=other.bbox)
+
+def get_midpoint(item: typing.Union[pdftypes.Bbox, path_utils.LinePointsType]):
+  x0, y0, x1, y1 = item
+  xmid = abs(x1 - x0) / 2 + min(x0, x1)
+  ymid = abs(y1 - y0) / 2 + min(y0, y1)
+  return xmid, ymid
+
+def get_quad(dx: float, dy: float):
+  if dx >= 0 and dy >= 0:
+    return 0
+  if dx >= 0 and dy < 0:
+    return 1
+  if dx < 0 and dy < 0:
+    return 2
+  if dx < 0 and dy >= 0:
+    return 3
+  raise ValueError("Unhandled dx{0} dy{1}".format(dx, dy))
+
+def get_angle(dx: float, dy: float):
+  quad = get_quad(dx=dx, dy=dy)
+  angle = math.degrees(math.tanh(dy / dx))
+  # TODO adjust angle for quad
+
+
+def get_node_angle_to(
+  other: pdftypes.ClassificationNode,
+  src: pdftypes.ClassificationNode,
+):
+  if src.line is not None:
+    src_x, src_y = get_midpoint(item=src.line)
+  else:
+    src_x, src_y = get_midpoint(item=src.bbox)
+  if other.line is not None:
+    x0, y0, x1, y1 = other.line
+    points = [(x0, y0,), (x1, y1)]
+  else:
+    x0, y0, x1, y1 = other.bbox
+    points = [(x0, y0,), (x0, y1), (x1, y1), (x1, y0)]
+  for pt in points:
+    dx = pt[0] - src_x
+    dy = pt[1] - src_y
+    angle = get_angle(dx=dx, dy=dy)
+
+
+
 
 def get_idx_for_vert(vert: bool):
   if vert:
