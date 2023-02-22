@@ -483,6 +483,8 @@ class ClassifierDrawer:
     self.id_to_elem: typing.Dict[int, ClassificationNode] = {}
     self.elem_to_elem_idx: typing.Dict[ClassificationNode, int] = {}
     self.selected_elems: typing.Dict[ClassificationNode, bool] = {}
+    self.xmin = 0
+    self.ymin = 0
 
   def on_selection(
     self,
@@ -609,6 +611,8 @@ class ClassifierDrawer:
       xmin, ymin = self.get_minx_miny(wrappers=elems)
     else:
       xmin, ymin = 0, 0
+    self.xmin = xmin
+    self.ymin = ymin
     for idx, elem in enumerate(elems):
       self.elem_to_elem_idx[elem] = idx
       if elem.line is not None:
@@ -623,6 +627,12 @@ class ClassifierDrawer:
         self.insert_text(elem=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
 
   def draw_bbox(self, bbox: Bbox, color: str):
+    bbox = (
+      bbox[0] - self.xmin,
+      bbox[3] + self.ymin,
+      bbox[2] - self.xmin,
+      bbox[1] + self.ymin,
+    )
     _ = self.app.canvas.draw_rect(bbox, color)
 
   def get_minx_miny(self, wrappers: typing.Iterable[ClassificationNode]):

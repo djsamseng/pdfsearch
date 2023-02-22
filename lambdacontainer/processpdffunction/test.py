@@ -559,7 +559,8 @@ def shapememory_test():
     celems[idx] for idx in window_label_with_pointer_line_idxes
   ]
   window_labels = [*window_label_with_pointer_line[:6], *window_label_with_pointer_line[7:]]
-  shape_manager = symbol_indexer.ShapeManager(leaf_layer=layers[0])
+  node_manager = pdftypes.NodeManager(layers=[layers[0]])
+  shape_manager = symbol_indexer.ShapeManager(node_manager=node_manager)
   shape_manager.add_shape(
     shape_id="window_label",
     lines=[l.line for l in window_labels if l.line is not None]
@@ -685,6 +686,8 @@ def connect_node_neighbors(
   closest_left: typing.Union[ClassificationNode, None] = None
   closest_left_space = 1000
   for other in neighbors:
+    if other.node_id == node.node_id:
+      continue
     is_above = pdfelemtransforms.other_is_pos_cmp(node=node, other=other, vert=True, above=True)
     is_right = pdfelemtransforms.other_is_pos_cmp(node=node, other=other, vert=False, above=True)
     is_below = pdfelemtransforms.other_is_pos_cmp(node=node, other=other, vert=True, above=False)
@@ -732,6 +735,8 @@ def conn_test():
     bbox=search_bbox,
   )
   cl, cb, cr, ca = connect_node_neighbors(node=start_node, neighbors=leaf_neighbors)
+  # Fraction rule that activates --shapememory activates a fraction
+
   for n in [cl, cb, cr, ca]:
     if n is not None:
       n.labelize()
@@ -747,6 +752,13 @@ def conn_test():
       # divisor keep looking left
 
   draw = [start_node, *[n for n in [cl, cb, cr, ca] if n is not None]]
+  left_itr = cl
+  while left_itr is not None:
+    left_itr, _, _, _ = connect_node_neighbors(node=left_itr, neighbors=leaf_neighbors)
+    if left_itr is not None:
+      draw.append(left_itr)
+
+
   for d in leaf_neighbors:
     d.labelize()
     #print(d.text, d.labels)
@@ -755,9 +767,10 @@ def conn_test():
   print("below:", cb)
   print("right:", cr)
   print("above:", ca)
-  return
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=draw, align_top_left=True)
+  for n in draw:
+    drawer.draw_bbox(bbox=n.bbox, color="blue")
   drawer.show("C")
 
 

@@ -153,15 +153,12 @@ class TextJoiner():
         if idx in node_ids_stranded:
           node_ids_stranded.remove(idx)
       # TODO: Allow overlapping words
-      joined_node_id = len(self.nodes)
       joined_node = pdftypes.ClassificationNode(
-        layer_idx=0,
-        in_layer_idx=joined_node_id,
         elem=None,
         bbox=joined_bbox,
         line=None,
         text=joined_text,
-        child_idxes=delete_idxes,
+        child_ids=delete_idxes,
       )
       joined_node.upright = upright
       return joined_node
@@ -222,9 +219,9 @@ ActivationLookupType = SingletonIndexer[typing.Tuple[str, int, float, pdftypes.C
 class ShapeManager:
   def __init__(
     self,
-    leaf_layer: typing.List[pdftypes.ClassificationNode]
+    node_manager: pdftypes.NodeManager,
   ) -> None:
-    self.layers = [ leaf_layer ]
+    self.node_manager = node_manager
     self.indexer: SymbolIndexer[
       pdftypes.LineSymbol,
       typing.Tuple[str, int]
@@ -245,10 +242,6 @@ class ShapeManager:
         typing.List[path_utils.OffsetType]
       ]
     ] = {}
-
-    self.layers_rtree: typing.List[rtree.index.Index] = []
-    for layer in self.layers:
-      self.layers_rtree.append(rtree.index.Index(insertion_generator(nodes=layer)))
 
     self.results: typing.DefaultDict[
       str, # shape_id
@@ -291,35 +284,37 @@ class ShapeManager:
 
   def activate_layers(self):
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
-    for new_layer_idx in range(len(self.layers_rtree), len(self.layers)):
-      self.layers_rtree.append(
-        rtree.index.Index(insertion_generator(nodes=self.layers[new_layer_idx]))
-      )
-    for layer_idx in range(len(self.layers)):
-      used_in_layer = self.__activate_layer(layer_idx=layer_idx)
-      nodes_used.extend(used_in_layer)
+    old_layers = []
+    new_layers = list(self.node_manager.layers.keys())
+    while len(old_layers) != len(new_layers):
+      old_layers = list(self.node_manager.layers.keys())
+      for layer_id in old_layers:
+        used_in_layer = self.__activate_layer(layer_id=layer_id)
+        nodes_used.extend(used_in_layer)
+      new_layers = list(self.node_manager.layers.keys())
 
     return nodes_used
 
-  def __activate_layer(self, layer_idx: int) -> typing.List[pdftypes.ClassificationNode]:
+  def __activate_layer(self, layer_id: int) -> typing.List[pdftypes.ClassificationNode]:
     # Layer 0 is chars and lines
     # Layer 1 is words and shapes/rects
     # Layer 2 is text inside shapes / text inside schedules / text inside measurement lines
     # Layer 3 is shapes inside shapes / rooms
     # Layer 4 is sections of the page / different floors on the same page
-    if layer_idx == 0:
-      return self.__activate_leaf_layer(layer_idx=layer_idx)
+    if layer_id == 0:
+      return self.__activate_leaf_layer(layer_id=layer_id)
     return []
 
-  def __activate_leaf_layer(self, layer_idx: int):
-    layer = self.layers[layer_idx]
+  def __activate_leaf_layer(self, layer_id: int):
+    layer_node_ids = self.node_manager.layers[layer_id]
+    layer = [self.node_manager.nodes[node_id] for node_id in layer_node_ids]
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
     # Shape = [lines], [offsets]
         # Found shape = x0, y0, [lines], [offsets]
         # Activations[(x0,y0)][shape_id][line_id] = score
     activation_lookup: ActivationLookupType = SingletonIndexer()
     for node in layer:
-      if len(node.parent_idxes) > 0:
+      if len(node.parent_ids) > 0:
         continue
       if node.line is not None:
         self.__activate_line_leaf(node=node, activation_lookup=activation_lookup)
@@ -332,7 +327,7 @@ class ShapeManager:
         pass
     nodes_used = self.__join_layer(
       activation_lookup=activation_lookup,
-      next_layer_idx=layer_idx + 1,
+      next_layer_id=layer_id + 1,
     )
     # Align, walk, box
     # 1. Find text bbox and snap to the beginning of the next
@@ -342,7 +337,11 @@ class ShapeManager:
     #    - join the smaller regions
     # 3. Narrow the final bbox
     # 4. Repeat for all areas
-    text_joiner = TextJoiner(layer_nodes=layer, layer_rtree=self.layers_rtree[layer_idx])
+    text_joiner = TextJoiner(
+      layer_nodes=[self.node_manager.nodes[node_id] for node_id in self.node_manager.layers[0]],
+      layer_rtree=self.node_manager.indexes[0],
+    )
+
     joined_text_nodes = text_joiner.join()
     print([n.text for n in joined_text_nodes])
     return nodes_used
@@ -378,7 +377,7 @@ class ShapeManager:
   def __join_layer(
     self,
     activation_lookup: ActivationLookupType,
-    next_layer_idx: int,
+    next_layer_id: int,
   ):
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
     for idx, shape_start in enumerate(activation_lookup.stored):
@@ -405,25 +404,22 @@ class ShapeManager:
         shape_total = len(self.shapes[shape_id][0])
         shape_activation = shape_score / shape_total
         if shape_activation > 0.9:
-          if next_layer_idx >= len(self.layers):
-            self.layers.append([])
-          child_idxes = [ n.in_layer_idx for n in shape_nodes ]
+          if next_layer_id not in self.node_manager.layers:
+            self.node_manager.create_layer(layer_id=next_layer_id)
+          child_ids = [ n.node_id for n in shape_nodes ]
           shape_bbox = path_utils.lines_bounding_bbox(
             elems=[ n.line for n in shape_nodes if n.line is not None ],
           )
-          parent_idx = len(self.layers[next_layer_idx])
-          new_parent = pdftypes.ClassificationNode(
-            layer_idx=next_layer_idx,
-            in_layer_idx=parent_idx,
+          new_parent = self.node_manager.add_node(
             elem=None,
             bbox=shape_bbox,
             line=None,
             text=None,
-            child_idxes=child_idxes
+            child_ids=child_ids,
+            layer_id=next_layer_id
           )
           for node in shape_nodes:
-            node.parent_idxes.append(parent_idx)
-          self.layers[next_layer_idx].append(new_parent)
+            node.parent_ids.add(new_parent.node_id)
           print("id:", shape_id, "score:", shape_score, "/", shape_total, "at:", (x0, y0))
           nodes_used.extend(shape_nodes)
           self.results[shape_id].append(new_parent)

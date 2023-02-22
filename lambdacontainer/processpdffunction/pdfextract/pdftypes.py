@@ -250,16 +250,16 @@ class NodeManager():
       rtree.index.Index
     ] = {}
     for idx, layer in enumerate(layers):
-      self.create_layer(layer_idx=idx)
+      self.create_layer(layer_id=idx)
       for node in layer:
         self.layers[idx].add(node.node_id)
         self.nodes[node.node_id] = node
       self.index_layer(layer_idx=idx)
 
-  def create_layer(self, layer_idx: int):
-    if layer_idx in self.layers:
-      print("=== Warning: Destroying existing layer {0} ===".format(layer_idx))
-    self.layers[layer_idx] = set()
+  def create_layer(self, layer_id: int):
+    if layer_id in self.layers:
+      print("=== Warning: Destroying existing layer {0} ===".format(layer_id))
+    self.layers[layer_id] = set()
 
   def add_node(
     self,
@@ -268,10 +268,10 @@ class NodeManager():
     line: typing.Union[None, path_utils.LinePointsType],
     text: typing.Union[None, str],
     child_ids: typing.List[int],
-    layer_idx: int,
+    layer_id: int,
   ):
-    if layer_idx not in self.layers:
-      self.create_layer(layer_idx=layer_idx)
+    if layer_id not in self.layers:
+      self.create_layer(layer_id=layer_id)
     node = ClassificationNode(
       elem=elem,
       bbox=bbox,
@@ -279,10 +279,10 @@ class NodeManager():
       text=text,
       child_ids=child_ids,
     )
-    self.layers[layer_idx].add(node.node_id)
+    self.layers[layer_id].add(node.node_id)
     self.nodes[node.node_id] = node
-    if layer_idx in self.indexes:
-      self.indexes[layer_idx].add(id=node.node_id, coordinates=node.bbox, obj=None)
+    if layer_id in self.indexes:
+      self.indexes[layer_id].add(id=node.node_id, coordinates=node.bbox, obj=None)
     return node
 
   def index_layer(self, layer_idx: int):
