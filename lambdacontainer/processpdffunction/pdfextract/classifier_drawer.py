@@ -1,5 +1,8 @@
 
 import collections
+import multiprocessing
+from multiprocessing import Process, Value
+import time
 import typing
 
 import tkinter as tk
@@ -426,7 +429,7 @@ class TkDrawerControlPanel:
     if event.num == 4 or event.delta == 120: # scroll up
       self.canvas.yview_scroll(-1, what="units")
 
-class TkDrawerMainWindow(ttk.Frame):
+class TkDrawerMainWindow(tk.Toplevel):
   def __init__(
     self,
     root: tk.Tk,
@@ -515,19 +518,22 @@ class ClassifierDrawer:
       if elem.line is not None:
         if len(text) > 0 and text[-1] != " ":
           text += " "
-        text += "{0:.3f} {1}".format(elem.slope, elem.length)
+        text += "slope:{0:.3f} len:{1}".format(elem.slope, elem.length)
       def on_press(ids: typing.List[int]):
         for id in ids:
           elem = self.id_to_elem[id]
           self.selected_elems[elem] = not self.selected_elems[elem]
         self.app.canvas.set_item_visibility(ids)
 
+      font_size = ""
       if isinstance(elem.elem, pdfminer.layout.LTCurve):
         original_path = elem.elem.original_path
       else:
         original_path = None
+      if isinstance(elem.elem, pdfminer.layout.LTChar):
+        font_size = "fontsize:{0:.2f}".format(elem.elem.size)
       self.app.controlPanel.add_button(
-        text="{0} {1} {2}".format(text, elem.bbox, original_path),
+        text="{0} {1} {2} {3}".format(text, font_size, elem.bbox, original_path),
         callback=lambda ids=ids: on_press(ids))
     self.app.controlPanel.finish_draw()
 
@@ -549,6 +555,7 @@ class ClassifierDrawer:
       font_size = 11
       if isinstance(wrapper.elem, pdfminer.layout.LTChar):
         upright = wrapper.elem.upright
+        font_size = int(wrapper.elem.size)
       else:
         upright = True
       text_ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size), upright=upright)
@@ -577,25 +584,26 @@ class ClassifierDrawer:
     x0, y0, x1, y1 = elem.bbox
     text = elem.text or ""
     if isinstance(elem.elem, pdfminer.layout.LTChar):
-      font_size = elem.elem.size
+      font_size = int(elem.elem.size * 1.5)
       upright = elem.elem.upright
     else:
       font_size = 11
       upright = True
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
     # y1 because we flip the point on the y axis
-    ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size), upright=upright)
+    ids = self.app.canvas.insert_text(pt=(x0-xmin+2, y1+ymin-4), text=text, font_size=int(font_size), upright=upright)
     for id in ids:
       self.id_to_elem[id] = elem
     if draw_buttons:
       def on_press():
         self.app.canvas.set_item_visibility(ids)
       self.app.controlPanel.add_button(
-        text="{0} ({1},{2}) {3}".format(pdfminer_class_name(elem), x0, y0, text),
+        text="{0} {1}({2},{3}) {4}".format(pdfminer_class_name(elem), font_size, x0, y0, text),
         callback=on_press)
-  def show(self, name: str):
+  def show(self, name: str, blocking: bool=True):
     self.app.controlPanel.finish_draw()
-    self.app.mainloop()
+    if blocking:
+      self.app.mainloop()
 
   def draw_elems(self,
     elems: typing.Iterable[ClassificationNode],
@@ -607,12 +615,13 @@ class ClassifierDrawer:
     # however when we draw we draw the underlying LTChar
     # When we select the container in the control panel we want to highlight the bbox
     # When sending to the client, we send the positions of what we found and how to draw it
-    if align_top_left:
-      xmin, ymin = self.get_minx_miny(wrappers=elems)
-    else:
-      xmin, ymin = 0, 0
-    self.xmin = xmin
-    self.ymin = ymin
+    if self.xmin == 0 and self.ymin == 0:
+      if align_top_left:
+        xmin, ymin = self.get_minx_miny(wrappers=elems)
+      else:
+        xmin, ymin = 0, 0
+      self.xmin = xmin
+      self.ymin = ymin
     for idx, elem in enumerate(elems):
       self.elem_to_elem_idx[elem] = idx
       if elem.line is not None:
@@ -622,9 +631,9 @@ class ClassifierDrawer:
           linewidth = 1
         linewidth = max(1, linewidth)
         if linewidth > 0:
-          self.draw_path(wrapper=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+          self.draw_path(wrapper=elem, xmin=self.xmin, ymin=self.ymin, draw_buttons=draw_buttons)
       elif elem.text is not None:
-        self.insert_text(elem=elem, xmin=xmin, ymin=ymin, draw_buttons=draw_buttons)
+        self.insert_text(elem=elem, xmin=self.xmin, ymin=self.ymin, draw_buttons=draw_buttons)
 
   def draw_bbox(self, bbox: Bbox, color: str):
     bbox = (
@@ -644,4 +653,3 @@ class ClassifierDrawer:
         xmin = min(xmin, x0, x1)
         ymax = max(ymax, y0, y1)
     return int(xmin), self.page_height - int(ymax)
-

@@ -730,12 +730,18 @@ def conn_test():
   )
   start_node.labelize()
 
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+
   leaf_neighbors = node_manager.intersection(
     layer_idx=0,
     bbox=search_bbox,
   )
   cl, cb, cr, ca = connect_node_neighbors(node=start_node, neighbors=leaf_neighbors)
   # Fraction rule that activates --shapememory activates a fraction
+  drawer.draw_elems(elems=leaf_neighbors, align_top_left=True)
+  for n in leaf_neighbors:
+    drawer.draw_bbox(bbox=n.bbox, color="blue")
+  drawer.show("C", blocking=True)
 
   for n in [cl, cb, cr, ca]:
     if n is not None:
@@ -767,11 +773,6 @@ def conn_test():
   print("below:", cb)
   print("right:", cr)
   print("above:", ca)
-  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=draw, align_top_left=True)
-  for n in draw:
-    drawer.draw_bbox(bbox=n.bbox, color="blue")
-  drawer.show("C")
 
 
   # TODO: Not a grid, instead pointers
@@ -788,6 +789,35 @@ def conn_test():
   #      [line][space]1 3/4"[space][line][space]H4[space][line]
   #      [line][      space       ][line][     space    ][line]
 
+def fraction_test():
+  _, layers, width, height = get_pdf(which=1, page_number=1)
+  node_manager = pdftypes.NodeManager(layers=[layers[0]])
+  measurement_fraction_vert_idxes = [6681, 6682, 6683, 6684, 6685, 6686, 6687, 6688, 6689, 6690, 6691]
+  measurement_fraction_horiz_idxes = [6618, 6619, 6620, 6621, 6622, 6623, 6624, 6625, 6626, 6627]
+  fraction_schedule_idxes = [17107, 17108, 17125, 17126, 17227, 17228, 17229, 17230, 17231, 17232]
+  start_node = layers[0][fraction_schedule_idxes[-1]]
+  x0, y0, x1, y1 = start_node.bbox
+
+
+
+  leaf_grid = leafgrid.LeafGrid(celems=layers[0], width=width, height=height, step_size=5)
+
+  radius = 50
+  for radius in range(1, 50):
+    query = (
+      x0-radius,
+      y0-radius,
+      x1+radius,
+      y1+radius,
+    )
+
+    grid_elems = leaf_grid.intersection(query=query)
+  return
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=grid_elems, align_top_left=True)
+  drawer.draw_bbox(bbox=query, color="blue")
+  drawer.show("")
+
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--profile", dest="profile", default=False, action="store_true")
@@ -799,6 +829,7 @@ def parse_args():
   parser.add_argument("--shapememory", dest="shapememory", default=False, action="store_true")
   parser.add_argument("--sqft", dest="sqft", default=False, action="store_true")
   parser.add_argument("--conn", dest="conn", default=False, action="store_true")
+  parser.add_argument("--fraction", dest="fraction", default=False, action="store_true")
   return parser.parse_args()
 
 def main():
@@ -820,6 +851,8 @@ def main():
     func = sqft_test
   elif args.conn:
     func = conn_test
+  elif args.fraction:
+    func = fraction_test
   if func:
     if args.profile:
       cProfile.run("{0}()".format(func.__name__))

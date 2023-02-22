@@ -42,40 +42,27 @@ class LeafGrid():
       for _ in range(coord_for(height)+1)
     ]
     def insert_elems(grid: GridType, celems: typing.List[pdftypes.ClassificationNode]):
-      for idx, elem in enumerate(celems):
-        if elem.text is not None:
-          x0, y0, x1, y1 = elem.bbox
+      for node in celems:
+        if node.text is not None:
+          x0, y0, x1, y1 = node.bbox
           x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
           for y in range(y0, y1+1):
             for x in range(x0, x1+1):
-              grid[y][x].append(GridNode(node_id=idx, node=elem))
-        elif elem.line is not None:
-          x0, y0, x1, y1 = elem.line
-
-          x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
-          if abs(y1 - y0) > x1 - x0:
-            if x1 - x0 > 0.1:
-              slope = (x1-x0) / y1-y0
-              y_begin = min(y0, y1)
-              y_end = max(y0, y1)
-              for y in range(y_begin, y_end+1):
-                dy = y - y0
-                x = x0 + dy * slope
-                x = int(x)
-                grid[y][x].append(GridNode(node_id=idx, node=elem))
-            else:
-              y_begin = min(y0, y1)
-              y_end = max(y0, y1)
-              for y in range(y_begin, y_end+1):
-                x = x0
-                grid[y][x].append(GridNode(node_id=idx, node=elem))
-          elif x1 - x0 > 0:
-            slope = (y1 - y0) / (x1 - x0)
+              grid[y][x].append(GridNode(node_id=node.node_id, node=node))
+        elif node.line is not None:
+          x0, y0, x1, y1 = node.line
+          if abs(x1 - x0) > abs(y1 - y0):
+            x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
             for x in range(x0, x1+1):
-              dx = x - x0
-              y = y0 + dx * slope
-              y = int(y)
-              grid[y][x].append(GridNode(node_id=idx, node=elem))
+              y = math.floor((x - x0) * node.slope + y0)
+              grid[y][x].append(GridNode(node_id=node.node_id, node=node))
+          else:
+            x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
+            ymin = min(y0, y1)
+            ymax = max(y0, y1)
+            for y in range(ymin, ymax+1):
+              x = math.floor((y - y0) / node.slope + x0)
+              grid[y][x].append(GridNode(node_id=node.node_id, node=node))
     def sort_grid(grid: GridType):
       for y in range(len(grid)):
         for x in range(len(grid[y])):
@@ -158,10 +145,20 @@ class LeafGrid():
        x1 >= 0 and x1 < len(self.grid[y1])
     return None
 
-  def intersection(self, x0:float, y0:float, x1:float, y1:float):
+  def intersection(
+    self,
+    x0: typing.Union[None, float] = None,
+    y0: typing.Union[None, float] = None,
+    x1: typing.Union[None, float] = None,
+    y1: typing.Union[None, float] = None,
+    query: typing.Union[None, pdftypes.Bbox] = None,
+  ) -> typing.List[pdftypes.ClassificationNode]:
     # Return sorted such that
     # If intersects then sorted by x0 left right, y1 top down
-
+    if x0 is None or y0 is None or x1 is None or y1 is None:
+      if query is None:
+        return []
+      x0, y0, x1, y1 = query
     out: typing.List[GridNode] = []
     already_in_out: typing.Dict[int, bool] = {}
     for x in range(self.coord_for(x0), self.coord_for(x1)+1):
