@@ -74,6 +74,23 @@ def box_contains(outer: BboxType, inner: BboxType):
       return True
   return False
 
+def boundaries_contains(
+  boundaries: typing.List[
+    typing.Union[None, pdftypes.ClassificationNode]
+  ],
+  bbox: pdftypes.Bbox,
+):
+  for idx in range(len(bbox)):
+    boundary_elem = boundaries[idx]
+    if boundary_elem is not None:
+      if idx < 2:
+        if bbox[idx] < boundary_elem.bbox[idx]:
+          return False
+      else:
+        if bbox[idx] > boundary_elem.bbox[idx]:
+          return False
+  return True
+
 def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: BboxType) -> typing.List[LTJson]:
   out: typing.List[LTJson] = []
   json_encoder = LTJsonEncoder()
@@ -316,7 +333,7 @@ def join_text_line(
   if len(nodes) > 0 and nodes[0].text is not None:
     out += nodes[0].text
     has_no_text = False
-    if isinstance(nodes[0], pdfminer.layout.LTChar) and not nodes[0].upright:
+    if isinstance(nodes[0], pdfminer.layout.LTChar) and not nodes[0].left_right:
       idx0 = 1
       idx2 = 3
   for idx in range(1, len(nodes)):

@@ -20,7 +20,7 @@ class ClassificationType(enum.Enum):
   SLOPE = 1
   LENGTH = 2
   TEXT = 3
-  UPRIGHT = 4
+  LEFT_RIGHT = 4
   SIZE = 5
 
 class LabelType(int, enum.Enum):
@@ -140,10 +140,7 @@ class ClassificationNode():
     self.node_id = ClassificationNode.id_itr
     ClassificationNode.id_itr += 1
     self.elem = elem
-    if isinstance(elem, pdfminer.layout.LTChar):
-      self.upright = elem.upright
-    else:
-      self.upright = True
+
     self.bbox = bbox
     self.line = line
     self.text = text
@@ -152,6 +149,12 @@ class ClassificationNode():
 
     self.parent_ids: typing.Set[NodeId] = set()
     self.slope = path_utils.line_slope(line=line) if line is not None else 0.
+    if isinstance(elem, pdfminer.layout.LTChar):
+      self.left_right = elem.upright
+    elif abs(self.slope) > 1:
+      self.left_right = False
+    else:
+      self.left_right = True
     self.length = self.__length()
 
     self.left: typing.Union[None, ClassificationNode] = None
@@ -178,7 +181,7 @@ class ClassificationNode():
       ]
     elif self.text is not None and other.text is not None:
       text_activation = 1. if self.text == other.text else 0. # TODO: mincut distance
-      upright_activation = 1. if self.upright == other.upright else 0.
+      upright_activation = 1. if self.left_right == other.left_right else 0.
       size_activation = abs(self.width() - other.width()) + abs(self.height() - other.height())
       if size_activation < 0.001:
         size_activation = 1
@@ -186,7 +189,7 @@ class ClassificationNode():
         size_activation = min(1, 1 / size_activation)
       return [
         (ClassificationType.TEXT, text_activation),
-        (ClassificationType.UPRIGHT, upright_activation),
+        (ClassificationType.LEFT_RIGHT, upright_activation),
         (ClassificationType.SIZE, size_activation),
       ]
     return []
@@ -200,8 +203,8 @@ class ClassificationNode():
     elif self.text is not None:
       return [
         (ClassificationType.TEXT, self.text),
-        (ClassificationType.UPRIGHT, self.upright),
-        (ClassificationType.SIZE, self.width() if self.upright else self.height()),
+        (ClassificationType.LEFT_RIGHT, self.left_right),
+        (ClassificationType.SIZE, self.width() if self.left_right else self.height()),
       ]
     return []
 
@@ -220,7 +223,7 @@ class ClassificationNode():
     if self.line is not None:
       return path_utils.line_length(line=self.line)
     elif self.text is not None:
-      if self.upright:
+      if self.left_right:
         return self.bbox[2] - self.bbox[0]
       else:
         return self.bbox[3] - self.bbox[1]

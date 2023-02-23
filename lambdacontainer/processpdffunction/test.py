@@ -720,15 +720,112 @@ def connect_node_neighbors(
   node.right = cr
   node.above = ca
 
+def make_query(bbox: pdftypes.Bbox, radius: float):
+  x0, y0, x1, y1 = bbox
+  return (
+    x0 - radius,
+    y0 - radius,
+    x1 + radius,
+    y1 + radius,
+  )
+
+def set_boundaries(
+  start: pdftypes.ClassificationNode,
+  node: pdftypes.ClassificationNode,
+  boundaries: typing.List[
+    typing.Union[None, pdftypes.ClassificationNode]
+  ],
+):
+  if node.line is not None:
+    x0, y0, x1, y1 = node.line
+    if abs(node.slope) < 0.5 and node.width() >= start.width():
+      if y0 < start.bbox[1]:
+        if boundaries[1] is None:
+          boundaries[1] = node
+        elif y0 > boundaries[1].bbox[1]:
+          boundaries[1] = node
+      if y1 > start.bbox[3]:
+        if boundaries[3] is None:
+          boundaries[3] = node
+        elif y1 < boundaries[3].bbox[3]:
+          boundaries[3] = node
+    elif abs(node.slope) > 5 and node.height() >= start.height():
+      if x0 < start.bbox[0]:
+        if boundaries[0] is None:
+          boundaries[0] = node
+        elif x0 > boundaries[0].bbox[0]:
+          boundaries[0] = node
+      if x1 > start.bbox[2]:
+        if boundaries[2] is None:
+          boundaries[2] = node
+        elif x1 < boundaries[2].bbox[2]:
+          boundaries[2] = node
+
+def cluster_text_by_connected_groups(
+  start: pdftypes.ClassificationNode,
+  leaf_grid: leafgrid.LeafGrid,
+):
+  # Get my neighbors, find what I'm connected to
+  # If I'm text then I don't connect to a much larger line
+  # Joined text can connect to a large line if they are above the same size
+  # Keep connecting until no nodes in my group can connect
+  radius = max(start.width(), start.height())
+  query = make_query(bbox=start.bbox, radius=radius)
+  neighbors = leaf_grid.intersection(query=query)
+
+  group: typing.Set[pdftypes.ClassificationNode] = set()
+  group.add(start)
+  boundaries: typing.List[
+    typing.Union[None, pdftypes.ClassificationNode]
+  ] = [ None for _ in range(4) ]
+
+  to_process: typing.List[pdftypes.ClassificationNode] = [start]
+  while len(to_process) > 0:
+    added_node = to_process.pop()
+    radius = max(added_node.width(), added_node.height())
+    query = make_query(bbox=added_node.bbox, radius=radius)
+    neighbors = leaf_grid.intersection(query=query)
+    for node in neighbors:
+      set_boundaries(start=start, node=node, boundaries=boundaries)
+    for node in neighbors:
+      if node not in group:
+        is_inside = pdfelemtransforms.boundaries_contains(
+          boundaries=boundaries,
+          bbox=node.bbox,
+        )
+        if is_inside:
+          group.add(node)
+          to_process.append(node)
+  out = list(group)
+  out = [n for n in out if pdfelemtransforms.boundaries_contains(
+    boundaries=boundaries,
+    bbox=n.bbox,
+  )]
+  return out, boundaries
 
 def conn_test():
   _, celems, width, height = get_window_schedule_pdf()
 
   node_manager = pdftypes.NodeManager(layers=[celems])
+  leaf_grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
 
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
   start_node = text_join_test[-2]
+
+  group, boundaries = cluster_text_by_connected_groups(
+    start=start_node,
+    leaf_grid=leaf_grid
+  )
+  for n in group:
+    print(n.text, n.left_right, n.slope)
+  # TODO: Pick a boundary that actually applies
+  # TODO: Text may be close enough but should be separate groups
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=[*group, *[b for b in boundaries if b is not None]], align_top_left=False)
+  drawer.show("")
+  return
+
   start_pos_x, start_pos_y = start_node.bbox[:2] # 4 in 1 3/4"
   focus_radius = 50
   search_bbox = (
@@ -738,8 +835,6 @@ def conn_test():
     start_pos_y + focus_radius,
   )
   start_node.labelize()
-
-  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
 
   leaf_neighbors = node_manager.intersection(
     layer_idx=0,
@@ -770,7 +865,8 @@ def conn_test():
   draw = [start_node, *[n for n in [cl, cb, cr, ca] if n is not None]]
   left_itr = cl
   while left_itr is not None:
-    left_itr, _, _, _ = connect_node_neighbors(node=left_itr, neighbors=leaf_neighbors)
+    connect_node_neighbors(node=left_itr, neighbors=leaf_neighbors)
+    left_itr = left_itr.left
     if left_itr is not None:
       draw.append(left_itr)
 

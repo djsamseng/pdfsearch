@@ -266,11 +266,11 @@ class ZoomCanvas(ttk.Frame):
     text: str,
     font_size:int=12,
     fill:str="black",
-    upright:bool=True
+    left_right:bool=True
   ):
     x, y = pt
     x, y = self.rot_point(x, y)
-    angle = 0 if upright else 90
+    angle = 0 if left_right else 90
     text_id: int = self.canvas.create_text(
       x, y, fill=fill, font=("Arial", font_size), text=text, angle=angle
     )
@@ -554,11 +554,11 @@ class ClassifierDrawer:
       x0, y0, x1, y1 = wrapper.bbox
       font_size = 11
       if isinstance(wrapper.elem, pdfminer.layout.LTChar):
-        upright = wrapper.elem.upright
+        left_right = wrapper.left_right
         font_size = int(wrapper.elem.size)
       else:
-        upright = True
-      text_ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size), upright=upright)
+        left_right = True
+      text_ids = self.app.canvas.insert_text(pt=(x0-xmin, y1+ymin), text=text, font_size=int(font_size), left_right=left_right)
     if wrapper.line is not None:
       if len(text) > 0 and text[-1] != " ":
         text += " "
@@ -585,13 +585,13 @@ class ClassifierDrawer:
     text = elem.text or ""
     if isinstance(elem.elem, pdfminer.layout.LTChar):
       font_size = int(elem.elem.size * 1.5)
-      upright = elem.elem.upright
+      left_right = elem.left_right
     else:
       font_size = 11
-      upright = True
+      left_right = True
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
     # y1 because we flip the point on the y axis
-    ids = self.app.canvas.insert_text(pt=(x0-xmin+2, y1+ymin-4), text=text, font_size=int(font_size), upright=upright)
+    ids = self.app.canvas.insert_text(pt=(x0-xmin+2, y1+ymin-4), text=text, font_size=int(font_size), left_right=left_right)
     for id in ids:
       self.id_to_elem[id] = elem
     if draw_buttons:

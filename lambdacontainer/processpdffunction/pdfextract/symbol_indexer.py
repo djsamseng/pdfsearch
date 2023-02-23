@@ -139,8 +139,8 @@ class TextJoiner():
       lines = [
         self.layer_nodes[idx] for idx in lines_idxes if self.layer_nodes[idx].line is not None
       ]
-      upright = node.upright
-      if not upright:
+      left_right = node.left_right
+      if not left_right:
         connecting.sort(key=lambda n: n.bbox[1])
       else:
         connecting.sort(key=lambda n: n.bbox[0])
@@ -160,7 +160,7 @@ class TextJoiner():
         text=joined_text,
         child_ids=delete_idxes,
       )
-      joined_node.upright = upright
+      joined_node.left_right = left_right
       return joined_node
     else:
       idx = len(self.nodes)
