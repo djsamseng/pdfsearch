@@ -1,5 +1,4 @@
 
-import enum
 import heapq
 import functools
 import math
@@ -19,11 +18,6 @@ class GridNode(object):
     return "{0} {1}".format(self.node_id, self.node)
 
 GridType = typing.List[typing.List[typing.List[GridNode]]]
-class Direction(enum.Enum):
-  LEFT = 1
-  RIGHT = 2
-  UP = 3
-  DOWN = 4
 
 class LeafGrid():
   def __init__(
@@ -97,7 +91,7 @@ class LeafGrid():
   def next_elem_for_coords(
     self,
     x0: float, y0: float, x1: float, y1: float,
-    direction: Direction,
+    direction: pdftypes.Direction,
     restrict_idxes: typing.Dict[int, bool],
   ):
     bbox = (x0, y0, x1, y1)
@@ -114,13 +108,13 @@ class LeafGrid():
       yield res
 
     def step(x0: int, y0: int, x1: int, y1: int):
-      if direction == Direction.LEFT:
+      if direction == pdftypes.Direction.LEFT:
         x1 -= 1
-      elif direction == Direction.RIGHT:
+      elif direction == pdftypes.Direction.RIGHT:
         x0 += 1
-      elif direction == Direction.UP:
+      elif direction == pdftypes.Direction.UP:
         y0 += 1
-      elif direction == Direction.DOWN:
+      elif direction == pdftypes.Direction.DOWN:
         y1 -= 1
       return x0, y0, x1, y1
 
@@ -180,7 +174,7 @@ class LeafGrid():
     self,
     bbox: pdftypes.Bbox,
     x0: int, y0: int, x1: int, y1: int,
-    direction: Direction,
+    direction: pdftypes.Direction,
     restrict_idxes: typing.Dict[int, bool],
   ):
 
@@ -188,10 +182,10 @@ class LeafGrid():
       if node.node_id in restrict_idxes:
         return False
 
-      vert = direction == Direction.UP or direction == Direction.DOWN
+      vert = direction == pdftypes.Direction.UP or direction == pdftypes.Direction.DOWN
       if pdfelemtransforms.get_aligns_in_direction(
-        a=bbox,
-        b=node.node.bbox,
+        this=bbox,
+        other=node.node.bbox,
         vert=vert
       ):
         return True
@@ -199,7 +193,7 @@ class LeafGrid():
 
 
     in_this_box: typing.List[GridNode] = []
-    if direction == Direction.LEFT:
+    if direction == pdftypes.Direction.LEFT:
       for y in range(y1, y0-1, -1):
         in_this_box.extend([
           b for b in self.grid[y][x1] if
@@ -207,7 +201,7 @@ class LeafGrid():
             node_can_be_next(node=b)
         ])
       sort_func = functools.partial(self.sort_func_custom, order=(2, 3, 1, 0))
-    elif direction == Direction.RIGHT:
+    elif direction == pdftypes.Direction.RIGHT:
       for y in range(y1, y0-1, -1):
         in_this_box.extend([
           b for b in self.grid[y][x0] if
@@ -215,7 +209,7 @@ class LeafGrid():
             node_can_be_next(node=b)
         ])
       sort_func = functools.partial(self.sort_func_custom, order=(0, 3, 1, 2))
-    elif direction == Direction.UP:
+    elif direction == pdftypes.Direction.UP:
       for x in range(x0, x1):
         in_this_box.extend([
           b for b in self.grid[y0][x] if
@@ -223,7 +217,7 @@ class LeafGrid():
             node_can_be_next(node=b)
         ])
       sort_func = functools.partial(self.sort_func_custom, order=(1, 0, 2, 3))
-    elif direction == Direction.DOWN:
+    elif direction == pdftypes.Direction.DOWN:
       for x in range(x0, x1):
         in_this_box.extend([
           b for b in self.grid[y1][x] if

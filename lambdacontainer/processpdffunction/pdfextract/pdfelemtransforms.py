@@ -184,10 +184,12 @@ def get_quad(dx: float, dy: float):
   raise ValueError("Unhandled dx{0} dy{1}".format(dx, dy))
 
 def get_angle(dx: float, dy: float):
-  quad = get_quad(dx=dx, dy=dy)
-  angle = math.degrees(math.tanh(dy / dx))
-  # TODO adjust angle for quad
-
+  # Top = 0
+  # Left = -90
+  # Right = 90
+  # bottom = -179, 180, 179
+  angle = math.degrees(math.atan2(dx, dy))
+  return angle
 
 def get_node_angle_to(
   other: pdftypes.ClassificationNode,
@@ -198,18 +200,41 @@ def get_node_angle_to(
   else:
     src_x, src_y = get_midpoint(item=src.bbox)
   if other.line is not None:
-    x0, y0, x1, y1 = other.line
-    points = [(x0, y0,), (x1, y1)]
+    other_x, other_y = get_midpoint(item=other.line)
   else:
-    x0, y0, x1, y1 = other.bbox
-    points = [(x0, y0,), (x0, y1), (x1, y1), (x1, y0)]
-  for pt in points:
-    dx = pt[0] - src_x
-    dy = pt[1] - src_y
-    angle = get_angle(dx=dx, dy=dy)
+    other_x, other_y = get_midpoint(item=other.bbox)
+  dx, dy = other_x - src_x, other_y - src_y
+  angle = get_angle(dx=dx, dy=dy)
+  return angle
 
+def get_node_points(node: pdftypes.ClassificationNode):
+  if node.line is not None:
+    x0, y0, x1, y1 = node.line
+    pts = ((x0, y0), (x0, y0), (x1, y1), (x1, y1))
+  else:
+    x0, y0, x1, y1 = node.bbox
+    pts = ((x0, y0), (x1, y0), (x0, y1), (x1, y1))
+  return pts
 
+def get_node_angles_to(
+  other: pdftypes.ClassificationNode,
+  src: pdftypes.ClassificationNode
+):
+  other_pts = get_node_points(node=other)
+  src_pts =  get_node_points(node=src)
+  angles: typing.List[float] = []
+  for idx in range(len(other_pts)):
+    dx = other_pts[idx][0] - src_pts[idx][0]
+    dy = other_pts[idx][1] - src_pts[idx][1]
+    angle =  get_angle(dx=dx, dy=dy)
+    angles.append(angle)
+  return angles
 
+def get_node_directions_to(
+  other: pdftypes.ClassificationNode,
+  src: pdftypes.ClassificationNode,
+):
+  pass
 
 def get_idx_for_vert(vert: bool):
   if vert:

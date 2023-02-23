@@ -670,9 +670,7 @@ def sqft_test():
   # 2. Classify the reference lines showing distances by the text
   # 3. Thic
 
-
-
-def connect_node_neighbors(
+def get_node_neighbors(
   node: ClassificationNode,
   neighbors: typing.List[ClassificationNode]
 ):
@@ -712,6 +710,17 @@ def connect_node_neighbors(
         closest_left_space = distance_x
   return closest_left, closest_below, closest_right, closest_above
 
+def connect_node_neighbors(
+  node: ClassificationNode,
+  neighbors: typing.List[ClassificationNode],
+):
+  cl, cb, cr, ca = get_node_neighbors(node=node, neighbors=neighbors)
+  node.left = cl
+  node.below = cb
+  node.right = cr
+  node.above = ca
+
+
 def conn_test():
   _, celems, width, height = get_window_schedule_pdf()
 
@@ -736,13 +745,14 @@ def conn_test():
     layer_idx=0,
     bbox=search_bbox,
   )
-  cl, cb, cr, ca = connect_node_neighbors(node=start_node, neighbors=leaf_neighbors)
+  connect_node_neighbors(node=start_node, neighbors=leaf_neighbors)
   # Fraction rule that activates --shapememory activates a fraction
   drawer.draw_elems(elems=leaf_neighbors, align_top_left=True)
   for n in leaf_neighbors:
     drawer.draw_bbox(bbox=n.bbox, color="blue")
   drawer.show("C", blocking=True)
 
+  cl, cb, cr, ca = start_node.left, start_node.below, start_node.right, start_node.above
   for n in [cl, cb, cr, ca]:
     if n is not None:
       n.labelize()
@@ -826,8 +836,57 @@ def a_star_join(
         if node.node_id == item.node.node_id:
           continue
         dist = pdfelemtransforms.get_node_distance_to(other=node, src=item.node)
-        print("Dist:", dist, "Text:", node.text,
+        angles = pdfelemtransforms.get_node_angles_to(other=node, src=item.node)
+        angles_str = " ".join(["{0:.2f}".format(angle) for angle in angles])
+        print("Dist:{0:.2f} Angles:{1}".format(dist, angles_str),
+          "Text:", node.text,
           "slope:{0:.2f} length:{1:.2f}".format(node.slope, node.length))
+
+def get_horizontal_aligned_groups(
+  nodes: typing.List[pdftypes.ClassificationNode]
+):
+  # We'll get a little confused with the 3/4
+  # but that will be fixed when merging the 3/4 into a single element
+  tb_groups: typing.DefaultDict[
+    typing.Tuple[float, float],
+    typing.Set[pdftypes.ClassificationNode]
+  ] = collections.defaultdict(set)
+  for node in nodes:
+    _, y0, _, y1 = node.bbox
+    yb = math.floor(y0)
+    yt = math.floor(y1)
+    tb_groups[yb, yt].add(node)
+  merged_groups: typing.DefaultDict[
+    typing.Tuple[float, float],
+    typing.Set[pdftypes.ClassificationNode]
+  ] = collections.defaultdict(set)
+  for (yb, yt), line_nodes in tb_groups.items():
+    dest = (yb, yt)
+    merge_range =  [(yb, yt), (yb+1, yt), (yb, yt+1), (yb+1, yt+1)]
+    for merge_key in merge_range:
+      if merge_key in merged_groups:
+        dest = merge_key
+        break
+    merged_groups[dest] |= line_nodes
+    for merge_key in merge_range[1:]:
+      if merge_key in tb_groups:
+        merge_group = tb_groups[merge_key]
+        merged_groups[dest] |= merge_group
+
+  return merged_groups
+
+def align_horizontal(
+  nodes: typing.List[pdftypes.ClassificationNode]
+):
+  horizontal_groups = get_horizontal_aligned_groups(nodes=nodes)
+  # TODO: Merge groups that share a lot of area that are close
+  # Ex: (553, 562), (557, 563), (554, 562), (552, 559) => (552, 563)
+  # But (1312, 553, 1319, 562) doesn't merge because it's x is far away
+  # Later we see that the table row is everything inside (1029, 549, 1651, 567)
+  return horizontal_groups
+
+def align_vertical():
+  pass
 
 def fraction_test():
   _, layers, width, height = get_pdf(which=1, page_number=1)
@@ -851,11 +910,15 @@ def fraction_test():
   )
 
   grid_elems = leaf_grid.intersection(query=query)
-  a_star_join(start=start_node, nodes=grid_elems)
-  return
+  horiz_groups = align_horizontal(nodes=grid_elems)
+  for (yb, yt), line_nodes in horiz_groups.items():
+    print("y0:{0:.2f} y1:{1:.2f} num:{2}".format(yb, yt, len(line_nodes)))
+  #a_star_join(start=start_node, nodes=grid_elems)
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=grid_elems, align_top_left=True)
-  drawer.draw_bbox(bbox=query, color="blue")
+  for elem in grid_elems:
+    drawer.draw_bbox(bbox=elem.bbox, color="blue")
+  drawer.draw_bbox(bbox=query, color="red")
   drawer.show("")
 
 def parse_args():

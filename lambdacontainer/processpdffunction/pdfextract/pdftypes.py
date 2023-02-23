@@ -38,6 +38,12 @@ class LabelType(int, enum.Enum):
   INT = 12
   FRACTION_LINE = 13
 
+class Direction(enum.Enum):
+  LEFT = 1
+  RIGHT = 2
+  UP = 3
+  DOWN = 4
+
 decimal_regex_cap = re.compile("^[\\d]*\\.[\\d]+")
 int_regex_cap = re.compile("^\\d+")
 fraction_regex_cap = re.compile("[\\d]+/[\\d]+")
@@ -147,6 +153,11 @@ class ClassificationNode():
     self.parent_ids: typing.Set[NodeId] = set()
     self.slope = path_utils.line_slope(line=line) if line is not None else 0.
     self.length = self.__length()
+
+    self.left: typing.Union[None, ClassificationNode] = None
+    self.below: typing.Union[None, ClassificationNode] = None
+    self.right: typing.Union[None, ClassificationNode] = None
+    self.above: typing.Union[None, ClassificationNode] = None
 
   def width(self):
     return self.bbox[2] - self.bbox[0]
