@@ -75,23 +75,24 @@ def box_contains(outer: BboxType, inner: BboxType):
   return False
 
 def boundaries_contains(
-  boundaries: typing.List[
-    typing.Union[None, pdftypes.ClassificationNode]
-  ],
+  boundaries: pdftypes.Boundaries,
   bbox: pdftypes.Bbox,
 ):
   for idx in range(len(bbox)):
     boundary_elem = boundaries[idx]
     if boundary_elem is not None:
       if idx < 2:
-        if bbox[idx] < boundary_elem.bbox[idx]:
+        if bbox[idx] < boundary_elem[0]:
           return False
       else:
-        if bbox[idx] > boundary_elem.bbox[idx]:
+        if bbox[idx] > boundary_elem[0]:
           return False
   return True
 
-def filter_contains_bbox_hierarchical(elems: typing.Iterable[LTJson], bbox: BboxType) -> typing.List[LTJson]:
+def filter_contains_bbox_hierarchical(
+  elems: typing.Iterable[LTJson],
+  bbox: BboxType
+) -> typing.List[LTJson]:
   out: typing.List[LTJson] = []
   json_encoder = LTJsonEncoder()
   old_idx_to_new_idx: typing.Dict[int, int] = dict()
@@ -322,6 +323,23 @@ def get_aligns_in_direction(
     vert=not vert
   )
   return distance_perpendicular == 0
+
+def get_overlap_in_direction(
+  this: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  other: typing.Union[pdftypes.Bbox, path_utils.LinePointsType],
+  height_overlap: bool,
+):
+  # For width overlap we compare y0, y1
+  idx0, idx1 = get_idx_for_vert(vert=height_overlap)
+  selfmin = min(this[idx0], this[idx1])
+  selfmax = max(this[idx0], this[idx1])
+  othermin = min(other[idx0], other[idx1])
+  othermax = max(other[idx0], other[idx1])
+  if selfmin < othermax and selfmax > othermin:
+    sharedmin = max(selfmin, othermin)
+    sharedmax = min(selfmax, othermax)
+    return sharedmax - sharedmin
+  return 0
 
 def join_text_line(
   nodes: typing.List[pdftypes.ClassificationNode],

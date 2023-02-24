@@ -540,3 +540,13 @@ class MatcherManager():
     self.searches: typing.List[LookForElem] =  [
       make_window_schedule_matcher()
     ]
+
+Boundaries = typing.List[
+  typing.Union[
+    None,
+    typing.Tuple[
+      float, # the boundary
+      typing.Union[None, ClassificationNode] # Why
+    ],
+  ]
+]

@@ -729,11 +729,8 @@ def make_query(bbox: pdftypes.Bbox, radius: float):
     y1 + radius,
   )
 
-Boundaries = typing.List[
-  typing.Union[None, pdftypes.ClassificationNode]
-]
 def get_boundaries_str(
-  boundaries: Boundaries,
+  boundaries: pdftypes.Boundaries,
 ):
   out = "("
   for idx in range(len(boundaries)):
@@ -741,40 +738,52 @@ def get_boundaries_str(
     if bound is None:
       out += "-1,"
     else:
-      out += "{0:.2f},".format(bound.bbox[idx])
+      out += "{0:.2f},".format(bound[0])
   return out[:-1] + ")"
 
 def set_boundaries(
   start: pdftypes.ClassificationNode,
   node: pdftypes.ClassificationNode,
-  boundaries: Boundaries,
+  boundaries: pdftypes.Boundaries,
 ):
   if node.line is not None:
     x0, y0, x1, y1 = node.line
     if abs(node.slope) < 0.5 and node.width() >= start.width():
-      if pdfelemtransforms.get_aligns_in_direction(this=start.bbox, other=node.bbox, vert=True):
+      # Horizontal line
+      width_overlap = pdfelemtransforms.get_overlap_in_direction(
+        this=start.bbox,
+        other=node.bbox,
+        height_overlap=False,
+      )
+      if width_overlap >= start.width():
         if y0 < start.bbox[1]:
           if boundaries[1] is None:
-            boundaries[1] = node
-          elif y0 > boundaries[1].bbox[1]:
-            boundaries[1] = node
+            boundaries[1] = (node.bbox[1], node)
+          elif y0 > boundaries[1][0]:
+            boundaries[1] = (node.bbox[1], node)
         if y1 > start.bbox[3]:
           if boundaries[3] is None:
-            boundaries[3] = node
-          elif y1 < boundaries[3].bbox[3]:
-            boundaries[3] = node
+            boundaries[3] = (node.bbox[3], node)
+          elif y1 < boundaries[3][0]:
+            boundaries[3] = (node.bbox[3], node)
     elif abs(node.slope) > 5 and node.height() >= start.height():
-      if pdfelemtransforms.get_aligns_in_direction(this=start.bbox, other=node.bbox, vert=False):
+      # Vertical line
+      height_overlap = pdfelemtransforms.get_overlap_in_direction(
+        this=start.bbox,
+        other=node.bbox,
+        height_overlap=True
+      )
+      if height_overlap >= start.height():
         if x0 < start.bbox[0]:
           if boundaries[0] is None:
-            boundaries[0] = node
-          elif x0 > boundaries[0].bbox[0]:
-            boundaries[0] = node
+            boundaries[0] = (node.bbox[0], node)
+          elif x0 > boundaries[0][0]:
+            boundaries[0] = (node.bbox[0], node)
         if x1 > start.bbox[2]:
           if boundaries[2] is None:
-            boundaries[2] = node
-          elif x1 < boundaries[2].bbox[2]:
-            boundaries[2] = node
+            boundaries[2] = (node.bbox[2], node)
+          elif x1 < boundaries[2][0]:
+            boundaries[2] = (node.bbox[2], node)
 
 def cluster_text_group(
   start: pdftypes.ClassificationNode,
@@ -790,9 +799,13 @@ def cluster_text_group(
 
   group: typing.Set[pdftypes.ClassificationNode] = set()
   group.add(start)
-  boundaries: typing.List[
-    typing.Union[None, pdftypes.ClassificationNode]
-  ] = [ None for _ in range(4) ]
+  boundaries: pdftypes.Boundaries = [ None for _ in range(4) ]
+  if start.left_right:
+    boundaries[1] = (start.bbox[1] - start.height() / 2, None)
+    boundaries[3] = (start.bbox[3] + start.height() / 2, None)
+  else:
+    boundaries[0] = (start.bbox[0] - start.width() / 2, None)
+    boundaries[2] = (start.bbox[2] + start.width() / 2, None)
 
   to_process: typing.List[pdftypes.ClassificationNode] = [start]
   while len(to_process) > 0:
@@ -803,16 +816,26 @@ def cluster_text_group(
     for node in neighbors:
       set_boundaries(start=start, node=node, boundaries=boundaries)
     for node in neighbors:
+      if node in group:
+        continue
       node.labelize()
-      if node not in group:
-        is_inside = pdfelemtransforms.boundaries_contains(
-          boundaries=boundaries,
-          bbox=node.bbox,
-        )
-        if is_inside:
-          if node.text is not None or node.labels[pdftypes.LabelType.FRACTION_LINE] > 0:
-            group.add(node)
-            to_process.append(node)
+      is_inside = pdfelemtransforms.boundaries_contains(
+        boundaries=boundaries,
+        bbox=node.bbox,
+      )
+      if not is_inside:
+        continue
+      if start.text is not None and node.text is not None:
+        if node.left_right != start.left_right:
+          continue
+        # Fontsize is wildly different
+        group.add(node)
+        to_process.append(node)
+        continue
+      if node.labels[pdftypes.LabelType.FRACTION_LINE] > 0:
+        group.add(node)
+        to_process.append(node)
+        continue
   out = list(group)
   out = [n for n in out if pdfelemtransforms.boundaries_contains(
     boundaries=boundaries,
@@ -832,22 +855,34 @@ def cluster_text_by_connected_groups(
   groups: typing.List[
     typing.Tuple[
       typing.List[pdftypes.ClassificationNode],
-      typing.List[typing.Union[None, pdftypes.ClassificationNode]],
+      pdftypes.Boundaries,
     ]
   ] = []
+  # remaining = [node_manager.nodes[3282]]
+  # TODO: Fix: remaining = [ node_manager.nodes[19926], node_manager.nodes[19949]]
+  # TODO: Join [2348, 2390, 3447, 3448, 3454, 3455, 3456, 3457, 3458, 3466, 3467, 3468, 3469, 3470, 3471]
+  #    - Use known words
+  is_dev = len(remaining) <= 2
   while len(remaining) > 0:
     start_node = remaining.pop()
+    if is_dev:
+      print("Start:", start_node.bbox)
     group, boundaries = cluster_text_group(
       start=start_node, leaf_grid=leaf_grid
     )
     for node in group:
       nodes_used.add(node)
     groups.append((group, boundaries))
+    if not is_dev:
+      remaining = text_nodes.difference(nodes_used)
   return groups
 
 
 def conn_test():
-  _, celems, width, height = get_window_schedule_pdf()
+  #_, celems, width, height = get_window_schedule_pdf()
+  _, layers, width, height = get_pdf(which=1, page_number=1)
+  celems = layers[0]
+
 
   node_manager = pdftypes.NodeManager(layers=[celems])
   leaf_grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
