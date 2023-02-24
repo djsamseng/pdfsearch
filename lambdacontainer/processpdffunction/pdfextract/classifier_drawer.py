@@ -495,12 +495,11 @@ class ClassifierDrawer:
   ):
     self.app.controlPanel.clear_buttons()
     def on_save():
-      idxes = []
+      ids = []
       for elem, selected in self.selected_elems.items():
         if selected:
-          idxes.append(self.elem_to_elem_idx[elem])
-          # print(self.elem_to_elem_idx[elem], elem.bbox, original_path)
-      print("Idxes:", idxes)
+          ids.append(elem.node_id)
+      print("node_ids:", ids)
     self.app.controlPanel.add_button(text="save", callback=on_save)
     elems: typing.DefaultDict[ClassificationNode, typing.List[int]] = collections.defaultdict(list)
     self.selected_elems = {}

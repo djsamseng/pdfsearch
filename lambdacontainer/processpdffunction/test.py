@@ -729,39 +729,54 @@ def make_query(bbox: pdftypes.Bbox, radius: float):
     y1 + radius,
   )
 
+Boundaries = typing.List[
+  typing.Union[None, pdftypes.ClassificationNode]
+]
+def get_boundaries_str(
+  boundaries: Boundaries,
+):
+  out = "("
+  for idx in range(len(boundaries)):
+    bound = boundaries[idx]
+    if bound is None:
+      out += "-1,"
+    else:
+      out += "{0:.2f},".format(bound.bbox[idx])
+  return out[:-1] + ")"
+
 def set_boundaries(
   start: pdftypes.ClassificationNode,
   node: pdftypes.ClassificationNode,
-  boundaries: typing.List[
-    typing.Union[None, pdftypes.ClassificationNode]
-  ],
+  boundaries: Boundaries,
 ):
   if node.line is not None:
     x0, y0, x1, y1 = node.line
     if abs(node.slope) < 0.5 and node.width() >= start.width():
-      if y0 < start.bbox[1]:
-        if boundaries[1] is None:
-          boundaries[1] = node
-        elif y0 > boundaries[1].bbox[1]:
-          boundaries[1] = node
-      if y1 > start.bbox[3]:
-        if boundaries[3] is None:
-          boundaries[3] = node
-        elif y1 < boundaries[3].bbox[3]:
-          boundaries[3] = node
+      if pdfelemtransforms.get_aligns_in_direction(this=start.bbox, other=node.bbox, vert=True):
+        if y0 < start.bbox[1]:
+          if boundaries[1] is None:
+            boundaries[1] = node
+          elif y0 > boundaries[1].bbox[1]:
+            boundaries[1] = node
+        if y1 > start.bbox[3]:
+          if boundaries[3] is None:
+            boundaries[3] = node
+          elif y1 < boundaries[3].bbox[3]:
+            boundaries[3] = node
     elif abs(node.slope) > 5 and node.height() >= start.height():
-      if x0 < start.bbox[0]:
-        if boundaries[0] is None:
-          boundaries[0] = node
-        elif x0 > boundaries[0].bbox[0]:
-          boundaries[0] = node
-      if x1 > start.bbox[2]:
-        if boundaries[2] is None:
-          boundaries[2] = node
-        elif x1 < boundaries[2].bbox[2]:
-          boundaries[2] = node
+      if pdfelemtransforms.get_aligns_in_direction(this=start.bbox, other=node.bbox, vert=False):
+        if x0 < start.bbox[0]:
+          if boundaries[0] is None:
+            boundaries[0] = node
+          elif x0 > boundaries[0].bbox[0]:
+            boundaries[0] = node
+        if x1 > start.bbox[2]:
+          if boundaries[2] is None:
+            boundaries[2] = node
+          elif x1 < boundaries[2].bbox[2]:
+            boundaries[2] = node
 
-def cluster_text_by_connected_groups(
+def cluster_text_group(
   start: pdftypes.ClassificationNode,
   leaf_grid: leafgrid.LeafGrid,
 ):
@@ -788,20 +803,48 @@ def cluster_text_by_connected_groups(
     for node in neighbors:
       set_boundaries(start=start, node=node, boundaries=boundaries)
     for node in neighbors:
+      node.labelize()
       if node not in group:
         is_inside = pdfelemtransforms.boundaries_contains(
           boundaries=boundaries,
           bbox=node.bbox,
         )
         if is_inside:
-          group.add(node)
-          to_process.append(node)
+          if node.text is not None or node.labels[pdftypes.LabelType.FRACTION_LINE] > 0:
+            group.add(node)
+            to_process.append(node)
   out = list(group)
   out = [n for n in out if pdfelemtransforms.boundaries_contains(
     boundaries=boundaries,
     bbox=n.bbox,
   )]
   return out, boundaries
+
+def cluster_text_by_connected_groups(
+  node_manager: pdftypes.NodeManager,
+  leaf_grid: leafgrid.LeafGrid,
+):
+  nodes_used: typing.Set[
+    pdftypes.ClassificationNode,
+  ] = set()
+  text_nodes = set([n for n in node_manager.nodes.values() if n.text is not None])
+  remaining = text_nodes.difference(nodes_used)
+  groups: typing.List[
+    typing.Tuple[
+      typing.List[pdftypes.ClassificationNode],
+      typing.List[typing.Union[None, pdftypes.ClassificationNode]],
+    ]
+  ] = []
+  while len(remaining) > 0:
+    start_node = remaining.pop()
+    group, boundaries = cluster_text_group(
+      start=start_node, leaf_grid=leaf_grid
+    )
+    for node in group:
+      nodes_used.add(node)
+    groups.append((group, boundaries))
+  return groups
+
 
 def conn_test():
   _, celems, width, height = get_window_schedule_pdf()
@@ -813,10 +856,20 @@ def conn_test():
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
   start_node = text_join_test[-2]
 
-  group, boundaries = cluster_text_by_connected_groups(
-    start=start_node,
+  groups = cluster_text_by_connected_groups(
+    node_manager=node_manager,
     leaf_grid=leaf_grid
   )
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=celems, align_top_left=False)
+
+  for group, boundaries in groups:
+    bbox = pdfelemtransforms.bounding_bbox(elems=group)
+    # drawer.draw_elems(elems=group, align_top_left=False)
+    drawer.draw_bbox(bbox=bbox, color="blue")
+  print("Num groups:", len(groups))
+  drawer.show("")
+  return
   for n in group:
     print(n.text, n.left_right, n.slope)
   # TODO: Pick a boundary that actually applies

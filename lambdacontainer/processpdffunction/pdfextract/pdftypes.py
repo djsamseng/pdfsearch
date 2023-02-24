@@ -149,8 +149,10 @@ class ClassificationNode():
 
     self.parent_ids: typing.Set[NodeId] = set()
     self.slope = path_utils.line_slope(line=line) if line is not None else 0.
+    self.fontsize = 0.
     if isinstance(elem, pdfminer.layout.LTChar):
       self.left_right = elem.upright
+      self.fontsize = elem.size
     elif abs(self.slope) > 1:
       self.left_right = False
     else:

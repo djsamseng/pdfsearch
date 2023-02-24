@@ -360,7 +360,12 @@ def join_text_line(
     return ""
   return out
 
-def bounding_bbox(elems: typing.List[typing.Union[LTJson, pdftypes.ClassificationNode]]):
+def bounding_bbox(
+  elems: typing.Union[
+    typing.List[LTJson],
+    typing.List[pdftypes.ClassificationNode]
+  ]
+):
   if len(elems) == 0:
     return 0, 0, 1, 1
   x0, y0, x1, y1 = elems[0].bbox
