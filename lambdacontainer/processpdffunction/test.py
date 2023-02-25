@@ -746,6 +746,23 @@ def set_boundaries(
   node: pdftypes.ClassificationNode,
   boundaries: pdftypes.Boundaries,
 ):
+  if node.text is not None:
+    if node.left_right == start.left_right:
+      if abs(node.fontsize - start.fontsize) > FONT_SIZE_DIFF:
+        perpendicular_overlap = pdfelemtransforms.get_overlap_in_direction(
+          this=start.bbox,
+          other=node.bbox,
+          height_overlap=node.left_right,
+        )
+        if perpendicular_overlap > 0:
+          idx0, idx1 = pdfelemtransforms.get_idx_for_vert(vert=not node.left_right)
+          if node.bbox[idx0] < start.bbox[idx0]:
+            if boundaries[idx0] is None or node.bbox[idx0] > boundaries[idx0][0]:
+              boundaries[idx0] = (node.bbox[idx0], node)
+          if node.bbox[idx1] > start.bbox[idx1]:
+            if boundaries[idx1] is None or node.bbox[idx1] < boundaries[idx1][0]:
+              boundaries[idx1] = (node.bbox[idx1], node)
+
   if node.line is not None:
     x0, y0, x1, y1 = node.line
     if abs(node.slope) < 0.5 and node.width() >= start.width():
@@ -785,6 +802,32 @@ def set_boundaries(
           elif x1 < boundaries[2][0]:
             boundaries[2] = (node.bbox[2], node)
 
+FONT_SIZE_DIFF = 1
+def node_should_add_to_group(
+  start: pdftypes.ClassificationNode,
+  node: pdftypes.ClassificationNode,
+  group: typing.Set[pdftypes.ClassificationNode],
+  boundaries: pdftypes.Boundaries,
+):
+  if node in group:
+    return False
+  node.labelize()
+  is_inside = pdfelemtransforms.boundaries_contains(
+    boundaries=boundaries,
+    bbox=node.bbox,
+  )
+  if not is_inside:
+    return False
+  if start.text is not None and node.text is not None:
+    if node.left_right != start.left_right:
+      return False
+    if abs(node.fontsize - start.fontsize) > FONT_SIZE_DIFF:
+      return False
+    return True
+  if node.labels[pdftypes.LabelType.FRACTION_LINE] > 0:
+    return True
+  return False
+
 def cluster_text_group(
   start: pdftypes.ClassificationNode,
   leaf_grid: leafgrid.LeafGrid,
@@ -799,6 +842,8 @@ def cluster_text_group(
 
   group: typing.Set[pdftypes.ClassificationNode] = set()
   group.add(start)
+  to_process: typing.List[pdftypes.ClassificationNode] = [start]
+
   boundaries: pdftypes.Boundaries = [ None for _ in range(4) ]
   if start.left_right:
     boundaries[1] = (start.bbox[1] - start.height() / 2, None)
@@ -807,7 +852,6 @@ def cluster_text_group(
     boundaries[0] = (start.bbox[0] - start.width() / 2, None)
     boundaries[2] = (start.bbox[2] + start.width() / 2, None)
 
-  to_process: typing.List[pdftypes.ClassificationNode] = [start]
   while len(to_process) > 0:
     added_node = to_process.pop()
     radius = max(added_node.width(), added_node.height())
@@ -816,26 +860,9 @@ def cluster_text_group(
     for node in neighbors:
       set_boundaries(start=start, node=node, boundaries=boundaries)
     for node in neighbors:
-      if node in group:
-        continue
-      node.labelize()
-      is_inside = pdfelemtransforms.boundaries_contains(
-        boundaries=boundaries,
-        bbox=node.bbox,
-      )
-      if not is_inside:
-        continue
-      if start.text is not None and node.text is not None:
-        if node.left_right != start.left_right:
-          continue
-        # Fontsize is wildly different
+      if node_should_add_to_group(start=start, node=node, group=group, boundaries=boundaries):
         group.add(node)
         to_process.append(node)
-        continue
-      if node.labels[pdftypes.LabelType.FRACTION_LINE] > 0:
-        group.add(node)
-        to_process.append(node)
-        continue
   out = list(group)
   out = [n for n in out if pdfelemtransforms.boundaries_contains(
     boundaries=boundaries,
@@ -858,15 +885,21 @@ def cluster_text_by_connected_groups(
       pdftypes.Boundaries,
     ]
   ] = []
+  # remaining = [ node_manager.nodes[17275]] # H in HARDWARE
   # remaining = [node_manager.nodes[3282]]
+  # remaining = [ node_manager.nodes[17229]] # schedule 3 in 3/4
+  # remaining = [ node_manager.nodes[17227]] # schedule 1 in 1 3/4
+  # remaining = [ node_manager.nodes[19926], node_manager.nodes[19949]]
   # TODO: Fix: remaining = [ node_manager.nodes[19926], node_manager.nodes[19949]]
+  # TODO: Fix: remaining = [ node_manager.nodes[21200]]
   # TODO: Join [2348, 2390, 3447, 3448, 3454, 3455, 3456, 3457, 3458, 3466, 3467, 3468, 3469, 3470, 3471]
   #    - Use known words
   is_dev = len(remaining) <= 2
   while len(remaining) > 0:
     start_node = remaining.pop()
+
     if is_dev:
-      print("Start:", start_node.bbox)
+      print("Start:", start_node.bbox, start_node.text)
     group, boundaries = cluster_text_group(
       start=start_node, leaf_grid=leaf_grid
     )
@@ -895,6 +928,7 @@ def conn_test():
     node_manager=node_manager,
     leaf_grid=leaf_grid
   )
+  print("Got groups", len(groups))
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=celems, align_top_left=False)
 
@@ -902,7 +936,9 @@ def conn_test():
     bbox = pdfelemtransforms.bounding_bbox(elems=group)
     # drawer.draw_elems(elems=group, align_top_left=False)
     drawer.draw_bbox(bbox=bbox, color="blue")
-  print("Num groups:", len(groups))
+    group.sort(key=lambda n: n.bbox[0])
+    #text = pdfelemtransforms.join_text_line(nodes=group)
+
   drawer.show("")
   return
   for n in group:
