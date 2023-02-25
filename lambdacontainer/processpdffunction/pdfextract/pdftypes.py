@@ -152,7 +152,10 @@ class ClassificationNode():
     self.fontsize = 0.
     if isinstance(elem, pdfminer.layout.LTChar):
       self.left_right = elem.upright
-      self.fontsize = elem.size
+      if self.left_right:
+        self.fontsize = bbox[3] - bbox[1]
+      else:
+        self.fontsize = bbox[2] - bbox[0]
     elif abs(self.slope) > 1:
       self.left_right = False
     else:

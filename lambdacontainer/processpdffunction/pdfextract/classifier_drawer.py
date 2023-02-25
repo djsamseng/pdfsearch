@@ -530,7 +530,7 @@ class ClassifierDrawer:
       else:
         original_path = None
       if isinstance(elem.elem, pdfminer.layout.LTChar):
-        font_size = "fontsize:{0:.2f}".format(elem.elem.size)
+        font_size = "fontsize:{0:.2f}".format(elem.fontsize)
       self.app.controlPanel.add_button(
         text="{0} {1} {2} {3}".format(text, font_size, elem.bbox, original_path),
         callback=lambda ids=ids: on_press(ids))
@@ -582,15 +582,11 @@ class ClassifierDrawer:
   ):
     x0, y0, x1, y1 = elem.bbox
     text = elem.text or ""
-    if isinstance(elem.elem, pdfminer.layout.LTChar):
-      font_size = int(elem.elem.size * 1.5)
-      left_right = elem.left_right
-    else:
-      font_size = 11
-      left_right = True
+    font_size = elem.fontsize
+    left_right = elem.left_right
     # Size is closer to the rendered fontsize than fontsize is per https://github.com/pdfminer/pdfminer.six/issues/202
     # y1 because we flip the point on the y axis
-    ids = self.app.canvas.insert_text(pt=(x0-xmin+2, y1+ymin-4), text=text, font_size=int(font_size), left_right=left_right)
+    ids = self.app.canvas.insert_text(pt=(x0-xmin+2, y1+ymin-4), text=text, font_size=int(font_size * 1.5), left_right=left_right)
     for id in ids:
       self.id_to_elem[id] = elem
     if draw_buttons:
