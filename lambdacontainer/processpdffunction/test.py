@@ -639,7 +639,7 @@ def sqft_test():
     line=None,
     text=text,
     child_ids=[n.node_id for n in inside],
-    layer_idx=1,
+    layer_id=1,
   )
   for node in inside:
     node.parent_ids.add(parent_node.node_id)
@@ -720,14 +720,22 @@ def connect_node_neighbors(
   node.right = cr
   node.above = ca
 
-def make_query(bbox: pdftypes.Bbox, radius: float):
-  x0, y0, x1, y1 = bbox
-  return (
-    x0 - radius,
-    y0 - radius,
-    x1 + radius,
-    y1 + radius,
-  )
+def make_query(node: pdftypes.ClassificationNode):
+  x0, y0, x1, y1 = node.bbox
+  if node.left_right:
+    return (
+      x0 - node.width(),
+      y0,
+      x1 + node.width(),
+      y1,
+    )
+  else:
+    return (
+      x0,
+      y0 - node.height(),
+      x1,
+      y1 + node.height()
+    )
 
 def get_boundaries_str(
   boundaries: pdftypes.Boundaries,
@@ -746,23 +754,6 @@ def set_boundaries(
   node: pdftypes.ClassificationNode,
   boundaries: pdftypes.Boundaries,
 ):
-  if node.text is not None:
-    if node.left_right == start.left_right:
-      if abs(node.fontsize - start.fontsize) > FONT_SIZE_DIFF:
-        perpendicular_overlap = pdfelemtransforms.get_overlap_in_direction(
-          this=start.bbox,
-          other=node.bbox,
-          height_overlap=node.left_right,
-        )
-        if perpendicular_overlap > 0:
-          idx0, idx1 = pdfelemtransforms.get_idx_for_vert(vert=not node.left_right)
-          if node.bbox[idx0] < start.bbox[idx0]:
-            if boundaries[idx0] is None or node.bbox[idx0] > boundaries[idx0][0]:
-              boundaries[idx0] = (node.bbox[idx0], node)
-          if node.bbox[idx1] > start.bbox[idx1]:
-            if boundaries[idx1] is None or node.bbox[idx1] < boundaries[idx1][0]:
-              boundaries[idx1] = (node.bbox[idx1], node)
-
   if node.line is not None:
     x0, y0, x1, y1 = node.line
     if abs(node.slope) < 0.5 and node.width() >= start.width():
@@ -803,29 +794,41 @@ def set_boundaries(
             boundaries[2] = (node.bbox[2], node)
 
 FONT_SIZE_DIFF = 1
+
 def node_should_add_to_group(
   start: pdftypes.ClassificationNode,
   node: pdftypes.ClassificationNode,
   group: typing.Set[pdftypes.ClassificationNode],
-  boundaries: pdftypes.Boundaries,
 ):
   if node in group:
     return False
   node.labelize()
-  is_inside = pdfelemtransforms.boundaries_contains(
-    boundaries=boundaries,
-    bbox=node.bbox,
-  )
-  if not is_inside:
-    return False
+  radius = 1
   if start.text is not None and node.text is not None:
     if node.left_right != start.left_right:
       return False
     if abs(node.fontsize - start.fontsize) > FONT_SIZE_DIFF:
       return False
-    return True
-  if node.labels[pdftypes.LabelType.FRACTION_LINE] > 0:
-    return True
+    idx0, idx1 = pdfelemtransforms.get_idx_for_vert(vert=not start.left_right)
+    perpendicular_overlap = pdfelemtransforms.get_overlap_in_direction(
+      this=start.bbox,
+      other=node.bbox,
+      height_overlap=start.left_right,
+    )
+    start_perpendicular_size = start.height() if start.left_right else start.width()
+    if abs(perpendicular_overlap - start_perpendicular_size) > FONT_SIZE_DIFF:
+      if start.labels[pdftypes.LabelType.FRACTION] > 0:
+        if perpendicular_overlap / start_perpendicular_size > 0.25:
+          # Enough overlap
+          if start.bbox[idx0] < node.bbox[idx0] and start.bbox[idx1] > node.bbox[idx1]:
+            # Centered
+            return True
+      return False
+
+    node_is_touching_left = abs(node.bbox[idx1] - start.bbox[idx0]) < radius
+    node_is_touching_right = abs(node.bbox[idx0] - start.bbox[idx1]) < radius
+    if node_is_touching_left or node_is_touching_right:
+      return True
   return False
 
 def cluster_text_group(
@@ -836,39 +839,32 @@ def cluster_text_group(
   # If I'm text then I don't connect to a much larger line
   # Joined text can connect to a large line if they are above the same size
   # Keep connecting until no nodes in my group can connect
-  radius = max(start.width(), start.height())
-  query = make_query(bbox=start.bbox, radius=radius)
+  query = make_query(node=start)
   neighbors = leaf_grid.intersection(query=query)
 
   group: typing.Set[pdftypes.ClassificationNode] = set()
   group.add(start)
   to_process: typing.List[pdftypes.ClassificationNode] = [start]
 
-  boundaries: pdftypes.Boundaries = [ None for _ in range(4) ]
-  if start.left_right:
-    boundaries[1] = (start.bbox[1] - start.height() / 2, None)
-    boundaries[3] = (start.bbox[3] + start.height() / 2, None)
-  else:
-    boundaries[0] = (start.bbox[0] - start.width() / 2, None)
-    boundaries[2] = (start.bbox[2] + start.width() / 2, None)
-
   while len(to_process) > 0:
     added_node = to_process.pop()
-    radius = max(added_node.width(), added_node.height())
-    query = make_query(bbox=added_node.bbox, radius=radius)
+    query = make_query(node=added_node)
     neighbors = leaf_grid.intersection(query=query)
+    neighbors.sort(key=lambda n: pdfelemtransforms.get_node_distance_to(other=n, src=added_node))
     for node in neighbors:
-      set_boundaries(start=start, node=node, boundaries=boundaries)
-    for node in neighbors:
-      if node_should_add_to_group(start=start, node=node, group=group, boundaries=boundaries):
+      if node_should_add_to_group(start=added_node, node=node, group=group):
         group.add(node)
         to_process.append(node)
+      # TODO: instead of boundaries, stop going in that direction
+      # TODO: if reaching a fraction, form the fraction group then continue
+      # elif I'm a number
+      # depending on where I am relative to added_node
+      # check above,left,right,below to see if I'm a fraction
+      # elif group is a fraction (numerator/denominator)
+      # check above,left,right,below to see if I'm a fraction
+      # if fraction, to_process.append(fraction_node) with new height
   out = list(group)
-  out = [n for n in out if pdfelemtransforms.boundaries_contains(
-    boundaries=boundaries,
-    bbox=n.bbox,
-  )]
-  return out, boundaries
+  return out
 
 def cluster_text_by_connected_groups(
   node_manager: pdftypes.NodeManager,
@@ -880,10 +876,7 @@ def cluster_text_by_connected_groups(
   text_nodes = set([n for n in node_manager.nodes.values() if n.text is not None])
   remaining = text_nodes.difference(nodes_used)
   groups: typing.List[
-    typing.Tuple[
-      typing.List[pdftypes.ClassificationNode],
-      pdftypes.Boundaries,
-    ]
+    typing.List[pdftypes.ClassificationNode],
   ] = []
   # remaining = [ node_manager.nodes[17275]] # H in HARDWARE
   # remaining = [node_manager.nodes[3282]]
@@ -900,12 +893,12 @@ def cluster_text_by_connected_groups(
 
     if is_dev:
       print("Start:", start_node.bbox, start_node.text)
-    group, boundaries = cluster_text_group(
+    group = cluster_text_group(
       start=start_node, leaf_grid=leaf_grid
     )
     for node in group:
       nodes_used.add(node)
-    groups.append((group, boundaries))
+    groups.append(group)
     if not is_dev:
       remaining = text_nodes.difference(nodes_used)
   return groups
@@ -932,7 +925,7 @@ def conn_test():
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=celems, align_top_left=False)
 
-  for group, boundaries in groups:
+  for group in groups:
     bbox = pdfelemtransforms.bounding_bbox(elems=group)
     # drawer.draw_elems(elems=group, align_top_left=False)
     drawer.draw_bbox(bbox=bbox, color="blue")
@@ -1049,8 +1042,7 @@ def a_star_join(
   while len(q) > 0:
     item = heapq.heappop(q)
     label = item.label
-    sort_by_distance_to = functools.partial(pdfelemtransforms.get_node_distance_to, src=item.node)
-    nodes.sort(key=sort_by_distance_to)
+    nodes.sort(key=lambda n: pdfelemtransforms.get_node_distance_to(other=n, src=item.node))
     if label == LabelType.NUMBER or label == LabelType.MEASUREMENT:
       for node in nodes:
         if node.node_id == item.node.node_id:
@@ -1114,26 +1106,37 @@ def fraction_test():
   measurement_fraction_vert_idxes = [6681, 6682, 6683, 6684, 6685, 6686, 6687, 6688, 6689, 6690, 6691]
   measurement_fraction_horiz_idxes = [6618, 6619, 6620, 6621, 6622, 6623, 6624, 6625, 6626, 6627]
   fraction_schedule_idxes = [17107, 17108, 17125, 17126, 17227, 17228, 17229, 17230, 17231, 17232]
-  start_node = layers[0][fraction_schedule_idxes[-1]]
+  start_node = layers[0][fraction_schedule_idxes[-1]] # -1, -2
   x0, y0, x1, y1 = start_node.bbox
-
-
 
   leaf_grid = leafgrid.LeafGrid(celems=layers[0], width=width, height=height, step_size=5)
 
-  radius = 50
-  query = (
-    x0-radius,
-    y0-radius,
-    x1+radius,
-    y1+radius,
-  )
+  if start_node.left_right:
+    radius = start_node.width()
+    query = (
+      x0-radius,
+      y0,
+      x1+radius,
+      y1,
+    )
+  else:
+    radius = start_node.height()
+    query = (
+      x0,
+      y0-radius,
+      x1,
+      y1+radius,
+    )
 
   grid_elems = leaf_grid.intersection(query=query)
+  grid_elems.sort(key=lambda n: pdfelemtransforms.get_node_distance_to(other=n, src=start_node))
+  # if horizontally aligned and touching continue
+  #
+
   horiz_groups = align_horizontal(nodes=grid_elems)
   for (yb, yt), line_nodes in horiz_groups.items():
     print("y0:{0:.2f} y1:{1:.2f} num:{2}".format(yb, yt, len(line_nodes)))
-  #a_star_join(start=start_node, nodes=grid_elems)
+
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=grid_elems, align_top_left=True)
   for elem in grid_elems:
