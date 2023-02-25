@@ -248,11 +248,32 @@ def get_node_angles_to(
     angles.append(angle)
   return angles
 
-def get_node_directions_to(
-  other: pdftypes.ClassificationNode,
+def get_nodes_in_direction_from(
+  others: typing.List[pdftypes.ClassificationNode],
   src: pdftypes.ClassificationNode,
+  angle: float,
+  threshold: float,
 ):
-  pass
+  alt_angle = angle
+  if abs(angle) - 180 < threshold:
+    # threshold = 20
+    # angle=-170 -> 190
+    # abs(178 - 190) = 12
+    # angle=170 -> -190
+    # abs(-178 - -190) = 12
+    alt_angle = abs(angle) + threshold
+    alt_angle *= -1 if angle < 0 else 1
+  out: typing.List[pdftypes.ClassificationNode] = []
+  for other in others:
+    rel_angle = get_node_angle_to(
+      other=other,
+      src=src,
+    )
+    if abs(rel_angle - angle) < threshold:
+      out.append(other)
+    elif abs(rel_angle - alt_angle) < threshold:
+      out.append(other)
+  return out
 
 def get_idx_for_vert(vert: bool):
   if vert:

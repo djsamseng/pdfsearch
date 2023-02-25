@@ -45,7 +45,7 @@ class Direction(enum.Enum):
   DOWN = 4
 
 decimal_regex_cap = re.compile("^[\\d]*\\.[\\d]+")
-int_regex_cap = re.compile("^\\d+")
+int_regex_cap = re.compile("^\\d+$")
 fraction_regex_cap = re.compile("[\\d]+/[\\d]+")
 measurement_regex_cap = re.compile("\"|'|feet|foot|inches|inch?$", flags=re.IGNORECASE)
 
@@ -152,14 +152,14 @@ class ClassificationNode():
     self.fontsize = 0.
     if isinstance(elem, pdfminer.layout.LTChar):
       self.left_right = elem.upright
-      if self.left_right:
-        self.fontsize = bbox[3] - bbox[1]
-      else:
-        self.fontsize = bbox[2] - bbox[0]
     elif abs(self.slope) > 1:
       self.left_right = False
     else:
       self.left_right = True
+    if self.left_right:
+      self.fontsize = bbox[3] - bbox[1]
+    else:
+      self.fontsize = bbox[2] - bbox[0]
     self.length = self.__length()
 
     self.left: typing.Union[None, ClassificationNode] = None
@@ -221,7 +221,10 @@ class ClassificationNode():
       for label, prob in text_labels:
         self.labels[label] = prob
     if self.line is not None:
-      if 0.5 < self.slope and self.slope < 3:
+      if 0 <= self.slope and self.slope < 3:
+        self.labels[LabelType.FRACTION_LINE] = 0.1
+    if self.text is not None:
+      if self.text == "/":
         self.labels[LabelType.FRACTION_LINE] = 0.1
 
   def __length(self):

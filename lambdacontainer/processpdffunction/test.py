@@ -45,6 +45,7 @@ def get_pdf(
     if os.path.isfile(filename):
       with open(filename, "rb") as f:
         elems, celems, width, height = pickle.load(f)
+      ClassificationNode.id_itr = len(celems[0])
       return elems, celems, width, height
   if which == 0:
     page_number = 9 if page_number is None else page_number
@@ -737,6 +738,15 @@ def make_query(node: pdftypes.ClassificationNode):
       y1 + node.height()
     )
 
+def make_query_square(node: pdftypes.ClassificationNode, radius: float):
+  x0, y0, x1, y1 = node.bbox
+  return (
+    x0 - radius,
+    y0 - radius,
+    x1 + radius,
+    y1 + radius,
+  )
+
 def get_boundaries_str(
   boundaries: pdftypes.Boundaries,
 ):
@@ -794,9 +804,8 @@ def set_boundaries(
             boundaries[2] = (node.bbox[2], node)
 
 FONT_SIZE_DIFF = 1
-
 def node_should_add_to_group(
-  start: pdftypes.ClassificationNode,
+  processing: pdftypes.ClassificationNode,
   node: pdftypes.ClassificationNode,
   group: typing.Set[pdftypes.ClassificationNode],
 ):
@@ -804,34 +813,35 @@ def node_should_add_to_group(
     return False
   node.labelize()
   radius = 1
-  if start.text is not None and node.text is not None:
-    if node.left_right != start.left_right:
+  if node.text is not None:
+    if node.left_right != processing.left_right:
       return False
-    if abs(node.fontsize - start.fontsize) > FONT_SIZE_DIFF:
+    if abs(node.fontsize - processing.fontsize) > FONT_SIZE_DIFF:
       return False
-    idx0, idx1 = pdfelemtransforms.get_idx_for_vert(vert=not start.left_right)
+    idx0, idx1 = pdfelemtransforms.get_idx_for_vert(vert=not processing.left_right)
     perpendicular_overlap = pdfelemtransforms.get_overlap_in_direction(
-      this=start.bbox,
+      this=processing.bbox,
       other=node.bbox,
-      height_overlap=start.left_right,
+      height_overlap=processing.left_right,
     )
-    start_perpendicular_size = start.height() if start.left_right else start.width()
+    start_perpendicular_size = processing.height() if processing.left_right else processing.width()
     if abs(perpendicular_overlap - start_perpendicular_size) > FONT_SIZE_DIFF:
-      if start.labels[pdftypes.LabelType.FRACTION] > 0:
+      if processing.labels[pdftypes.LabelType.FRACTION] > 0:
         if perpendicular_overlap / start_perpendicular_size > 0.25:
           # Enough overlap
-          if start.bbox[idx0] < node.bbox[idx0] and start.bbox[idx1] > node.bbox[idx1]:
+          if processing.bbox[idx0] < node.bbox[idx0] and processing.bbox[idx1] > node.bbox[idx1]:
             # Centered
             return True
       return False
 
-    node_is_touching_left = abs(node.bbox[idx1] - start.bbox[idx0]) < radius
-    node_is_touching_right = abs(node.bbox[idx0] - start.bbox[idx1]) < radius
+    node_is_touching_left = abs(node.bbox[idx1] - processing.bbox[idx0]) < radius
+    node_is_touching_right = abs(node.bbox[idx0] - processing.bbox[idx1]) < radius
     if node_is_touching_left or node_is_touching_right:
       return True
   return False
 
 def cluster_text_group(
+  node_manager: pdftypes.NodeManager,
   start: pdftypes.ClassificationNode,
   leaf_grid: leafgrid.LeafGrid,
 ):
@@ -852,7 +862,7 @@ def cluster_text_group(
     neighbors = leaf_grid.intersection(query=query)
     neighbors.sort(key=lambda n: pdfelemtransforms.get_node_distance_to(other=n, src=added_node))
     for node in neighbors:
-      if node_should_add_to_group(start=added_node, node=node, group=group):
+      if node_should_add_to_group(processing=added_node, node=node, group=group):
         group.add(node)
         to_process.append(node)
       # TODO: instead of boundaries, stop going in that direction
@@ -864,7 +874,19 @@ def cluster_text_group(
       # check above,left,right,below to see if I'm a fraction
       # if fraction, to_process.append(fraction_node) with new height
   out = list(group)
-  return out
+  out_text = pdfelemtransforms.join_text_line(nodes=out)
+  bounding_bbox = pdfelemtransforms.bounding_bbox(elems=out)
+  child_ids = [n.node_id for n in out]
+  group_parent = node_manager.add_node(
+    elem=None,
+    bbox=bounding_bbox,
+    line=None,
+    text=out_text,
+    child_ids=child_ids,
+    layer_id=1,
+  )
+  group_parent.labelize()
+  return group_parent
 
 def cluster_text_by_connected_groups(
   node_manager: pdftypes.NodeManager,
@@ -875,9 +897,7 @@ def cluster_text_by_connected_groups(
   ] = set()
   text_nodes = set([n for n in node_manager.nodes.values() if n.text is not None])
   remaining = text_nodes.difference(nodes_used)
-  groups: typing.List[
-    typing.List[pdftypes.ClassificationNode],
-  ] = []
+  groups: typing.List[pdftypes.ClassificationNode] = []
   # remaining = [ node_manager.nodes[17275]] # H in HARDWARE
   # remaining = [node_manager.nodes[3282]]
   # remaining = [ node_manager.nodes[17229]] # schedule 3 in 3/4
@@ -893,15 +913,106 @@ def cluster_text_by_connected_groups(
 
     if is_dev:
       print("Start:", start_node.bbox, start_node.text)
-    group = cluster_text_group(
-      start=start_node, leaf_grid=leaf_grid
+    parent = cluster_text_group(
+      node_manager=node_manager,
+      start=start_node,
+      leaf_grid=leaf_grid
     )
-    for node in group:
+    for child_id in parent.child_ids:
+      node = node_manager.nodes[child_id]
       nodes_used.add(node)
-    groups.append(group)
+
+    groups.append(parent)
     if not is_dev:
       remaining = text_nodes.difference(nodes_used)
   return groups
+
+def try_create_fraction(
+  node_manager: pdftypes.NodeManager,
+  node: pdftypes.ClassificationNode,
+  nodes_used: typing.Set[pdftypes.ClassificationNode]
+):
+  if node in nodes_used:
+    return None
+  query = make_query_square(node=node, radius=max(node.width(), node.height()))
+
+  int_neighbors = node_manager.intersection(layer_idx=1, bbox=query)
+  int_neighbors = [
+    n for n in int_neighbors if \
+      n.node_id != node.node_id and \
+      n not in nodes_used and \
+      n.labels[pdftypes.LabelType.INT] > 0 and \
+      n.left_right == node.left_right and \
+      abs(n.fontsize - node.fontsize) < FONT_SIZE_DIFF
+  ]
+  int_neighbors.sort(key=lambda n: pdfelemtransforms.get_node_distance_to(other=n, src=node))
+
+  dividor_neighbors = node_manager.intersection(layer_idx=0, bbox=query)
+  dividor_neighbors = [n for n in dividor_neighbors if n.labels[pdftypes.LabelType.FRACTION_LINE] > 0]
+  dividor_neighbors.sort(key=lambda n: pdfelemtransforms.get_node_distance_to(other=n, src=node))
+
+  for dividor_node in dividor_neighbors:
+    def dividor_similar_sized(
+      dividor_node: pdftypes.ClassificationNode,
+      int_node: pdftypes.ClassificationNode
+    ):
+      size = max(int_node.width(), int_node.height())
+      if abs(dividor_node.length - size) < size:
+        return True
+    dividor_matches_node_size = dividor_similar_sized(dividor_node=dividor_node, int_node=node)
+    rel_angle = pdfelemtransforms.get_node_angle_to(
+      other=dividor_node,
+      src=node,
+    )
+    ints_in_dir = pdfelemtransforms.get_nodes_in_direction_from(
+      others=int_neighbors,
+      src=node,
+      angle=rel_angle,
+      threshold=20
+    )
+
+    ints_in_dir = [
+      n for n in ints_in_dir if \
+        dividor_matches_node_size or \
+        dividor_similar_sized(dividor_node=dividor_node, int_node=n)
+    ]
+    if len(ints_in_dir) > 0:
+      return [node, ints_in_dir[0], dividor_node]
+  return None
+
+def cluster_fractions(
+  node_manager: pdftypes.NodeManager,
+  leaf_grid: leafgrid.LeafGrid,
+  groups: typing.List[pdftypes.ClassificationNode],
+):
+  nodes_used: typing.Set[pdftypes.ClassificationNode] = set()
+  fractions_clustered: typing.List[pdftypes.ClassificationNode] = []
+  for node in groups:
+    if node.labels[pdftypes.LabelType.INT] > 0:
+      fraction_group = try_create_fraction(
+        node_manager=node_manager,
+        node=node,
+        nodes_used=nodes_used,
+      )
+      if fraction_group is not None:
+        for n in fraction_group:
+          nodes_used.add(n)
+        out_text = pdfelemtransforms.join_text_line(nodes=fraction_group)
+        bounding_bbox = pdfelemtransforms.bounding_bbox(elems=fraction_group)
+        child_ids = [n.node_id for n in fraction_group]
+        group_parent = node_manager.add_node(
+          elem=None,
+          bbox=bounding_bbox,
+          line=None,
+          text=out_text,
+          child_ids=child_ids,
+          layer_id=1,
+        )
+        group_parent.labelize()
+        # TODO: if fraction not None, retry joining left and right of fraction
+        fractions_clustered.append(group_parent)
+
+  return fractions_clustered
 
 
 def conn_test():
@@ -921,15 +1032,22 @@ def conn_test():
     node_manager=node_manager,
     leaf_grid=leaf_grid
   )
+  node_manager.index_layer(layer_idx=1)
   print("Got groups", len(groups))
+  fractions = cluster_fractions(
+    node_manager=node_manager,
+    leaf_grid=leaf_grid,
+    groups=groups,
+  )
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=celems, align_top_left=False)
 
   for group in groups:
-    bbox = pdfelemtransforms.bounding_bbox(elems=group)
+    bbox = group.bbox# pdfelemtransforms.bounding_bbox(elems=group)
     # drawer.draw_elems(elems=group, align_top_left=False)
     drawer.draw_bbox(bbox=bbox, color="blue")
-    group.sort(key=lambda n: n.bbox[0])
+  for fraction_parent in fractions:
+    drawer.draw_bbox(bbox=fraction_parent.bbox, color="red")
     #text = pdfelemtransforms.join_text_line(nodes=group)
 
   drawer.show("")
