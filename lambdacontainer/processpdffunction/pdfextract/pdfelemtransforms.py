@@ -184,6 +184,14 @@ def get_node_distance_to(
 ):
   return get_distance_to(src=src.bbox, other=other.bbox)
 
+def get_node_midpoint_distance_to(
+  other: pdftypes.ClassificationNode,
+  src: pdftypes.ClassificationNode,
+):
+  other_x, other_y = get_midpoint(item=other.bbox)
+  src_x, src_y = get_midpoint(item=src.bbox)
+  return math.sqrt((other_x - src_x) ** 2 + (other_y - src_y) ** 2)
+
 def get_midpoint(item: typing.Union[pdftypes.Bbox, path_utils.LinePointsType]):
   x0, y0, x1, y1 = item
   xmid = abs(x1 - x0) / 2 + min(x0, x1)
@@ -387,9 +395,13 @@ def join_text_line(
       out += ""
     if elem.text is None:
       if len(out) > 0 and out[-1] != "/" and out[-1] != " ":
-        if elem.line and elem.slope < 3 and elem.slope > 0.75 and elem.length < 50:
-          # TODO: other kinds of shapes
-          out += "/"
+        if nodes[0].left_right:
+          if elem.line and elem.slope < 3 and elem.slope >= 0 and elem.length < 50:
+            # TODO: other kinds of shapes
+            out += "/"
+        else:
+          if elem.line and abs(abs(elem.slope)-path_utils.MAX_SLOPE) < 10 and  elem.length < 50:
+            out += "/"
     else:
       if elem.text == '"' and len(out) > 0 and out[-1] == "/":
         out = out[:-1]

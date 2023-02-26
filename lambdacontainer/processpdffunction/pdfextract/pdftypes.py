@@ -44,9 +44,9 @@ class Direction(enum.Enum):
   UP = 3
   DOWN = 4
 
-decimal_regex_cap = re.compile("^[\\d]*\\.[\\d]+")
+decimal_regex_cap = re.compile("^[\\d]*\\.[\\d]+$")
 int_regex_cap = re.compile("^\\d+$")
-fraction_regex_cap = re.compile("[\\d]+/[\\d]+")
+fraction_regex_cap = re.compile("^[\\d]+/[\\d]+$")
 measurement_regex_cap = re.compile("\"|'|feet|foot|inches|inch?$", flags=re.IGNORECASE)
 
 def text_has_decimal(s: str):
@@ -289,6 +289,7 @@ class NodeManager():
     bbox: Bbox,
     line: typing.Union[None, path_utils.LinePointsType],
     text: typing.Union[None, str],
+    left_right: bool,
     child_ids: typing.List[int],
     layer_id: int,
   ):
@@ -301,6 +302,9 @@ class NodeManager():
       text=text,
       child_ids=child_ids,
     )
+    node.left_right = left_right
+    for child_id in child_ids:
+      self.nodes[child_id].parent_ids.add(node.node_id)
     self.layers[layer_id].add(node.node_id)
     self.nodes[node.node_id] = node
     if layer_id in self.indexes:
@@ -308,6 +312,11 @@ class NodeManager():
     return node
 
   def index_layer(self, layer_idx: int):
+    if layer_idx > 0:
+      for node_id in self.layers[layer_idx-1]:
+        if len(self.nodes[node_id].parent_ids) == 0:
+          # Promote node to next layer if no parent
+          self.layers[layer_idx].add(node_id)
     if layer_idx in self.indexes:
       print("=== Warning: Destroying existing index {0} ===".format(layer_idx))
     def insertion_generator(nodes: typing.List[ClassificationNode]):
