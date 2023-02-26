@@ -805,10 +805,35 @@ def set_boundaries(
             boundaries[2] = (node.bbox[2], node)
 
 FONT_SIZE_DIFF = 1
-def node_should_add_to_group(
+def node_should_add_to_group_split_space(
   processing: pdftypes.ClassificationNode,
   node: pdftypes.ClassificationNode,
   group: typing.Set[pdftypes.ClassificationNode],
+):
+  return node_should_add_to_group_impl(
+    processing=processing,
+    node=node,
+    group=group,
+    allow_space=False,
+  )
+
+def node_should_add_to_group_join_space(
+  processing: pdftypes.ClassificationNode,
+  node: pdftypes.ClassificationNode,
+  group: typing.Set[pdftypes.ClassificationNode],
+):
+  return node_should_add_to_group_impl(
+    processing=processing,
+    node=node,
+    group=group,
+    allow_space=True,
+  )
+
+def node_should_add_to_group_impl(
+  processing: pdftypes.ClassificationNode,
+  node: pdftypes.ClassificationNode,
+  group: typing.Set[pdftypes.ClassificationNode],
+  allow_space: bool,
 ):
   if node in group:
     return False
@@ -818,6 +843,8 @@ def node_should_add_to_group(
     if node.left_right != processing.left_right:
       return False
     if abs(node.fontsize - processing.fontsize) > FONT_SIZE_DIFF:
+      return False
+    if not allow_space and node.text == " ":
       return False
     idx0, idx1 = pdfelemtransforms.get_idx_for_vert(vert=not processing.left_right)
     perpendicular_overlap = pdfelemtransforms.get_overlap_in_direction(
@@ -895,11 +922,16 @@ def cluster_text_group(
 
 def cluster_text_by_connected_groups(
   node_manager: pdftypes.NodeManager,
+  source_layer_idx: int,
+  node_should_add_to_group_func: typing.Callable[
+    [pdftypes.ClassificationNode, pdftypes.ClassificationNode, typing.Set[pdftypes.ClassificationNode]],
+  bool],
 ):
   nodes_used: typing.Set[
     pdftypes.ClassificationNode,
   ] = set()
-  text_nodes = set([n for n in node_manager.nodes.values() if n.text is not None])
+  layer_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[source_layer_idx]]
+  text_nodes = set([n for n in layer_nodes if n.text is not None])
   remaining = text_nodes.difference(nodes_used)
   groups: typing.List[pdftypes.ClassificationNode] = []
   # remaining = [ node_manager.nodes[17275]] # H in HARDWARE
@@ -921,7 +953,7 @@ def cluster_text_by_connected_groups(
       node_manager=node_manager,
       start=start_node,
       source_layer_idx=0,
-      node_should_add_to_group_func=node_should_add_to_group,
+      node_should_add_to_group_func=node_should_add_to_group_func,
     )
     for child_id in parent.child_ids:
       node = node_manager.nodes[child_id]
@@ -1076,8 +1108,8 @@ def node_should_add_to_group_join_fractions(
       other=node.bbox,
       height_overlap=processing.left_right,
     )
-    start_perpendicular_size = processing.height() if processing.left_right else processing.width()
     if processing.labels[pdftypes.LabelType.FRACTION] > 0 or node.labels[pdftypes.LabelType.FRACTION] > 0:
+      start_perpendicular_size = processing.height() if processing.left_right else processing.width()
       if perpendicular_overlap / start_perpendicular_size > 0.25:
         # Enough overlap
         if processing.bbox[idx0] < node.bbox[idx0] and processing.bbox[idx1] > node.bbox[idx1]:
@@ -1129,9 +1161,19 @@ def conn_test():
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
   start_node = text_join_test[-2]
 
-  groups = cluster_text_by_connected_groups(
-    node_manager=node_manager,
-  )
+  split_space = False
+  if split_space:
+    groups = cluster_text_by_connected_groups(
+      node_manager=node_manager,
+      source_layer_idx=0,
+      node_should_add_to_group_func=node_should_add_to_group_split_space,
+    )
+  else:
+    groups = cluster_text_by_connected_groups(
+      node_manager=node_manager,
+      source_layer_idx=0,
+      node_should_add_to_group_func=node_should_add_to_group_join_space,
+    )
   node_manager.index_layer(layer_idx=1)
   print("Got groups", len(groups))
   fractions = cluster_fractions(
@@ -1145,7 +1187,31 @@ def conn_test():
     fractions=fractions,
     source_layer_idx=2,
   )
+
   print("Fraction groups:", len(fraction_text_groups))
+  if split_space:
+    # join space at step 1
+    # 804    0.045    0.000    1.137    0.001 test.py:874(cluster_text_group)
+    # keep space divided
+    # 2403    0.076    0.000    1.846    0.001 test.py:874(cluster_text_group)
+    # join space at last step
+    # 4565    0.368    0.000    9.501    0.002 test.py:874(cluster_text_group)
+    # 115782    0.145    0.000    4.804    0.000 pdftypes.py:329(intersection)
+    node_manager.index_layer(layer_idx=3)
+    joined_whitespace_groups = cluster_text_by_connected_groups(
+      node_manager=node_manager,
+      source_layer_idx=3,
+      node_should_add_to_group_func=node_should_add_to_group_join_space,
+    )
+  else:
+    # Vs: 1    0.000    0.000    1.748    1.748 test.py:1151(conn_test)
+    last_layer_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[3]]
+    text_nodes = [n for n in last_layer_nodes if n.text is not None]
+    for n in text_nodes:
+      if n.text is not None:
+        splits = n.text.split(" ")
+        print(len(splits))
+  return
 
   draw_layer = 0
   draw_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[draw_layer]]
@@ -1161,6 +1227,9 @@ def conn_test():
     #text = pdfelemtransforms.join_text_line(nodes=group)
   for fraction_text_group in fraction_text_groups:
     drawer.draw_bbox(bbox=fraction_text_group.bbox, color="green")
+  if split_space:
+    for group in joined_whitespace_groups:
+      drawer.draw_bbox(bbox=group.bbox, color="green")
   drawer.show("")
   return
   for n in group:
