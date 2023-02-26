@@ -473,7 +473,7 @@ class MSymbol():
     ] = collections.defaultdict(list)
 
 def make_symbols():
-  symbols = [
+  symbols = [ # type: ignore
     MSymbol(value="mahogony"),
     MSymbol(value="mahog"), # should be learned
     MSymbol(value='"'),

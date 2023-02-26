@@ -1,7 +1,6 @@
 
 from abc import ABCMeta, abstractmethod
 import collections
-import functools
 import json
 import os
 import re
@@ -11,7 +10,7 @@ import uuid
 import rtree
 
 from . import pdfindexer, pdfextracter, pdfelemtransforms
-from .ltjson import LTJson, BboxType, PdfElem, PdfSchedule, PdfScheduleCell, PdfScheduleRow,\
+from .ltjson import LTJson, PdfElem, PdfScheduleCell,\
    PdfSummaryJson, PdfRowPtr, ScheduleTypes
 
 def get_uuid() -> str:
@@ -42,23 +41,20 @@ def remove_duplicate_bbox(items: typing.List[PdfElem]):
     out.append(item)
   for item in items:
     results = bbox_indexer.intersection(item["bbox"])
-    if results is None:
+    results = list(results)
+    if len(results) == 0:
       insert_item(item)
     else:
-      results = list(results)
-      if len(results) == 0:
+      overlaps_a_result = False
+      for result in results:
+        overlap = pdfelemtransforms.bbox_intersection_area(a=out[result]["bbox"], b=item["bbox"])
+        width = item["bbox"][2] - item["bbox"][0]
+        height = item["bbox"][3] - item["bbox"][1]
+        if overlap > width * height * 0.9:
+          overlaps_a_result = True
+          break
+      if not overlaps_a_result:
         insert_item(item)
-      else:
-        overlaps_a_result = False
-        for result in results:
-          overlap = pdfelemtransforms.bbox_intersection_area(a=out[result]["bbox"], b=item["bbox"])
-          width = item["bbox"][2] - item["bbox"][0]
-          height = item["bbox"][3] - item["bbox"][1]
-          if overlap > width * height * 0.9:
-            overlaps_a_result = True
-            break
-        if not overlaps_a_result:
-          insert_item(item)
   return out
 
 MultiClassSearchRuleResults = typing.DefaultDict[

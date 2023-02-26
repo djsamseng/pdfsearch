@@ -70,9 +70,6 @@ class TextJoiner():
       # TODO: Figure out where to insert lines after full join instead of during to prevent double adds
       lines_idxes = self.layer_rtree.intersection(coordinates=query_coords, objects=False)
       lines_idxes = list(lines_idxes)
-      lines = [
-        self.layer_nodes[idx] for idx in lines_idxes if self.layer_nodes[idx].line is not None
-      ]
       left_right = node.left_right
       if not left_right:
         connecting.sort(key=lambda n: n.bbox[1])
@@ -611,6 +608,7 @@ def cluster_text(
   )
 
   print("Fraction groups:", len(fraction_text_groups))
+  joined_whitespace_groups = None # type: ignore
   if split_space:
     # join space at step 1
     # 804    0.045    0.000    1.137    0.001 test.py:874(cluster_text_group)
@@ -620,7 +618,7 @@ def cluster_text(
     # 4565    0.368    0.000    9.501    0.002 test.py:874(cluster_text_group)
     # 115782    0.145    0.000    4.804    0.000 pdftypes.py:329(intersection)
     node_manager.index_layer(layer_idx=3)
-    joined_whitespace_groups = cluster_text_by_connected_groups(
+    joined_whitespace_groups = cluster_text_by_connected_groups( # type: ignore
       node_manager=node_manager,
       source_layer_idx=3,
       node_should_add_to_group_func=node_should_add_to_group_join_space,
@@ -631,7 +629,7 @@ def cluster_text(
     text_nodes = [n for n in last_layer_nodes if n.text is not None]
     for n in text_nodes:
       if n.text is not None:
-        splits = n.text.split(" ")
-    joined_whitespace_groups = None
+        splits = n.text.split(" ") # type: ignore
+
 
   return groups, fractions, fraction_text_groups

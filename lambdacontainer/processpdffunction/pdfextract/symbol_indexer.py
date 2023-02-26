@@ -1,6 +1,5 @@
 
 import collections
-import re
 import typing
 
 import rtree
@@ -193,7 +192,22 @@ class ShapeManager:
         nodes_used.extend(used_in_layer)
       new_layers = list(self.node_manager.layers.keys())
 
-    groups, fractions, fraction_text_groups = textjoiner.cluster_text(node_manager=self.node_manager)
+    groups = textjoiner.cluster_text_by_connected_groups(
+      node_manager=self.node_manager,
+      source_layer_idx=0,
+      node_should_add_to_group_func=textjoiner.node_should_add_to_group_join_space,
+    )
+    self.node_manager.index_layer(layer_idx=1)
+    fractions = textjoiner.cluster_fractions(
+      node_manager=self.node_manager,
+      groups=groups,
+    )
+    self.node_manager.index_layer(layer_idx=2)
+    textjoiner.cluster_fractions_with_text(
+      node_manager=self.node_manager,
+      fractions=fractions,
+      source_layer_idx=2,
+    )
 
     return nodes_used
 

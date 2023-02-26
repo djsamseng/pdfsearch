@@ -2,32 +2,24 @@
 
 import collections
 import cProfile
-import enum
 import dataclasses
 import heapq
-import functools
 import os
 import math
 import random
 import pickle
-import time
 import typing
 import argparse
 import json
-import gzip
-import re
 
 import pdfminer.high_level, pdfminer.utils, pdfminer.layout
 import rtree
 
-from pdfextract import debug_utils, path_utils, pdftypes
+from pdfextract import path_utils, pdftypes
 from pdfextract import pdfelemtransforms
-from pdfextract import pdfextracter
 from pdfextract import pdfindexer, symbol_indexer, leafgrid, textjoiner
 from pdfextract import pdftkdrawer, classifier_drawer
-from pdfextract import votesearch
-from pdfextract import dataprovider, pdfprocessor
-from pdfextract.ltjson import LTJson, LTJsonEncoder, ScheduleTypes
+from pdfextract.ltjson import LTJson
 from pdfextract.pdftypes import Bbox, ClassificationNode, ClassificationType, LabelType
 
 def get_pdf(
@@ -327,7 +319,7 @@ def vote_test():
   # I look from left to right, top down and start joining things together
   # Classify groups/areas
   # A window will have a window symbol but also be in the context of a window
-  leaf_indexer = PdfLeafIndexer(elems=celems)
+  leaf_indexer = PdfLeafIndexer(elems=celems[0]) # type: ignore
 
 
   return
@@ -343,7 +335,7 @@ def leafgrid_test():
   _, layers, width, height = get_pdf(which=0, page_number=9)
   celems = layers[0]
   step_size = 5
-  leaf_grid = leafgrid.LeafGrid(celems=celems, step_size=step_size, width=width, height=height)
+  leaf_grid = leafgrid.LeafGrid(celems=celems, step_size=step_size, width=width, height=height) # type: ignore
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=celems, draw_buttons=False)
   drawer.show("ClassifierDrawer")
@@ -514,7 +506,7 @@ def what_is_this_test():
   x_right = x1
   for next_grid_node in leaf_grid.next_elem_for_coords(
     x0=x0, y0=y0, x1=x1, y1=y1,
-    direction=leafgrid.Direction.RIGHT,
+    direction=pdftypes.Direction.RIGHT,
     restrict_idxes=restrict_idxes
   ):
     if next_grid_node.node.bbox[0] > x_right + 10:
@@ -568,7 +560,7 @@ def shapememory_test():
   )
 
   print("Layers before:", [len(l) for l in layers])
-  nodes_used = shape_manager.activate_layers()
+  nodes_used = shape_manager.activate_layers() # type: ignore
   print("Layers after:", [len(l) for l in layers])
   nodes_used_b = shape_manager.activate_layers()
   assert len(nodes_used_b) == 0, "Second activation got nodes: {0}".format(nodes_used_b)
@@ -658,7 +650,7 @@ def sqft_test():
   drawer.show("C")
   return
 
-  manager = symbol_indexer.ShapeManager(leaf_layer=celems)
+  manager = symbol_indexer.ShapeManager(node_manager=node_manager)
   manager.activate_layers()
 
 
@@ -808,7 +800,7 @@ def a_star_join(
   for label, score in start.labels.items():
     if score > 0:
       heapq.heappush(q, AStarNode(score=score, label=label, node=start))
-  stranded: typing.List[AStarNode] = []
+  stranded: typing.List[AStarNode] = [] # type: ignore
 
   while len(q) > 0:
     item = heapq.heappop(q)
@@ -873,9 +865,9 @@ def align_vertical():
 
 def fraction_test():
   _, layers, width, height = get_pdf(which=1, page_number=1)
-  node_manager = pdftypes.NodeManager(layers=[layers[0]])
-  measurement_fraction_vert_idxes = [6681, 6682, 6683, 6684, 6685, 6686, 6687, 6688, 6689, 6690, 6691]
-  measurement_fraction_horiz_idxes = [6618, 6619, 6620, 6621, 6622, 6623, 6624, 6625, 6626, 6627]
+  node_manager = pdftypes.NodeManager(layers=[layers[0]]) # type: ignore
+  measurement_fraction_vert_idxes = [6681, 6682, 6683, 6684, 6685, 6686, 6687, 6688, 6689, 6690, 6691] # type: ignore
+  measurement_fraction_horiz_idxes = [6618, 6619, 6620, 6621, 6622, 6623, 6624, 6625, 6626, 6627] # type: ignore
   fraction_schedule_idxes = [17107, 17108, 17125, 17126, 17227, 17228, 17229, 17230, 17231, 17232]
   start_node = layers[0][fraction_schedule_idxes[-1]] # -1, -2
   x0, y0, x1, y1 = start_node.bbox
@@ -916,8 +908,8 @@ def fraction_test():
   drawer.show("")
 
 def see_test():
-  _, layers, width, height = get_pdf(which=1, page_number=1)
-  node_manager = pdftypes.NodeManager(layers=[layers[0]])
+  _, layers, width, height = get_pdf(which=1, page_number=1) # type: ignore
+  node_manager = pdftypes.NodeManager(layers=[layers[0]])  # type: ignore
   # Grab a spot, see what actions are triggered by the activations
   # Desire = "find sqft of bedroom"
   #   - Need = bedroom boundaries
