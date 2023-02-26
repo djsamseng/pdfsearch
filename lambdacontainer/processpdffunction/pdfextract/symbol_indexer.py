@@ -5,9 +5,8 @@ import typing
 
 import rtree
 
-from . import pdftypes, path_utils, leafgrid, pdfelemtransforms
+from . import pdftypes, path_utils, textjoiner
 
-import pdfminer.layout
 
 def line_symbol_to_coords(sym: pdftypes.LineSymbol):
   x = sym.slope
@@ -69,105 +68,6 @@ class SingletonIndexer(typing.Generic[S]):
     idxes = self.rtree.intersection(coordinates=coords, objects=False)
     results = [ self.stored[idx] for idx in idxes] #pylint: disable=not-an-iterable
     return results
-
-
-
-
-class TextJoiner():
-  def __init__(
-    self,
-    layer_nodes: typing.List[pdftypes.ClassificationNode],
-    layer_rtree: rtree.index.Index,
-  ) -> None:
-    self.layer_nodes = layer_nodes
-    self.layer_rtree = layer_rtree
-    self.join_rtree = rtree.index.Index()
-
-    self.nodes: typing.List[pdftypes.ClassificationNode] = []
-
-  def join(
-    self,
-  ):
-    def get_query_for_node(node: pdftypes.ClassificationNode):
-      x0, y0, x1, y1 = node.bbox
-      divisor = len(node.text) if node.text is not None else 1
-      divisor = max(divisor, 1)
-      if isinstance(node.elem, pdfminer.layout.LTChar) and not node.elem.upright:
-        y0 -= node.elem.height / divisor
-        y1 += node.elem.height / divisor
-      else:
-        x0 -= node.width() / divisor
-        x1 += node.width() / divisor
-      query = (
-        x0,
-        y0,
-        x1,
-        y1,
-      )
-      return query
-    pending_nodes: typing.List[pdftypes.ClassificationNode] = []
-    node_ids_stranded: typing.Set[int] = set()
-    for node in self.layer_nodes:
-      if node.text is not None:
-        query = get_query_for_node(node=node)
-        joined_node = self.__add(query_coords=query, node=node, node_ids_stranded=node_ids_stranded)
-        if joined_node is not None:
-          pending_nodes.append(joined_node)
-
-    while len(pending_nodes) > 0:
-      node = pending_nodes.pop()
-      query = get_query_for_node(node=node)
-      joined_node = self.__add(query_coords=query, node=node, node_ids_stranded=node_ids_stranded)
-      if joined_node is not None:
-        pending_nodes.append(joined_node)
-    return [self.nodes[idx] for idx in node_ids_stranded]
-
-  def __add(
-    self,
-    query_coords: path_utils.Bbox,
-    node: pdftypes.ClassificationNode,
-    node_ids_stranded: typing.Set[int],
-  ) -> typing.Union[None, pdftypes.ClassificationNode]:
-    idxes = self.join_rtree.intersection(coordinates=query_coords, objects=False)
-    idxes = list(idxes)
-    if len(idxes) > 0:
-      connecting = [ self.nodes[idx] for idx in idxes ]
-      connecting.append(node)
-      # TODO: Figure out where to insert lines after full join instead of during to prevent double adds
-      lines_idxes = self.layer_rtree.intersection(coordinates=query_coords, objects=False)
-      lines_idxes = list(lines_idxes)
-      lines = [
-        self.layer_nodes[idx] for idx in lines_idxes if self.layer_nodes[idx].line is not None
-      ]
-      left_right = node.left_right
-      if not left_right:
-        connecting.sort(key=lambda n: n.bbox[1])
-      else:
-        connecting.sort(key=lambda n: n.bbox[0])
-
-      joined_text = pdfelemtransforms.join_text_line(nodes=connecting)
-      joined_bbox = pdfelemtransforms.bounding_bbox(elems=[c for c in connecting if c.text is not None])
-      delete_idxes = idxes
-      for idx in delete_idxes:
-        self.join_rtree.delete(id=idx, coordinates=self.nodes[idx].bbox)
-        if idx in node_ids_stranded:
-          node_ids_stranded.remove(idx)
-      # TODO: Allow overlapping words
-      joined_node = pdftypes.ClassificationNode(
-        elem=None,
-        bbox=joined_bbox,
-        line=None,
-        text=joined_text,
-        child_ids=delete_idxes,
-      )
-      joined_node.left_right = left_right
-      return joined_node
-    else:
-      idx = len(self.nodes)
-      self.join_rtree.add(idx, coordinates=node.bbox, obj=None)
-      self.nodes.append(node)
-      node_ids_stranded.add(idx)
-      return None
 
 T = typing.TypeVar("T", pdftypes.LineSymbol, pdftypes.TextSymbol)
 ReturnType = typing.TypeVar("ReturnType")
@@ -293,6 +193,8 @@ class ShapeManager:
         nodes_used.extend(used_in_layer)
       new_layers = list(self.node_manager.layers.keys())
 
+    groups, fractions, fraction_text_groups = textjoiner.cluster_text(node_manager=self.node_manager)
+
     return nodes_used
 
   def __activate_layer(self, layer_id: int) -> typing.List[pdftypes.ClassificationNode]:
@@ -329,21 +231,7 @@ class ShapeManager:
       activation_lookup=activation_lookup,
       next_layer_id=layer_id + 1,
     )
-    # Align, walk, box
-    # 1. Find text bbox and snap to the beginning of the next
-    #    - divide into smaller regions, we may transfer a region to a different group
-    #    - use the leafgrid to find large areas of whitespace
-    # 2. Walk in the direction of the text
-    #    - join the smaller regions
-    # 3. Narrow the final bbox
-    # 4. Repeat for all areas
-    text_joiner = TextJoiner(
-      layer_nodes=[self.node_manager.nodes[node_id] for node_id in self.node_manager.layers[0]],
-      layer_rtree=self.node_manager.indexes[0],
-    )
 
-    joined_text_nodes = text_joiner.join()
-    print([n.text for n in joined_text_nodes])
     return nodes_used
 
   def __activate_line_leaf(
@@ -413,6 +301,7 @@ class ShapeManager:
           new_parent = self.node_manager.add_node(
             elem=None,
             bbox=shape_bbox,
+            left_right=True,
             line=None,
             text=None,
             child_ids=child_ids,
