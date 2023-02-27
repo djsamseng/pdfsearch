@@ -183,15 +183,11 @@ class ShapeManager:
 
   def activate_layers(self):
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
-    old_layers = []
-    new_layers = list(self.node_manager.layers.keys())
-    while len(old_layers) != len(new_layers):
-      old_layers = list(self.node_manager.layers.keys())
-      for layer_id in old_layers:
-        used_in_layer = self.__activate_layer(layer_id=layer_id)
-        nodes_used.extend(used_in_layer)
-      new_layers = list(self.node_manager.layers.keys())
-
+    old_layer_ids = list(self.node_manager.layers.keys())
+    for layer_id in old_layer_ids:
+      used_in_layer = self.__activate_layer(layer_id=layer_id)
+      nodes_used.extend(used_in_layer)
+    return nodes_used
     groups = textjoiner.cluster_text_by_connected_groups(
       node_manager=self.node_manager,
       source_layer_idx=0,
@@ -274,7 +270,10 @@ class ShapeManager:
           x0 + self.shape_start_radius,
           y0 + self.shape_start_radius,
         )
-        activation_lookup.add(coords=coords, to_return=(shape_id, line_id, activation, node))
+        # all             : 94077    0.202    0.000    2.944    0.000 symbol_indexer.py:47(add)
+        # activation > 0.8: 30139    0.060    0.000    0.882    0.000 symbol_indexer.py:47(add)
+        if activation > 0.8:
+          activation_lookup.add(coords=coords, to_return=(shape_id, line_id, activation, node))
 
   def __join_layer(
     self,

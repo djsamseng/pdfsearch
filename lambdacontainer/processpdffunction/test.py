@@ -140,31 +140,6 @@ def get_window_schedule_pdf():
   return layers[0], celems, width, height
 
 
-class PdfLeafIndexer:
-  def __init__(
-    self,
-    elems: typing.List[ClassificationNode]
-  ) -> None:
-    self.elems = elems
-    def insertion_generator(
-      elems: typing.List[ClassificationNode],
-    ):
-      for elem_idx, elem in enumerate(elems):
-        if elem.text is not None:
-          yield (elem_idx, elem.bbox, None)
-        elif elem.line is not None:
-          yield (elem_idx, elem.bbox, None)
-    self.find_by_position_rtree = rtree.index.Index(insertion_generator(elems=elems))
-
-  def find_intersection(
-    self,
-    bbox: Bbox,
-  ) -> typing.List[ClassificationNode]:
-    idxes = self.find_by_position_rtree.intersection(bbox, objects=False)
-    results = [ self.elems[idx] for idx in idxes ] #pylint: disable=not-an-iterable
-    return results
-
-
 def get_classification_nodes(
   elems: typing.Iterable[pdfminer.layout.LTComponent]
 ) -> typing.List[
@@ -235,111 +210,6 @@ def get_classification_nodes(
       print("Unhandled elem:", child)
   return layers
 
-def grid_test():
-  import numpy as np
-  _, layers, width, height = get_pdf(which=0, page_number=9)
-  celems = layers[0]
-  leaf_indexer = PdfLeafIndexer(elems=celems)
-  GridType = typing.List[typing.List[typing.List[ClassificationNode]]]
-  grid_indexer: GridType = [[ [] for _ in range(width)] for _ in range(height)] # y, x
-  np_grid = np.zeros(shape=(height, width), dtype=object)
-  for y in range(height):
-    for x in range(width):
-      np_grid[y, x] = []
-  for elem in celems:
-    x0, y0, _, _ = elem.bbox
-    grid_indexer[round(y0)][round(x0)].append(elem)
-    np_grid[round(y0), round(x0)].append(elem)
-
-  def query_grid(grid_indexer: GridType, x0: int, y0: int, x1: int, y1: int):
-    results = [wgrid[x0: x1] for wgrid in grid_indexer[y0:y1]]
-    return results
-  def query_np(np_grid: typing.Any, x0: int, y0: int, x1: int, y1: int):
-    results = np_grid[y0:y1, x0:x1]
-    return results
-  def concat_grid_results(results: GridType):
-    out: typing.List[ClassificationNode] = []
-    for row_ary in results:
-      for cell_results in row_ary:
-        out.extend(cell_results)
-    return out
-  def query_leaf(leaf_indexer: PdfLeafIndexer, x0: int, y0: int, x1: int, y1: int):
-    results = leaf_indexer.find_intersection(bbox=(x0, y0, x1, y1))
-    return results
-
-  for _ in range(1000):
-    x0 = 700 + random.randint(0, 10)
-    x1 = 790 + random.randint(0, 10)
-    y0 = 450 + random.randint(0, 10)
-    y1 = 512 + random.randint(0, 10)
-    grid_results = query_grid(grid_indexer, x0, y0, x1, y1)
-    leaf_results = query_leaf(leaf_indexer, x0, y0, x1, y1)
-    np_results = query_np(np_grid, x0, y0, x1, y1)
-    grid_concat_results = concat_grid_results(grid_results)
-    np_concat_results = concat_grid_results(np_results)
-    print(len(grid_concat_results), len(leaf_results), len(np_concat_results))
-  # 1000    0.001    0.000    0.018    0.000 test.py:179(query_grid)
-  # 1000    0.001    0.000    0.001    0.000 test.py:182(query_np)
-  # 2000    0.688    0.000    1.006    0.001 test.py:185(concat_grid_results)
-  # 1000    0.001    0.000    0.057    0.000 test.py:191(query_leaf)
-
-
-
-def vote_test():
-  #      1    0.038    0.038   12.150   12.150 test.py:46(vote_test)
-  #      2    0.000    0.000    4.984    2.492 high_level.py:180(extract_pages)
-  #  14464    0.009    0.000    5.081    0.000 pdfindexer.py:103(find_intersection)
-  #  14464    0.014    0.000    1.022    0.000 index.py:750(intersection)
-  # 708517    0.419    0.000    3.840    0.000 index.py:911(_get_objects)
-  elems, celems, width, height = get_pdf(which=0, page_number=9)
-
-  curve_sizes = [get_curve_size(elem) for elem in elems]
-  largest = max(elems, key=lambda x: x.width*x.height)
-  max_curve = max(curve_sizes, key=lambda x:x[0])
-
-  to_index = [max_curve[1], largest]
-  # TODO: sort LineIndexer so that we can walk from a given x,y
-  indexer = pdfindexer.PdfIndexer(wrappers=elems, page_height=height, page_width=width)
-  for elem in elems:
-    if elem.text is not None:
-      radius = max(elem.width, elem.height) * 2
-      x0, y0, x1, y1 = elem.bbox
-      search_box = (
-        x0 - radius,
-        y0 - radius,
-        x1 + radius,
-        y1 + radius,
-      )
-      nearby = indexer.find_intersection(search_box)
-      if len(nearby) == 0:
-        print("Should not be true")
-      elif len(nearby) == 1:
-        print("Only found self")
-  # I have a set of things to search for
-  # I look from left to right, top down and start joining things together
-  # Classify groups/areas
-  # A window will have a window symbol but also be in the context of a window
-  leaf_indexer = PdfLeafIndexer(elems=celems[0]) # type: ignore
-
-
-  return
-  # Curves are decomposed into lots of small lines
-  draw_elems: typing.List[LTJson] = to_index
-
-  drawer = pdftkdrawer.TkDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=draw_elems, align_top_left=True, draw_buttons=False)
-  drawer.show("Vote test")
-
-
-def leafgrid_test():
-  _, layers, width, height = get_pdf(which=0, page_number=9)
-  celems = layers[0]
-  step_size = 5
-  leaf_grid = leafgrid.LeafGrid(celems=celems, step_size=step_size, width=width, height=height) # type: ignore
-  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=celems, draw_buttons=False)
-  drawer.show("ClassifierDrawer")
-
 def get_rounded_bbox(bbox: Bbox):
   return (
     math.floor(bbox[0]),
@@ -347,134 +217,6 @@ def get_rounded_bbox(bbox: Bbox):
     math.ceil(bbox[2]),
     math.ceil(bbox[3]),
   )
-
-@dataclasses.dataclass(order=True)
-class QTextNode():
-  score: float = dataclasses.field(compare=True)
-  def __init__(
-    self,
-    text:str,
-    bbox:Bbox,
-    score: float=0,
-  ) -> None:
-    self.text = text
-    self.bbox = bbox
-    self.score = score
-
-  def __repr__(self) -> str:
-    return self.__str__()
-
-  def __str__(self) -> str:
-    return json.dumps(self.as_dict())
-
-  def as_dict(self):
-    out: typing.Dict[str, typing.Any] = dict()
-    for key in self.__dict__.keys():
-      if not key.startswith("_{0}__".format(self.__class__.__name__)):
-        out[key] = self.__dict__[key]
-    return out
-
-def get_distance_between(a: QTextNode, b: QTextNode, vert: bool=False):
-  if vert:
-    idx0 = 1
-    idx1 = 3
-  else:
-    idx0 = 0
-    idx1 = 2
-  if a.bbox[idx0] >= b.bbox[idx1]:
-    return a.bbox[idx0] - b.bbox[idx1]
-  elif b.bbox[idx0] >= a.bbox[idx1]:
-    return b.bbox[idx0] - a.bbox[idx1]
-  else:
-    return 0
-
-def get_length(a: QTextNode, vert: bool=False):
-  if vert:
-    idx0 = 1
-    idx1 = 3
-  else:
-    idx0 = 0
-    idx1 = 2
-  return a.bbox[idx1] - a.bbox[idx0]
-
-def get_overlaps(a: QTextNode, b:QTextNode, vert: bool=False):
-  if vert:
-    idx0 = 1
-    idx1 = 3
-  else:
-    idx0 = 0
-    idx1 = 2
-  if a.bbox[idx0] + 0.1 < b.bbox[idx1] and a.bbox[idx1] - 0.1 > b.bbox[idx0]:
-    return True
-  return False
-
-def make_joined_q_text_nodes(a: QTextNode, b: QTextNode, base_score: float=1):
-  horiz_distance = get_distance_between(a, b, vert=False)
-  vert_distance = get_distance_between(a, b, vert=True)
-  a_width = get_length(a, vert=False)
-  b_width = get_length(b, vert=False)
-
-  if vert_distance > 0:
-    score = 0.001
-  else:
-    score = 1 / (horiz_distance + 1)
-  if a.bbox[0] < b.bbox[0]:
-    left_node = a
-    right_node = b
-  else:
-    left_node = b
-    right_node = a
-  if horiz_distance > max(a_width, b_width) * 0.5:
-    space_str = " "
-  else:
-    space_str = ""
-  joined_text = left_node.text + space_str + right_node.text
-  joined_bbox = (
-    min(a.bbox[0], b.bbox[0]),
-    min(a.bbox[1], b.bbox[1]),
-    max(a.bbox[2], b.bbox[2]),
-    max(a.bbox[3], b.bbox[3]),
-  )
-  score *= base_score
-  score = 1 - score
-  if get_overlaps(a, b, vert=False):
-    score = 1 # Last
-  return QTextNode(text=joined_text, bbox=joined_bbox, score=score)
-
-def joinword_test():
-  _, layers, width, height = get_pdf(which=0, page_number=2)
-  celems = layers[0]
-  char_elems = [
-    celems[idx] for idx in [
-      1543, 1544, 1545, 1546, 1547, 1548, 1549, 1550, 1551, 1552, 1553, 1554, 1555
-    ]
-  ]
-
-  char_elems = [QTextNode(text=c.text or "", bbox=c.bbox) for c in char_elems]
-  join_q: typing.List[QTextNode] = []
-  for elem in char_elems:
-    heapq.heappush(join_q, elem)
-  while len(join_q) >= 2:
-    new_nodes: typing.List[QTextNode] = []
-    for idxa, node_a in enumerate(join_q):
-      for idxb, node_b in enumerate(join_q):
-
-        if idxa != idxb:
-          new_node = make_joined_q_text_nodes(node_a, node_b, base_score=node_a.score * node_b.score)
-          new_nodes.append(new_node)
-          if node_a.text == "DO" and node_b.text == "OR":
-            print("HERE!", node_a, node_b)
-            print(new_node)
-            return
-    for node in new_nodes:
-      heapq.heappush(join_q, node)
-
-  print("Num left:", len(join_q))
-  print(join_q)
-
-  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=celems, draw_buttons=False)
-  drawer.show("ClassifierDrawer")
 
 def int_bbox(bbox: pdftypes.Bbox):
   return (
@@ -545,30 +287,111 @@ def preload_activation_map(celems: typing.List[ClassificationNode]):
 def shapememory_test():
   _, layers, width, height = get_pdf(which=1, page_number=1)
   celems = layers[0]
-  window_label_with_pointer_line_idxes = [
-    6448, 6449, 6450, 6451, 6452, 6453, 6454, 6455, 6456, 6457
-  ]
-  window_label_with_pointer_line = [
-    celems[idx] for idx in window_label_with_pointer_line_idxes
-  ]
-  window_labels = [*window_label_with_pointer_line[:6], *window_label_with_pointer_line[7:]]
+  # TODO: Look at the schedule, find all the 101,102 etc. notice they all have a circle around them
+  window_label_with_pointer_line_ids = [6602, 6603, 6604, 6605, 6606, 6607, 6608]
+  door_label_line_ids = [7925, 7926, 7927, 7928, 7929, 7930, 7931, 7932, 7933, 7934,
+    7935, 7936, 7937, 7938, 7939, 7940, 7941, 7942, 7943, 7944, 7945, 7946, 7947, 7948,
+    7949, 7950, 7951, 7952, 7953, 7954, 7955, 7956, 7957, 7958, 7959, 7960, 7961, 7962, 7963, 7964]
+
   node_manager = pdftypes.NodeManager(layers=[layers[0]])
+  window_label_with_pointer_line = [
+    node_manager.nodes[node_id] for node_id in window_label_with_pointer_line_ids
+  ]
+  door_labels = [
+    node_manager.nodes[node_id] for node_id in door_label_line_ids
+  ]
+  window_labels = window_label_with_pointer_line[:-1]
   shape_manager = symbol_indexer.ShapeManager(node_manager=node_manager)
   shape_manager.add_shape(
     shape_id="window_label",
     lines=[l.line for l in window_labels if l.line is not None]
   )
+  shape_manager.add_shape(
+    shape_id="door_label",
+    lines=[l.line for l in door_labels if l.line is not None]
+  )
+  run_shapememory(
+    node_manager=node_manager,
+    shape_manager=shape_manager,
+    width=width,
+    height=height,
+  )
 
-  print("Layers before:", [len(l) for l in layers])
-  nodes_used = shape_manager.activate_layers() # type: ignore
-  print("Layers after:", [len(l) for l in layers])
-  nodes_used_b = shape_manager.activate_layers()
-  assert len(nodes_used_b) == 0, "Second activation got nodes: {0}".format(nodes_used_b)
-  print("Layers after:", [len(l) for l in layers])
+def lighting_test():
+  _, layers, width, height = get_pdf(which=1, page_number=2)
+  node_manager = pdftypes.NodeManager(layers=[layers[0]])
+  shape_manager = symbol_indexer.ShapeManager(node_manager=node_manager)
+  lighting_a_ids = [25891, 25892, 25893, 25894, 25895, 25896, 25897, 25898, 25899, 25900, 25901,
+    25902, 25903, 25904, 25905, 25906, 25907, 25908, 25909, 25910, 25911, 25912, 25913, 25914,
+    25915, 25916, 25917, 25918, 25919, 25920, 25921, 25922, 25923, 25924, 25925, 25926, 25927,
+    25928, 25929, 25930, 25931, 25932, 25933, 25934, 25935, 25936, 25937, 25938, 25939, 25940,
+    25941, 25942, 25943, 25944, 25945, 25946, 25947, 25948, 25949, 25950, 25951, 25952, 25953,
+    25954, 25955, 25956, 25957, 25958, 25959, 25960, 25961, 25962, 25963, 25964, 25965, 25966,
+    25967, 25968, 25969, 25970, 25971, 25972]
+  lighting_a = [node_manager.nodes[node_id] for node_id in lighting_a_ids]
+  lighting_c_ids = [25334, 25335, 25336, 25337, 25338, 25339, 25340, 25341, 25342, 25343, 25344,
+    25345, 25346, 25347, 25348, 25349, 25350, 25351, 25352, 25353, 25354, 25355, 25356, 25357,
+    25358, 25359, 25360, 25361, 25362, 25363, 25364, 25365, 25366, 25367, 25368, 25369, 25370,
+    25371, 25372, 25373, 25374, 25375, 25376, 25377, 25378, 25379, 25380, 25381, 25382, 25383,
+    25384, 25385, 25386, 25387, 25388, 25389, 25390, 25391, 25392, 25393, 25394, 25395, 25396,
+    25397, 25398, 25399, 25400, 25401, 25402, 25403, 25404, 25405, 25406, 25407, 25408, 25409,
+    25410, 25411, 25412, 25413]
+  lighting_c = [node_manager.nodes[node_id] for node_id in lighting_c_ids]
+  lighting_e_ids = [25593, 25594, 25595, 25596, 25597, 25598]
+  lighting_e = [node_manager.nodes[node_id] for node_id in lighting_e_ids]
+  shape_manager.add_shape(
+    shape_id="lighting_a",
+    lines=[l.line for l in lighting_a if l.line is not None]
+  )
+  shape_manager.add_shape(
+    shape_id="lighting_c",
+    lines=[l.line for l in lighting_c if l.line is not None]
+  )
+  shape_manager.add_shape(
+    shape_id="lighting_e",
+    lines=[l.line for l in lighting_e if l.line is not None]
+  )
+
+  run_shapememory(
+    node_manager=node_manager,
+    shape_manager=shape_manager,
+    width=width,
+    height=height,
+  )
+
+def color_for_idx(idx: int):
+  if idx == 0:
+    return "blue"
+  elif idx == 1:
+    return "red"
+  elif idx == 2:
+    return "green"
+  else:
+    return "purple"
+
+def run_shapememory(
+  node_manager: pdftypes.NodeManager,
+  shape_manager: symbol_indexer.ShapeManager,
+  width: int,
+  height: int,
+):
+  print("Layers before:", [len(l) for l in node_manager.layers.values()])
+  nodes_used = shape_manager.activate_layers()
+  print("Layers after:", [len(l) for l in node_manager.layers.values()])
+  #nodes_used_b = shape_manager.activate_layers()
+  #assert len(nodes_used_b) == 0, "Second activation got nodes: {0}".format(nodes_used_b)
+  # print("Layers after:", [len(l) for l in layers])
   # TODO: use children_idxes of shape_manager.results to draw recursively
 
+  results = shape_manager.results
+  draw_layer = 0
+  draw_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[draw_layer]]
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=celems)
+  drawer.draw_elems(elems=draw_nodes, align_top_left=False)
+  for idx, (shape_id, shape_elems) in enumerate(results.items()):
+    color = color_for_idx(idx=idx)
+    for found in shape_elems:
+      drawer.draw_bbox(bbox=found.bbox, color=color)
   drawer.show("C")
   # Draw elems that activated a symbol enough
 
@@ -866,8 +689,8 @@ def align_vertical():
 def fraction_test():
   _, layers, width, height = get_pdf(which=1, page_number=1)
   node_manager = pdftypes.NodeManager(layers=[layers[0]]) # type: ignore
-  measurement_fraction_vert_idxes = [6681, 6682, 6683, 6684, 6685, 6686, 6687, 6688, 6689, 6690, 6691] # type: ignore
-  measurement_fraction_horiz_idxes = [6618, 6619, 6620, 6621, 6622, 6623, 6624, 6625, 6626, 6627] # type: ignore
+  measurement_fraction_vert_idxes = [6681, 6682, 6683, 6684, 6685, 6686, 6687, 6688, 6689, 6690, 6691]
+  measurement_fraction_horiz_idxes = [6618, 6619, 6620, 6621, 6622, 6623, 6624, 6625, 6626, 6627]
   fraction_schedule_idxes = [17107, 17108, 17125, 17126, 17227, 17228, 17229, 17230, 17231, 17232]
   start_node = layers[0][fraction_schedule_idxes[-1]] # -1, -2
   x0, y0, x1, y1 = start_node.bbox
@@ -935,12 +758,9 @@ def see_test():
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("--profile", dest="profile", default=False, action="store_true")
-  parser.add_argument("--vote", dest="vote", default=False, action="store_true")
-  parser.add_argument("--grid", dest="grid", default=False, action="store_true")
-  parser.add_argument("--leafgrid", dest="leafgrid", default=False, action="store_true")
-  parser.add_argument("--joinword", dest="joinword", default=False, action="store_true")
   parser.add_argument("--what", dest="what", default=False, action="store_true") # TODO: continue to form words
   parser.add_argument("--shapememory", dest="shapememory", default=False, action="store_true")
+  parser.add_argument("--lighting", dest="lighting", default=False, action="store_true")
   parser.add_argument("--sqft", dest="sqft", default=False, action="store_true")
   parser.add_argument("--conn", dest="conn", default=False, action="store_true")
   parser.add_argument("--fraction", dest="fraction", default=False, action="store_true")
@@ -950,18 +770,12 @@ def parse_args():
 def main():
   args = parse_args()
   func = None
-  if args.vote:
-    func = vote_test
-  elif args.grid:
-    func = grid_test
-  elif args.leafgrid:
-    func = leafgrid_test
-  elif args.joinword:
-    func = joinword_test
-  elif args.what:
+  if args.what:
     func = what_is_this_test
   elif args.shapememory:
     func = shapememory_test
+  elif args.lighting:
+    func = lighting_test
   elif args.sqft:
     func = sqft_test
   elif args.conn:
