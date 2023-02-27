@@ -518,12 +518,6 @@ class ClassifierDrawer:
         if len(text) > 0 and text[-1] != " ":
           text += " "
         text += "slope:{0:.3f} len:{1}".format(elem.slope, elem.length)
-      def on_press(ids: typing.List[int]):
-        for id in ids:
-          elem = self.id_to_elem[id]
-          self.selected_elems[elem] = not self.selected_elems[elem]
-        self.app.canvas.set_item_visibility(ids)
-
       font_size = ""
       if isinstance(elem.elem, pdfminer.layout.LTCurve):
         original_path = elem.elem.original_path
@@ -533,8 +527,14 @@ class ClassifierDrawer:
         font_size = "fontsize:{0:.2f}".format(elem.fontsize)
       self.app.controlPanel.add_button(
         text="{0} {1} {2} {3}".format(text, font_size, elem.bbox, original_path),
-        callback=lambda ids=ids: on_press(ids))
+        callback=lambda ids=ids: self.on_press(ids))
     self.app.controlPanel.finish_draw()
+
+  def on_press(self, ids: typing.List[int]):
+    for id in ids:
+      elem = self.id_to_elem[id]
+      self.selected_elems[elem] = not self.selected_elems[elem]
+    self.app.canvas.set_item_visibility(ids)
 
   def draw_path(
     self,

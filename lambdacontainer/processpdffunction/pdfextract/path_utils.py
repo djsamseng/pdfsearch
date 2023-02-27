@@ -34,7 +34,7 @@ def get_bezier_point(t: float, pts: BezierPoints):
 def bezier_to_lines(pts: BezierPoints):
   lines: typing.List[LinePointsType] = []
   x_prev, y_prev = get_bezier_point(t=0, pts=pts)
-  for t_idx in range(1, 10):
+  for t_idx in range(1, 11):
     t = t_idx / 10
     x, y = get_bezier_point(t=t, pts=pts)
     swap_direction = x < x_prev
@@ -43,7 +43,7 @@ def bezier_to_lines(pts: BezierPoints):
     else:
       lines.append((x_prev, y_prev, x, y))
     x_prev, y_prev = x, y
-  return lines
+  return lines, x_prev, y_prev
 
 def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
   lines: typing.List[LinePointsType] = []
@@ -75,11 +75,15 @@ def path_to_lines(path: typing.List[pdfminer.utils.PathSegment]):
         pt
       )
       (x2, y2), (x3, y3), (x4, y4) = pt[1:]
-      bezier_lines = bezier_to_lines(pts=((x, y), (x2, y2), (x3, y3), (x4, y4)))
+      bezier_lines, x_end, y_end = bezier_to_lines(pts=((x, y), (x2, y2), (x3, y3), (x4, y4)))
       lines.extend(bezier_lines)
-      x, y = bezier_lines[-1][2:4]
+      x, y = x_end, y_end
     elif pt_type == "h":
-      lines.append((x, y, x_start, y_start))
+      swap_direction = x_start < x
+      if swap_direction:
+        lines.append((x_start, y_start, x, y))
+      else:
+        lines.append((x, y, x_start, y_start))
     else:
       print("Unhandled path point:", pt)
   return lines

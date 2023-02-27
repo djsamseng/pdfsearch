@@ -923,6 +923,14 @@ def see_test():
   # First a quick scan at small dx/dy to build up an initial hypothesis
   # Merge areas
   # Then go back down and refine
+  # Edit text joiner to look at more than just the processing node
+  # and take action depending on the situation on where to look
+
+  draw_layer = 0
+  draw_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[draw_layer]]
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=draw_nodes, align_top_left=False)
+  drawer.show("")
 
 def parse_args():
   parser = argparse.ArgumentParser()
