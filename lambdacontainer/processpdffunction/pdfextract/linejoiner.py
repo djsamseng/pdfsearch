@@ -3,7 +3,7 @@ import collections
 import math
 import typing
 
-from . import path_utils
+from . import path_utils, leafgrid
 
 def check_circle_angles_from_ordered_lines(
   ordered_lines: typing.List[path_utils.LinePointsType],
@@ -62,13 +62,12 @@ def find_cyclical_within(
     next_lines = point_to_lines[(x, y)]
     for next_line in next_lines:
       if next_line != cur_line and next_line in lines_so_far:
-        circle = extract_cycle_from_ordered_dict(
+        cycle = extract_cycle_from_ordered_dict(
           cycle_start_line=next_line,
           ordered_dict=lines_so_far,
         )
-        if len(circle) > 5:
-          if check_circle_angles_from_ordered_lines(ordered_lines=circle):
-            circles.append(circle)
+        if len(cycle) > 5 and check_circle_angles_from_ordered_lines(ordered_lines=cycle):
+          circles.append(cycle)
       elif next_line not in lines_traversed:
         lines_traversed.add(next_line)
         new_dict: typing.OrderedDict[
@@ -85,16 +84,23 @@ def find_cyclical_within(
 
   return circles
 
-def identify_circle(
-  lines: typing.List[path_utils.LinePointsType]
-):
+# Split lines at points where another line intersects
+#   - Fill a grid with line points at low granularity to get potential intersections
+# Create parent nodes for identifying shapes (ex: circle r1, r2) which we can compare
+#   - circle, hexagon, trapezoid, square, rectangle, curve (source, dest)
+# Table has columns and rows
+def identify_from_lines(
+  lines: typing.List[path_utils.LinePointsType],
+  leaf_grid: leafgrid.LeafGrid,
+) -> typing.Tuple[
+  typing.List[typing.List[path_utils.LinePointsType]]
+]:
   point_to_lines: typing.DefaultDict[
     typing.Tuple[float, float],
     typing.List[path_utils.LinePointsType]
   ] = collections.defaultdict(list)
-  if len(lines) < 5:
-    return False
   for line in lines:
+    leaf_grid.line_intersection(line=line)
     x0, y0, x1, y1 = line
     point_to_lines[(x0, y0)].append(line)
     point_to_lines[(x1, y1)].append(line)
@@ -113,10 +119,5 @@ def identify_circle(
     )
     all_circles.extend(circles)
 
-  if len(all_circles) > 0:
-    return True
-  return False
+  return all_circles,
 
-
-def match_table():
-  return False

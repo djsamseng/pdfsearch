@@ -4,7 +4,7 @@ import functools
 import math
 import typing
 
-from . import pdftypes, pdfelemtransforms
+from . import pdftypes, pdfelemtransforms, path_utils
 
 def coord_for_step_size(x: float, step_size: int) -> int:
   return math.floor(x / step_size)
@@ -18,6 +18,25 @@ class GridNode(object):
     return "{0} {1}".format(self.node_id, self.node)
 
 GridType = typing.List[typing.List[typing.List[GridNode]]]
+
+def coords_for_line(
+  line: path_utils.LinePointsType,
+  coord_for: typing.Callable[[float], int]
+):
+  x0, y0, x1, y1 = line
+  slope = path_utils.line_slope(line=line)
+  if abs(x1 - x0) > abs(y1 - y0):
+    x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
+    for x in range(x0, x1+1):
+      y = math.floor((x - x0) * slope + y0)
+      yield x, y
+  else:
+    x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
+    ymin = min(y0, y1)
+    ymax = max(y0, y1)
+    for y in range(ymin, ymax+1):
+      x = math.floor((y - y0) / slope + x0)
+      yield x, y
 
 class LeafGrid():
   def __init__(
@@ -44,19 +63,9 @@ class LeafGrid():
             for x in range(x0, x1+1):
               grid[y][x].append(GridNode(node_id=node.node_id, node=node))
         elif node.line is not None:
-          x0, y0, x1, y1 = node.line
-          if abs(x1 - x0) > abs(y1 - y0):
-            x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
-            for x in range(x0, x1+1):
-              y = math.floor((x - x0) * node.slope + y0)
-              grid[y][x].append(GridNode(node_id=node.node_id, node=node))
-          else:
-            x0, y0, x1, y1 = coord_for(x0), coord_for(y0), coord_for(x1), coord_for(y1)
-            ymin = min(y0, y1)
-            ymax = max(y0, y1)
-            for y in range(ymin, ymax+1):
-              x = math.floor((y - y0) / node.slope + x0)
-              grid[y][x].append(GridNode(node_id=node.node_id, node=node))
+          for x, y in coords_for_line(line=node.line, coord_for=coord_for):
+            grid[y][x].append(GridNode(node_id=node.node_id, node=node))
+
     def sort_grid(grid: GridType):
       for y in range(len(grid)):
         for x in range(len(grid[y])):
@@ -169,6 +178,19 @@ class LeafGrid():
       out.extend(in_this_x)
 
     return [ grid_node.node for grid_node in out]
+
+  def line_intersection(
+    self,
+    line: path_utils.LinePointsType
+  ):
+    out: typing.Set[pdftypes.ClassificationNode] = set()
+    for x, y in coords_for_line(line=line, coord_for=self.coord_for):
+      for match in self.grid[y][x]:
+        if match.node.line is not None:
+          line_intersection_pt = path_utils.line_intersection(line1=line, line2=match.node.line)
+          if line_intersection_pt is not None:
+            out.add(match.node)
+    return out
 
   def process_coords(
     self,

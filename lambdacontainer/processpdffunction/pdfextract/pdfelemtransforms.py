@@ -424,6 +424,24 @@ def bounding_bbox(
     ymax = max(ymax, y1)
   return xmin, ymin, xmax, ymax
 
+def bounding_bbox_lines(
+  lines: typing.List[path_utils.LinePointsType]
+):
+  if len(lines) == 0:
+    return 0, 0, 1, 1
+  x0, y0, x1, y1 = lines[0]
+  xmin = min(x0, x1)
+  ymin = min(y0, y1)
+  xmax = max(x0, x1)
+  ymax = max(y0, y1)
+  for line in lines:
+    x0, y0, x1, y1 = line
+    xmin = min(xmin, x0)
+    ymin = min(ymin, y0)
+    xmax = max(xmax, x1)
+    ymax = max(ymax, y1)
+  return xmin, ymin, xmax, ymax
+
 def bbox_circumference(bbox: BboxType):
   return 2 * (bbox[2] - bbox[0]) + 2 * (bbox[3] - bbox[1])
 

@@ -4,6 +4,8 @@ import typing
 
 import pdfminer, pdfminer.utils
 
+from . import compiled_utils
+
 BezierPoints = typing.Tuple[
   typing.Tuple[float,float],
   typing.Tuple[float,float],
@@ -219,6 +221,9 @@ def line_offset(a: LinePointsType, b: LinePointsType) -> OffsetType:
     a[0] - b[0],
     a[1] - b[1]
   )
+
+def line_intersection(line1: LinePointsType, line2: LinePointsType):
+  return compiled_utils.line_intersection(line1, line2)
 
 def line_pairwise_offsets(lines: typing.List[LinePointsType]):
   out: typing.List[typing.List[OffsetType]] = []

@@ -147,7 +147,7 @@ def get_classification_nodes(
   ] = [[], []]
   # We don't want to create parents because
   # we activate children in order to find similar parents
-  create_parents = True
+  create_parents = False
   for child in elems:
     if isinstance(child, pdfminer.layout.LTContainer):
       assert False, "pdfminer/layout.py line 959 def analyze to return early"
@@ -182,8 +182,7 @@ def get_classification_nodes(
               child_ids=[],
             )
             child_nodes.append(node)
-          is_circle = linejoiner.identify_circle(lines=lines)
-          if create_parents and is_circle:
+          if create_parents:
             parent_node = ClassificationNode(
               elem=None,
               bbox=child.bbox,
@@ -191,7 +190,6 @@ def get_classification_nodes(
               text=None,
               child_ids=[n.node_id for n in child_nodes]
             )
-            parent_node.circle = 1
             for n in child_nodes:
               n.parent_ids.add(parent_node.node_id)
             layers[1].append(parent_node)
@@ -728,6 +726,12 @@ def fraction_test():
 def see_test():
   _, layers, width, height = get_pdf(which=1, page_number=1) # type: ignore
   node_manager = pdftypes.NodeManager(layers=[layers[0]])  # type: ignore
+  leaf_grid = leafgrid.LeafGrid(
+    celems=layers[0],
+    width=width,
+    height=height,
+    step_size=10
+  )
   # Grab a spot, see what actions are triggered by the activations
   # Desire = "find sqft of bedroom"
   #   - Need = bedroom boundaries
@@ -743,14 +747,18 @@ def see_test():
   # Then go back down and refine
   # Edit text joiner to look at more than just the processing node
   # and take action depending on the situation on where to look
-
+  circles, = linejoiner.identify_from_lines(
+    lines=[node.line for node in layers[0] if node.line is not None],
+    leaf_grid=leaf_grid
+  )
+  print("Num circles:", len(circles))
   draw_layer = 0
   draw_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[draw_layer]]
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=draw_nodes, align_top_left=False)
-  for node in layers[1]:
-    if node.circle is not None:
-      drawer.draw_bbox(bbox=node.bbox, color="blue")
+  for circle in circles:
+    bbox = pdfelemtransforms.bounding_bbox_lines(lines=circle)
+    drawer.draw_bbox(bbox=bbox, color="blue")
   drawer.show("")
 
 def parse_args():
