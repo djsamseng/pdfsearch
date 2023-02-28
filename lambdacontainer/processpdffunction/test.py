@@ -15,7 +15,7 @@ import json
 import pdfminer.high_level, pdfminer.utils, pdfminer.layout
 import rtree
 
-from pdfextract import path_utils, pdftypes
+from pdfextract import path_utils, pdftypes, linejoiner
 from pdfextract import pdfelemtransforms
 from pdfextract import pdfindexer, symbol_indexer, leafgrid, textjoiner
 from pdfextract import pdftkdrawer, classifier_drawer
@@ -68,13 +68,6 @@ def get_curve_size(elem: LTJson):
     if len(curves) > 0:
       return elem.width * elem.height, elem
   return 0, elem
-
-def sign(val: float) -> int:
-  if val == 0:
-    return 0
-  elif val < 0:
-    return -1
-  return 1
 
 
 def get_window_schedule_pdf():
@@ -154,7 +147,7 @@ def get_classification_nodes(
   ] = [[], []]
   # We don't want to create parents because
   # we activate children in order to find similar parents
-  create_parents = False
+  create_parents = True
   for child in elems:
     if isinstance(child, pdfminer.layout.LTContainer):
       assert False, "pdfminer/layout.py line 959 def analyze to return early"
@@ -189,7 +182,8 @@ def get_classification_nodes(
               child_ids=[],
             )
             child_nodes.append(node)
-          if create_parents:
+          is_circle = linejoiner.identify_circle(lines=lines)
+          if create_parents and is_circle:
             parent_node = ClassificationNode(
               elem=None,
               bbox=child.bbox,
@@ -197,6 +191,7 @@ def get_classification_nodes(
               text=None,
               child_ids=[n.node_id for n in child_nodes]
             )
+            parent_node.circle = 1
             for n in child_nodes:
               n.parent_ids.add(parent_node.node_id)
             layers[1].append(parent_node)
@@ -753,6 +748,9 @@ def see_test():
   draw_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[draw_layer]]
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=draw_nodes, align_top_left=False)
+  for node in layers[1]:
+    if node.circle is not None:
+      drawer.draw_bbox(bbox=node.bbox, color="blue")
   drawer.show("")
 
 def parse_args():

@@ -149,6 +149,7 @@ class ClassificationNode():
 
     self.parent_ids: typing.Set[NodeId] = set()
     self.slope = path_utils.line_slope(line=line) if line is not None else 0.
+    self.angle = path_utils.line_angle(line=line) if line is not None else 0.
     self.fontsize = 0.
     if isinstance(elem, pdfminer.layout.LTChar):
       self.left_right = elem.upright
@@ -162,10 +163,7 @@ class ClassificationNode():
       self.fontsize = bbox[2] - bbox[0]
     self.length = self.__length()
 
-    self.left: typing.Union[None, ClassificationNode] = None
-    self.below: typing.Union[None, ClassificationNode] = None
-    self.right: typing.Union[None, ClassificationNode] = None
-    self.above: typing.Union[None, ClassificationNode] = None
+    self.circle: typing.Union[None, float] = None
 
   def width(self):
     return self.bbox[2] - self.bbox[0]

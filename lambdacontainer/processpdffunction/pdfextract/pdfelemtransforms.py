@@ -209,14 +209,6 @@ def get_quad(dx: float, dy: float):
     return 3
   raise ValueError("Unhandled dx{0} dy{1}".format(dx, dy))
 
-def get_angle(dx: float, dy: float):
-  # Top = 0
-  # Left = -90
-  # Right = 90
-  # bottom = -179, 180, 179
-  angle = math.degrees(math.atan2(dx, dy))
-  return angle
-
 def get_node_angle_to(
   other: pdftypes.ClassificationNode,
   src: pdftypes.ClassificationNode,
@@ -230,7 +222,7 @@ def get_node_angle_to(
   else:
     other_x, other_y = get_midpoint(item=other.bbox)
   dx, dy = other_x - src_x, other_y - src_y
-  angle = get_angle(dx=dx, dy=dy)
+  angle = path_utils.get_angle(dx=dx, dy=dy)
   return angle
 
 def get_node_points(node: pdftypes.ClassificationNode):
@@ -252,7 +244,7 @@ def get_node_angles_to(
   for idx in range(len(other_pts)):
     dx = other_pts[idx][0] - src_pts[idx][0]
     dy = other_pts[idx][1] - src_pts[idx][1]
-    angle =  get_angle(dx=dx, dy=dy)
+    angle =  path_utils.get_angle(dx=dx, dy=dy)
     angles.append(angle)
   return angles
 

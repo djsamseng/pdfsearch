@@ -37,7 +37,7 @@ def bezier_to_lines(pts: BezierPoints):
   for t_idx in range(1, 11):
     t = t_idx / 10
     x, y = get_bezier_point(t=t, pts=pts)
-    swap_direction = x < x_prev
+    swap_direction = x < x_prev and False
     if swap_direction:
       lines.append((x, y, x_prev, y_prev))
     else:
@@ -133,12 +133,19 @@ def zero_line(line: LinePointsType, bounding_box: Bbox) -> LinePointsType:
     line[3] - bounding_box[1],
   )
 
+def sign(val: float) -> int:
+  if val == 0:
+    return 0
+  elif val < 0:
+    return -1
+  return 1
+
 def line_slope(line: LinePointsType):
   x0, y0, x1, y1 = line
   rise = y1 - y0
   run = x1 - x0
   if abs(run) < 1 / MAX_SLOPE:
-    slope = MAX_SLOPE * (1 if run > 0 else -1)
+    slope = MAX_SLOPE * (1 if run >= 0 else -1)
   else:
     slope = rise / run
   if slope > 0:
@@ -146,6 +153,62 @@ def line_slope(line: LinePointsType):
   else:
     slope = max(slope, -MAX_SLOPE)
   return slope
+
+def get_angle(dx: float, dy: float):
+  # Top = 0
+  # Left = -90
+  # Right = 90
+  # bottom = -179, 180, 179
+  angle = math.degrees(math.atan2(dy, dx))
+  return angle
+
+def line_angle(line: LinePointsType):
+  x0, y0, x1, y1 = line
+  return get_angle(
+    dx=x1 - x0,
+    dy=y1 - y0
+  )
+
+def get_angle_diff_impl(
+  a: float,
+  b: float,
+):
+  # 1 - -1 = 2 => 2
+  # 180 - -1 = 180 + 1 => 180-1
+  # 180 - -180 = 360 => 0
+  # 172 - 7.95
+  # >>> get_angle_diff(180*0.7, 180)
+  # 54.000000000000014
+  # >>> get_angle_diff(180*0.7, -180)
+  # 54.0
+  # >>> get_angle_diff(-180*0.7, -180)
+  # 54.000000000000014
+  # >>> get_angle_diff(180*0.7, 180)
+  # 54.000000000000014
+  # >>> get_angle_diff(180*0.7, 180*0.7)
+  # 0.0
+  # >>> get_angle_diff(180*0.7, -180*0.7)
+  # 108.00000000000003 = 180 * 0.3 * 2
+  diff = abs(a - b)
+  if diff > 180:
+    return 360 - abs(diff)
+  return diff
+
+def get_angle_diff(
+  a: float,
+  b: float,
+  directional: bool=True,
+):
+  if not directional:
+    if a < 0:
+      flipped_a = 180 + a
+    else:
+      flipped_a = -(180 - a)
+    return min(
+      get_angle_diff_impl(a=a, b=b),
+      get_angle_diff_impl(a=flipped_a, b=b),
+    )
+  return get_angle_diff_impl(a=a, b=b)
 
 def line_length(line: LinePointsType):
   x0, y0, x1, y1 = line

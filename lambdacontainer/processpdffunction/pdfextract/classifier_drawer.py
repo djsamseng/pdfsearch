@@ -517,7 +517,7 @@ class ClassifierDrawer:
       if elem.line is not None:
         if len(text) > 0 and text[-1] != " ":
           text += " "
-        text += "slope:{0:.3f} len:{1}".format(elem.slope, elem.length)
+        text += "angle:{0:.3f} len:{1}".format(elem.angle, elem.length)
       font_size = ""
       if isinstance(elem.elem, pdfminer.layout.LTCurve):
         original_path = elem.elem.original_path
@@ -526,7 +526,7 @@ class ClassifierDrawer:
       if isinstance(elem.elem, pdfminer.layout.LTChar):
         font_size = "fontsize:{0:.2f}".format(elem.fontsize)
       self.app.controlPanel.add_button(
-        text="{0} {1} {2} {3}".format(text, font_size, elem.bbox, original_path),
+        text="{0} {1} {2} {3}".format(text, font_size, elem.bbox, elem.line),
         callback=lambda ids=ids: self.on_press(ids))
     self.app.controlPanel.finish_draw()
 
@@ -561,7 +561,7 @@ class ClassifierDrawer:
     if wrapper.line is not None:
       if len(text) > 0 and text[-1] != " ":
         text += " "
-      text += "{0:.3f} {1}".format(wrapper.slope, wrapper.length)
+      text += "{0:.3f} {1}".format(wrapper.angle, wrapper.length)
     if draw_buttons:
       def on_press():
         self.app.canvas.set_item_visibility(ids)
@@ -571,7 +571,7 @@ class ClassifierDrawer:
       else:
         original_path = None
       self.app.controlPanel.add_button(
-        text="{0} {1} {2}".format(text, pdfminer_class_name(wrapper), original_path),
+        text="{0} {1} {2}".format(text, pdfminer_class_name(wrapper), wrapper.line),
         callback=on_press)
   def insert_text(
     self,
