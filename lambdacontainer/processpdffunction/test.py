@@ -329,14 +329,22 @@ def lighting_test():
     25967, 25968, 25969, 25970, 25971, 25972]
   lighting_a = [node_manager.nodes[node_id] for node_id in lighting_a_ids]
   lighting_a_circles, intersection_pts = linejoiner.identify_from_lines(
-    lines=[node.line for node in lighting_a if node.line is not None],
+    nodes=[node for node in lighting_a if node.line is not None],
     leaf_grid=leaf_grid,
   )
-  print(len(lighting_a_circles), [len(a) for a in lighting_a_circles], len(lighting_a_ids))
-  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=draw_nodes, align_top_left=False)
-  drawer.show("")
-  return
+  for circle in lighting_a_circles:
+    new_node = node_manager.add_node(
+      elem=None,
+      bbox=pdfelemtransforms.bounding_bbox(elems=circle),
+      text=None,
+      left_right=circle[0].left_right,
+      child_ids=[c.node_id for c in circle],
+      line=None,
+      layer_id=1,
+    )
+    # Instead while processing, pick out the circle, then realize we have a lot of similar circles
+    # Then we have the mouse hover over one, it highlights the others
+    new_node.circle = pdftypes.Circle(r1=new_node.width(), r2=new_node.height())
   lighting_c_ids = [25334, 25335, 25336, 25337, 25338, 25339, 25340, 25341, 25342, 25343, 25344,
     25345, 25346, 25347, 25348, 25349, 25350, 25351, 25352, 25353, 25354, 25355, 25356, 25357,
     25358, 25359, 25360, 25361, 25362, 25363, 25364, 25365, 25366, 25367, 25368, 25369, 25370,

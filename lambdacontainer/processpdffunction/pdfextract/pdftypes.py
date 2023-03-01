@@ -126,6 +126,15 @@ def get_numeric_text_labels(
 
   return out
 
+class Circle():
+  def __init__(
+    self,
+    r1: float,
+    r2: float,
+  ) -> None:
+    self.r1 = r1
+    self.r2 = r2
+
 NodeId = int
 class ClassificationNode():
   id_itr: NodeId = 0
@@ -163,7 +172,7 @@ class ClassificationNode():
       self.fontsize = bbox[2] - bbox[0]
     self.length = self.__length()
 
-    self.circle: typing.Union[None, float] = None
+    self.circle: typing.Union[None, Circle] = None
 
   def width(self):
     return self.bbox[2] - self.bbox[0]
