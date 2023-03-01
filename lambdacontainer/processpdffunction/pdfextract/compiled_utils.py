@@ -12,6 +12,23 @@ cc.verbose = True
 FloatTupleType = numba.types.Tuple([numba.types.float64, numba.types.float64])
 LinePointsTypePy = typing.Tuple[float, float, float, float]
 LinePointsTypeNumba = numba.types.Tuple([numba.types.float64, numba.types.float64, numba.types.float64, numba.types.float64])
+
+@numba.njit()
+@cc.export("points_inside_line_bbox", numba.types.boolean(LinePointsTypeNumba, numba.types.float64, numba.types.float64))
+def point_inside_line_bbox(
+  line: LinePointsTypePy,
+  x: float,
+  y: float,
+):
+  x0, y0, x1, y1 = line
+  xmin = min(x0, x1) - 0.1
+  ymin = min(y0, y1) - 0.1
+  xmax = max(x0, x1) + 0.1
+  ymax = max(y0, y1) + 0.1
+  x_inside = xmin <= x and x <= xmax
+  y_inside = ymin <= y and y <= ymax
+  return x_inside and y_inside
+
 @numba.njit()
 @cc.export("get_det", numba.types.float64(FloatTupleType, FloatTupleType))
 def get_det(
@@ -33,6 +50,10 @@ def line_intersection(line1: LinePointsTypePy, line2: LinePointsTypePy):
   x = get_det(a=d, b=dx) / div
   y = get_det(a=d, b=dy) / div
 
-  return x, y
+  if point_inside_line_bbox(line1, x, y):
+    if point_inside_line_bbox(line2, x, y):
+      return x, y
+
+  return (-1, -1)
 
 # cc.compile()

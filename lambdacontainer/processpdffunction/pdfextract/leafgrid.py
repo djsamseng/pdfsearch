@@ -35,7 +35,10 @@ def coords_for_line(
     ymin = min(y0, y1)
     ymax = max(y0, y1)
     for y in range(ymin, ymax+1):
-      x = math.floor((y - y0) / slope + x0)
+      if slope == path_utils.MAX_SLOPE:
+        x = x0
+      else:
+        x = math.floor((y - y0) / slope + x0)
       yield x, y
 
 class LeafGrid():
@@ -183,13 +186,15 @@ class LeafGrid():
     self,
     line: path_utils.LinePointsType
   ):
-    out: typing.Set[pdftypes.ClassificationNode] = set()
+    out: typing.Set[path_utils.PointType] = set()
     for x, y in coords_for_line(line=line, coord_for=self.coord_for):
       for match in self.grid[y][x]:
         if match.node.line is not None:
-          line_intersection_pt = path_utils.line_intersection(line1=line, line2=match.node.line)
-          if line_intersection_pt is not None:
-            out.add(match.node)
+          if match.node.line != line:
+            line_intersection_pt = path_utils.line_intersection(line1=line, line2=match.node.line)
+            if line_intersection_pt[0] >= 0 and line_intersection_pt not in out:
+              out.add(line_intersection_pt)
+
     return out
 
   def process_coords(

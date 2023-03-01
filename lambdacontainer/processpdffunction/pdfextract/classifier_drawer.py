@@ -526,7 +526,7 @@ class ClassifierDrawer:
       if isinstance(elem.elem, pdfminer.layout.LTChar):
         font_size = "fontsize:{0:.2f}".format(elem.fontsize)
       self.app.controlPanel.add_button(
-        text="{0} {1} {2} {3}".format(text, font_size, elem.bbox, elem.line),
+        text="{0} {1} bbox:{2} line:{3}".format(text, font_size, elem.bbox, elem.line),
         callback=lambda ids=ids: self.on_press(ids))
     self.app.controlPanel.finish_draw()
 

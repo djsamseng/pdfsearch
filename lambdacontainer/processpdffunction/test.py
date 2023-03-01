@@ -747,11 +747,11 @@ def see_test():
   # Then go back down and refine
   # Edit text joiner to look at more than just the processing node
   # and take action depending on the situation on where to look
-  circles, = linejoiner.identify_from_lines(
+  circles, intersection_pts = linejoiner.identify_from_lines(
     lines=[node.line for node in layers[0] if node.line is not None],
     leaf_grid=leaf_grid
   )
-  print("Num circles:", len(circles))
+  print("Num circles:", len(circles), "Intersection points:", len(intersection_pts))
   draw_layer = 0
   draw_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[draw_layer]]
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
@@ -759,6 +759,15 @@ def see_test():
   for circle in circles:
     bbox = pdfelemtransforms.bounding_bbox_lines(lines=circle)
     drawer.draw_bbox(bbox=bbox, color="blue")
+  for pt in intersection_pts:
+    radius = 2
+    bbox = (
+      pt[0] - radius,
+      pt[1] - radius,
+      pt[0] + radius,
+      pt[1] + radius,
+    )
+    drawer.draw_bbox(bbox=bbox, color="red")
   drawer.show("")
 
 def parse_args():

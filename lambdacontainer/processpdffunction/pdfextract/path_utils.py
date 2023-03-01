@@ -15,6 +15,7 @@ BezierPoints = typing.Tuple[
 
 LinePointsType = typing.Tuple[float, float, float, float]
 OffsetType = typing.Tuple[float, float]
+PointType = typing.Tuple[float, float]
 
 Bbox = typing.Tuple[float, float, float, float]
 MAX_SLOPE = 1000.
@@ -222,7 +223,17 @@ def line_offset(a: LinePointsType, b: LinePointsType) -> OffsetType:
     a[1] - b[1]
   )
 
-def line_intersection(line1: LinePointsType, line2: LinePointsType):
+def point_inside_line_bbox(
+  line: LinePointsType,
+  x: float,
+  y: float,
+):
+  return compiled_utils.point_inside_line_bbox(line, x, y)
+
+def line_intersection(
+  line1: LinePointsType,
+  line2: LinePointsType
+) -> typing.Tuple[float, float]:
   return compiled_utils.line_intersection(line1, line2)
 
 def line_pairwise_offsets(lines: typing.List[LinePointsType]):

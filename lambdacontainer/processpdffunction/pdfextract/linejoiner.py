@@ -36,7 +36,7 @@ def extract_cycle_from_ordered_dict(
 def find_cyclical_within(
   start_line: path_utils.LinePointsType,
   point_to_lines: typing.DefaultDict[
-    typing.Tuple[float, float],
+    path_utils.PointType,
     typing.List[path_utils.LinePointsType]
   ],
   lines_traversed: typing.Set[path_utils.LinePointsType],
@@ -93,15 +93,26 @@ def identify_from_lines(
   lines: typing.List[path_utils.LinePointsType],
   leaf_grid: leafgrid.LeafGrid,
 ) -> typing.Tuple[
-  typing.List[typing.List[path_utils.LinePointsType]]
+  typing.List[typing.List[path_utils.LinePointsType]],
+  typing.Set[path_utils.PointType],
 ]:
   point_to_lines: typing.DefaultDict[
     typing.Tuple[float, float],
     typing.List[path_utils.LinePointsType]
   ] = collections.defaultdict(list)
+  all_intersection_pts: typing.Set[path_utils.PointType] = set()
+  pts_hit: typing.Set[path_utils.PointType] = set()
   for line in lines:
-    leaf_grid.line_intersection(line=line)
+    intersection_pts = leaf_grid.line_intersection(line=line)
+    for pt in intersection_pts:
+      all_intersection_pts.add(pt)
     x0, y0, x1, y1 = line
+    if (x0, y0) in pts_hit:
+      all_intersection_pts.add((x0, y0))
+    if (x1, y1) in pts_hit:
+      all_intersection_pts.add((x1, y1))
+    pts_hit.add((x0, y0))
+    pts_hit.add((x1, y1))
     point_to_lines[(x0, y0)].append(line)
     point_to_lines[(x1, y1)].append(line)
 
@@ -119,5 +130,4 @@ def identify_from_lines(
     )
     all_circles.extend(circles)
 
-  return all_circles,
-
+  return all_circles, all_intersection_pts
