@@ -313,6 +313,12 @@ def shapememory_test():
 def lighting_test():
   _, layers, width, height = get_pdf(which=1, page_number=2)
   node_manager = pdftypes.NodeManager(layers=[layers[0]])
+  leaf_grid = leafgrid.LeafGrid(
+    celems=layers[0],
+    width=width,
+    height=height,
+    step_size=10
+  )
   shape_manager = symbol_indexer.ShapeManager(node_manager=node_manager)
   lighting_a_ids = [25891, 25892, 25893, 25894, 25895, 25896, 25897, 25898, 25899, 25900, 25901,
     25902, 25903, 25904, 25905, 25906, 25907, 25908, 25909, 25910, 25911, 25912, 25913, 25914,
@@ -322,6 +328,15 @@ def lighting_test():
     25954, 25955, 25956, 25957, 25958, 25959, 25960, 25961, 25962, 25963, 25964, 25965, 25966,
     25967, 25968, 25969, 25970, 25971, 25972]
   lighting_a = [node_manager.nodes[node_id] for node_id in lighting_a_ids]
+  lighting_a_circles, intersection_pts = linejoiner.identify_from_lines(
+    lines=[node.line for node in lighting_a if node.line is not None],
+    leaf_grid=leaf_grid,
+  )
+  print(len(lighting_a_circles), [len(a) for a in lighting_a_circles], len(lighting_a_ids))
+  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
+  drawer.draw_elems(elems=draw_nodes, align_top_left=False)
+  drawer.show("")
+  return
   lighting_c_ids = [25334, 25335, 25336, 25337, 25338, 25339, 25340, 25341, 25342, 25343, 25344,
     25345, 25346, 25347, 25348, 25349, 25350, 25351, 25352, 25353, 25354, 25355, 25356, 25357,
     25358, 25359, 25360, 25361, 25362, 25363, 25364, 25365, 25366, 25367, 25368, 25369, 25370,
@@ -513,68 +528,6 @@ def conn_test():
     drawer.draw_bbox(bbox=fraction_text_group.bbox, color="green")
   drawer.show("")
   return
-  for n in group:
-    print(n.text, n.left_right, n.slope)
-  # TODO: Pick a boundary that actually applies
-  # TODO: Text may be close enough but should be separate groups
-  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=group, align_top_left=False)
-  drawer.show("")
-  return
-
-  start_pos_x, start_pos_y = start_node.bbox[:2] # 4 in 1 3/4"
-  focus_radius = 50
-  search_bbox = (
-    start_pos_x - focus_radius,
-    start_pos_y - focus_radius,
-    start_pos_x + focus_radius,
-    start_pos_y + focus_radius,
-  )
-  start_node.labelize()
-
-  leaf_neighbors = node_manager.intersection(
-    layer_idx=0,
-    bbox=search_bbox,
-  )
-  textjoiner.connect_node_neighbors(node=start_node, neighbors=leaf_neighbors)
-  # Fraction rule that activates --shapememory activates a fraction
-  drawer.draw_elems(elems=leaf_neighbors, align_top_left=True)
-  for n in leaf_neighbors:
-    drawer.draw_bbox(bbox=n.bbox, color="blue")
-  drawer.show("C", blocking=True)
-
-  cl, cb, cr, ca = start_node.left, start_node.below, start_node.right, start_node.above
-  for n in [cl, cb, cr, ca]:
-    if n is not None:
-      n.labelize()
-  if start_node.labels[LabelType.INT] > 0:
-    if cr is not None:
-      if cr.labels[LabelType.MEASUREMENT] > 0:
-        # check what is to the right of cr
-        pass
-    if cl is not None and cl == ca and cl.labels[LabelType.FRACTION_LINE] > 0:
-      cmp_height = cl.height() - start_node.height()
-      if 0 <= cmp_height and cmp_height < start_node.height() * 3:
-        print("Join /{0}".format(start_node.text))
-      # divisor keep looking left
-
-  draw = [start_node, *[n for n in [cl, cb, cr, ca] if n is not None]]
-  left_itr = cl
-  while left_itr is not None:
-    textjoiner.connect_node_neighbors(node=left_itr, neighbors=leaf_neighbors)
-    left_itr = left_itr.left
-    if left_itr is not None:
-      draw.append(left_itr)
-
-
-  for d in leaf_neighbors:
-    d.labelize()
-    #print(d.text, d.labels)
-  print("Start:", start_node)
-  print("left:", cl)
-  print("below:", cb)
-  print("right:", cr)
-  print("above:", ca)
 
 
   # TODO: Not a grid, instead pointers
@@ -748,7 +701,7 @@ def see_test():
   # Edit text joiner to look at more than just the processing node
   # and take action depending on the situation on where to look
   circles, intersection_pts = linejoiner.identify_from_lines(
-    lines=[node.line for node in layers[0] if node.line is not None],
+    nodes=[node for node in layers[0] if node.line is not None],
     leaf_grid=leaf_grid
   )
   print("Num circles:", len(circles), "Intersection points:", len(intersection_pts))
@@ -757,7 +710,7 @@ def see_test():
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=draw_nodes, align_top_left=False)
   for circle in circles:
-    bbox = pdfelemtransforms.bounding_bbox_lines(lines=circle)
+    bbox = pdfelemtransforms.bounding_bbox(elems=circle)
     drawer.draw_bbox(bbox=bbox, color="blue")
   for pt in intersection_pts:
     radius = 2

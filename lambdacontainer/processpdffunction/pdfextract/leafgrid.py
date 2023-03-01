@@ -1,4 +1,5 @@
 
+import collections
 import heapq
 import functools
 import math
@@ -186,14 +187,17 @@ class LeafGrid():
     self,
     line: path_utils.LinePointsType
   ):
-    out: typing.Set[path_utils.PointType] = set()
+    out: typing.DefaultDict[
+      path_utils.PointType,
+      typing.Set[pdftypes.ClassificationNode]
+    ] = collections.defaultdict(set)
     for x, y in coords_for_line(line=line, coord_for=self.coord_for):
       for match in self.grid[y][x]:
         if match.node.line is not None:
           if match.node.line != line:
             line_intersection_pt = path_utils.line_intersection(line1=line, line2=match.node.line)
             if line_intersection_pt[0] >= 0 and line_intersection_pt not in out:
-              out.add(line_intersection_pt)
+              out[line_intersection_pt].add(match.node)
 
     return out
 
