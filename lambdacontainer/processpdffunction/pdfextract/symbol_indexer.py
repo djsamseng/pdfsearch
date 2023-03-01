@@ -4,7 +4,7 @@ import typing
 
 import rtree
 
-from . import pdftypes, path_utils, textjoiner
+from . import pdftypes, path_utils, textjoiner, linejoiner, leafgrid, nodemanager
 
 
 def line_symbol_to_coords(sym: pdftypes.LineSymbol):
@@ -118,7 +118,7 @@ ActivationLookupType = SingletonIndexer[typing.Tuple[str, int, float, pdftypes.C
 class ShapeManager:
   def __init__(
     self,
-    node_manager: pdftypes.NodeManager,
+    node_manager: nodemanager.NodeManager,
   ) -> None:
     self.node_manager = node_manager
     self.indexer: SymbolIndexer[

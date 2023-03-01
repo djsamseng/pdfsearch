@@ -17,7 +17,7 @@ import rtree
 
 from pdfextract import path_utils, pdftypes, linejoiner
 from pdfextract import pdfelemtransforms
-from pdfextract import pdfindexer, symbol_indexer, leafgrid, textjoiner
+from pdfextract import pdfindexer, symbol_indexer, leafgrid, textjoiner, nodemanager
 from pdfextract import pdftkdrawer, classifier_drawer
 from pdfextract.ltjson import LTJson
 from pdfextract.pdftypes import Bbox, ClassificationNode, ClassificationType, LabelType
@@ -286,7 +286,7 @@ def shapememory_test():
     7935, 7936, 7937, 7938, 7939, 7940, 7941, 7942, 7943, 7944, 7945, 7946, 7947, 7948,
     7949, 7950, 7951, 7952, 7953, 7954, 7955, 7956, 7957, 7958, 7959, 7960, 7961, 7962, 7963, 7964]
 
-  node_manager = pdftypes.NodeManager(layers=[layers[0]])
+  node_manager = nodemanager.NodeManager(layers=[layers[0]])
   window_label_with_pointer_line = [
     node_manager.nodes[node_id] for node_id in window_label_with_pointer_line_ids
   ]
@@ -312,7 +312,7 @@ def shapememory_test():
 
 def lighting_test():
   _, layers, width, height = get_pdf(which=1, page_number=2)
-  node_manager = pdftypes.NodeManager(layers=[layers[0]])
+  node_manager = nodemanager.NodeManager(layers=[layers[0]])
   leaf_grid = leafgrid.LeafGrid(
     celems=layers[0],
     width=width,
@@ -386,7 +386,7 @@ def color_for_idx(idx: int):
     return "purple"
 
 def run_shapememory(
-  node_manager: pdftypes.NodeManager,
+  node_manager: nodemanager.NodeManager,
   shape_manager: symbol_indexer.ShapeManager,
   width: int,
   height: int,
@@ -406,6 +406,7 @@ def run_shapememory(
   drawer.draw_elems(elems=draw_nodes, align_top_left=False)
   for idx, (shape_id, shape_elems) in enumerate(results.items()):
     color = color_for_idx(idx=idx)
+    print("Found {0}:{1}".format(shape_id, len(shape_elems)))
     for found in shape_elems:
       drawer.draw_bbox(bbox=found.bbox, color=color)
   drawer.show("C")
@@ -419,7 +420,7 @@ def sqft_test():
   #_, layers, width, height = get_pdf(which=1, page_number=1)
   _, celems, width, height = get_window_schedule_pdf()
 
-  node_manager = pdftypes.NodeManager(layers=[celems])
+  node_manager = nodemanager.NodeManager(layers=[celems])
 
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
@@ -511,7 +512,7 @@ def conn_test():
   celems = layers[0]
 
 
-  node_manager = pdftypes.NodeManager(layers=[celems])
+  node_manager = nodemanager.NodeManager(layers=[celems])
   #leaf_grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
 
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
@@ -642,7 +643,7 @@ def align_vertical():
 
 def fraction_test():
   _, layers, width, height = get_pdf(which=1, page_number=1)
-  node_manager = pdftypes.NodeManager(layers=[layers[0]]) # type: ignore
+  node_manager = nodemanager.NodeManager(layers=[layers[0]]) # type: ignore
   measurement_fraction_vert_idxes = [6681, 6682, 6683, 6684, 6685, 6686, 6687, 6688, 6689, 6690, 6691]
   measurement_fraction_horiz_idxes = [6618, 6619, 6620, 6621, 6622, 6623, 6624, 6625, 6626, 6627]
   fraction_schedule_idxes = [17107, 17108, 17125, 17126, 17227, 17228, 17229, 17230, 17231, 17232]
@@ -686,13 +687,17 @@ def fraction_test():
 
 def see_test():
   _, layers, width, height = get_pdf(which=1, page_number=1) # type: ignore
-  node_manager = pdftypes.NodeManager(layers=[layers[0]])  # type: ignore
+  node_manager = nodemanager.NodeManager(layers=[layers[0]])  # type: ignore
   leaf_grid = leafgrid.LeafGrid(
     celems=layers[0],
     width=width,
     height=height,
     step_size=10
   )
+  shape_manager = symbol_indexer.ShapeManager(
+    node_manager=node_manager,
+  )
+  shape_manager.activate_layers()
   # Grab a spot, see what actions are triggered by the activations
   # Desire = "find sqft of bedroom"
   #   - Need = bedroom boundaries

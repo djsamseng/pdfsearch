@@ -5,7 +5,7 @@ import pdfminer, pdfminer.layout
 import rtree, rtree.index
 
 
-from . import pdftypes, path_utils, pdfelemtransforms
+from . import pdftypes, path_utils, pdfelemtransforms, nodemanager
 
 class TextJoiner():
   def __init__(
@@ -140,16 +140,6 @@ def get_node_neighbors(
         closest_left = other
         closest_left_space = distance_x
   return closest_left, closest_below, closest_right, closest_above
-
-def connect_node_neighbors(
-  node: pdftypes.ClassificationNode,
-  neighbors: typing.List[pdftypes.ClassificationNode],
-):
-  cl, cb, cr, ca = get_node_neighbors(node=node, neighbors=neighbors)
-  node.left = cl
-  node.below = cb
-  node.right = cr
-  node.above = ca
 
 def make_query(node: pdftypes.ClassificationNode):
   x0, y0, x1, y1 = node.bbox
@@ -301,7 +291,7 @@ def node_should_add_to_group_impl(
   return False
 
 def cluster_text_group(
-  node_manager: pdftypes.NodeManager,
+  node_manager: nodemanager.NodeManager,
   start: pdftypes.ClassificationNode,
   source_layer_idx: int,
   node_should_add_to_group_func: typing.Callable[
@@ -350,7 +340,7 @@ def cluster_text_group(
   return group_parent
 
 def cluster_text_by_connected_groups(
-  node_manager: pdftypes.NodeManager,
+  node_manager: nodemanager.NodeManager,
   source_layer_idx: int,
   node_should_add_to_group_func: typing.Callable[
     [pdftypes.ClassificationNode, pdftypes.ClassificationNode, typing.Set[pdftypes.ClassificationNode]],
@@ -394,7 +384,7 @@ def cluster_text_by_connected_groups(
   return groups
 
 def try_create_fraction(
-  node_manager: pdftypes.NodeManager,
+  node_manager: nodemanager.NodeManager,
   node: pdftypes.ClassificationNode,
   nodes_used: typing.Set[pdftypes.ClassificationNode]
 ):
@@ -486,7 +476,7 @@ def try_create_fraction(
   return None
 
 def cluster_fractions(
-  node_manager: pdftypes.NodeManager,
+  node_manager: nodemanager.NodeManager,
   groups: typing.List[pdftypes.ClassificationNode],
 ):
   nodes_used: typing.Set[pdftypes.ClassificationNode] = set()
@@ -550,7 +540,7 @@ def node_should_add_to_group_join_fractions(
   return False
 
 def cluster_fractions_with_text(
-  node_manager: pdftypes.NodeManager,
+  node_manager: nodemanager.NodeManager,
   fractions: typing.List[pdftypes.ClassificationNode],
   source_layer_idx: int,
 ):
@@ -578,7 +568,7 @@ def cluster_fractions_with_text(
   return groups
 
 def cluster_text(
-  node_manager: pdftypes.NodeManager,
+  node_manager: nodemanager.NodeManager,
 ):
   split_space = False
   if split_space:
