@@ -286,7 +286,7 @@ def shapememory_test():
     7935, 7936, 7937, 7938, 7939, 7940, 7941, 7942, 7943, 7944, 7945, 7946, 7947, 7948,
     7949, 7950, 7951, 7952, 7953, 7954, 7955, 7956, 7957, 7958, 7959, 7960, 7961, 7962, 7963, 7964]
 
-  node_manager = nodemanager.NodeManager(layers=[layers[0]])
+  node_manager = nodemanager.NodeManager(layers=[layers[0]], width=width, height=height)
   window_label_with_pointer_line = [
     node_manager.nodes[node_id] for node_id in window_label_with_pointer_line_ids
   ]
@@ -312,12 +312,10 @@ def shapememory_test():
 
 def lighting_test():
   _, layers, width, height = get_pdf(which=1, page_number=2)
-  node_manager = nodemanager.NodeManager(layers=[layers[0]])
-  leaf_grid = leafgrid.LeafGrid(
-    celems=layers[0],
+  node_manager = nodemanager.NodeManager(
+    layers=[layers[0]],
     width=width,
-    height=height,
-    step_size=10
+    height=height
   )
   shape_manager = symbol_indexer.ShapeManager(node_manager=node_manager)
   lighting_a_ids = [25891, 25892, 25893, 25894, 25895, 25896, 25897, 25898, 25899, 25900, 25901,
@@ -330,7 +328,7 @@ def lighting_test():
   lighting_a = [node_manager.nodes[node_id] for node_id in lighting_a_ids]
   lighting_a_circles, intersection_pts = linejoiner.identify_from_lines(
     nodes=[node for node in lighting_a if node.line is not None],
-    leaf_grid=leaf_grid,
+    leaf_grid=node_manager.leaf_grid,
   )
   for circle in lighting_a_circles:
     new_node = node_manager.add_node(
@@ -420,7 +418,7 @@ def sqft_test():
   #_, layers, width, height = get_pdf(which=1, page_number=1)
   _, celems, width, height = get_window_schedule_pdf()
 
-  node_manager = nodemanager.NodeManager(layers=[celems])
+  node_manager = nodemanager.NodeManager(layers=[celems], width=width, height=height)
 
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
@@ -512,8 +510,7 @@ def conn_test():
   celems = layers[0]
 
 
-  node_manager = nodemanager.NodeManager(layers=[celems])
-  #leaf_grid = leafgrid.LeafGrid(celems=celems, width=width, height=height, step_size=5)
+  node_manager = nodemanager.NodeManager(layers=[celems], width=width, height=height)
 
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
@@ -638,56 +635,9 @@ def align_horizontal(
   # Later we see that the table row is everything inside (1029, 549, 1651, 567)
   return horizontal_groups
 
-def align_vertical():
-  pass
-
-def fraction_test():
-  _, layers, width, height = get_pdf(which=1, page_number=1)
-  node_manager = nodemanager.NodeManager(layers=[layers[0]]) # type: ignore
-  measurement_fraction_vert_idxes = [6681, 6682, 6683, 6684, 6685, 6686, 6687, 6688, 6689, 6690, 6691]
-  measurement_fraction_horiz_idxes = [6618, 6619, 6620, 6621, 6622, 6623, 6624, 6625, 6626, 6627]
-  fraction_schedule_idxes = [17107, 17108, 17125, 17126, 17227, 17228, 17229, 17230, 17231, 17232]
-  start_node = layers[0][fraction_schedule_idxes[-1]] # -1, -2
-  x0, y0, x1, y1 = start_node.bbox
-
-  leaf_grid = leafgrid.LeafGrid(celems=layers[0], width=width, height=height, step_size=5)
-
-  if start_node.left_right:
-    radius = start_node.width()
-    query = (
-      x0-radius,
-      y0,
-      x1+radius,
-      y1,
-    )
-  else:
-    radius = start_node.height()
-    query = (
-      x0,
-      y0-radius,
-      x1,
-      y1+radius,
-    )
-
-  grid_elems = leaf_grid.intersection(query=query)
-  grid_elems.sort(key=lambda n: pdfelemtransforms.get_node_distance_to(other=n, src=start_node))
-  # if horizontally aligned and touching continue
-  #
-
-  horiz_groups = align_horizontal(nodes=grid_elems)
-  for (yb, yt), line_nodes in horiz_groups.items():
-    print("y0:{0:.2f} y1:{1:.2f} num:{2}".format(yb, yt, len(line_nodes)))
-
-  drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
-  drawer.draw_elems(elems=grid_elems, align_top_left=True)
-  for elem in grid_elems:
-    drawer.draw_bbox(bbox=elem.bbox, color="blue")
-  drawer.draw_bbox(bbox=query, color="red")
-  drawer.show("")
-
 def see_test():
   _, layers, width, height = get_pdf(which=1, page_number=1) # type: ignore
-  node_manager = nodemanager.NodeManager(layers=[layers[0]])  # type: ignore
+  node_manager = nodemanager.NodeManager(layers=[layers[0]], width=width, height=height)  # type: ignore
   leaf_grid = leafgrid.LeafGrid(
     celems=layers[0],
     width=width,
@@ -761,8 +711,6 @@ def main():
     func = sqft_test
   elif args.conn:
     func = conn_test
-  elif args.fraction:
-    func = fraction_test
   elif args.see:
     func = see_test
   if func:

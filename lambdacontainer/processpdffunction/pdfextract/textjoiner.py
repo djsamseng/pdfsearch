@@ -377,6 +377,7 @@ def cluster_text_by_connected_groups(
     for child_id in parent.child_ids:
       node = node_manager.nodes[child_id]
       nodes_used.add(node)
+    nodes_used.add(start_node)
 
     groups.append(parent)
     if not is_dev:

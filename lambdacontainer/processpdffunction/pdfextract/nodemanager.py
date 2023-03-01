@@ -6,19 +6,27 @@ import typing
 import rtree, rtree.index
 import pdfminer.layout
 
-from . import pdftypes, path_utils
+from . import pdftypes, path_utils, leafgrid
 from .pdftypes import ClassificationNode, NodeId, Bbox
 
 class NodeManager():
   def __init__(
     self,
     layers: typing.List[typing.List[ClassificationNode]],
+    width: int,
+    height: int,
   ) -> None:
     self.layers: typing.DefaultDict[
       int,
       typing.Set[NodeId]
     ] = collections.defaultdict(set)
     self.nodes: typing.Dict[NodeId, ClassificationNode] = {}
+    self.leaf_grid = leafgrid.LeafGrid(
+      celems=layers[0],
+      width=width,
+      height=height,
+      step_size=10
+    )
 
     self.indexes: typing.Dict[
       int,
