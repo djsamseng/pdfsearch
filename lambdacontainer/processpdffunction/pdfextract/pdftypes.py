@@ -44,6 +44,9 @@ class Direction(enum.Enum):
   UP = 3
   DOWN = 4
 
+class ShapeType(int, enum.Enum):
+  CIRCLE = 1
+
 decimal_regex_cap = re.compile("^[\\d]*\\.[\\d]+$")
 int_regex_cap = re.compile("^\\d+$")
 fraction_regex_cap = re.compile("^[\\d]+/[\\d]+$")
@@ -129,11 +132,11 @@ def get_numeric_text_labels(
 class Circle():
   def __init__(
     self,
-    r1: float,
-    r2: float,
+    rw: float,
+    rh: float,
   ) -> None:
-    self.r1 = r1
-    self.r2 = r2
+    self.rw = rw
+    self.rh = rh
 
 NodeId = int
 class ClassificationNode():

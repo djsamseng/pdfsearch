@@ -170,6 +170,8 @@ def get_classification_nodes(
           child_nodes: typing.List[ClassificationNode] = []
           for line in lines:
             x0, y0, x1, y1 = line
+            if x0 == x1 and y0 == y1:
+              continue
             xmin = min(x0, x1)
             xmax = max(x0, x1)
             ymin = min(y0, y1)
@@ -286,7 +288,7 @@ def shapememory_test():
     7935, 7936, 7937, 7938, 7939, 7940, 7941, 7942, 7943, 7944, 7945, 7946, 7947, 7948,
     7949, 7950, 7951, 7952, 7953, 7954, 7955, 7956, 7957, 7958, 7959, 7960, 7961, 7962, 7963, 7964]
 
-  node_manager = nodemanager.NodeManager(layers=[layers[0]], width=width, height=height)
+  node_manager = nodemanager.NodeManager(layers=[layers[0]])
   window_label_with_pointer_line = [
     node_manager.nodes[node_id] for node_id in window_label_with_pointer_line_ids
   ]
@@ -314,48 +316,35 @@ def lighting_test():
   _, layers, width, height = get_pdf(which=1, page_number=2)
   node_manager = nodemanager.NodeManager(
     layers=[layers[0]],
-    width=width,
-    height=height
   )
   shape_manager = symbol_indexer.ShapeManager(node_manager=node_manager)
-  lighting_a_ids = [25891, 25892, 25893, 25894, 25895, 25896, 25897, 25898, 25899, 25900, 25901,
-    25902, 25903, 25904, 25905, 25906, 25907, 25908, 25909, 25910, 25911, 25912, 25913, 25914,
-    25915, 25916, 25917, 25918, 25919, 25920, 25921, 25922, 25923, 25924, 25925, 25926, 25927,
-    25928, 25929, 25930, 25931, 25932, 25933, 25934, 25935, 25936, 25937, 25938, 25939, 25940,
-    25941, 25942, 25943, 25944, 25945, 25946, 25947, 25948, 25949, 25950, 25951, 25952, 25953,
-    25954, 25955, 25956, 25957, 25958, 25959, 25960, 25961, 25962, 25963, 25964, 25965, 25966,
-    25967, 25968, 25969, 25970, 25971, 25972]
+  lighting_a_ids = [25365, 25366, 25367, 25368, 25369, 25370, 25371, 25372, 25373, 25374, 25375, 25376,
+    25377, 25378, 25379, 25380, 25381, 25382, 25383, 25384, 25385, 25386, 25387, 25388, 25389, 25390,
+    25391, 25392, 25393, 25394, 25395, 25396, 25397, 25398, 25399, 25400, 25401, 25402, 25403, 25404,
+    25405, 25406, 25407, 25408, 25409, 25410, 25411, 25412, 25413, 25414, 25415, 25416, 25417, 25418,
+    25419, 25420, 25421, 25422, 25423, 25424, 25425, 25426, 25427, 25428, 25429, 25430, 25431, 25432,
+    25433, 25434, 25435, 25436, 25437, 25438, 25439, 25440, 25441, 25442, 25443, 25444, 25445, 25446]
   lighting_a = [node_manager.nodes[node_id] for node_id in lighting_a_ids]
-  lighting_a_circles, intersection_pts = linejoiner.identify_from_lines(
-    nodes=[node for node in lighting_a if node.line is not None],
-    leaf_grid=node_manager.leaf_grid,
-  )
-  for circle in lighting_a_circles:
-    new_node = node_manager.add_node(
-      elem=None,
-      bbox=pdfelemtransforms.bounding_bbox(elems=circle),
-      text=None,
-      left_right=circle[0].left_right,
-      child_ids=[c.node_id for c in circle],
-      line=None,
-      layer_id=1,
-    )
-    # Instead while processing, pick out the circle, then realize we have a lot of similar circles
-    # Then we have the mouse hover over one, it highlights the others
-    new_node.circle = pdftypes.Circle(r1=new_node.width(), r2=new_node.height())
-  lighting_c_ids = [25334, 25335, 25336, 25337, 25338, 25339, 25340, 25341, 25342, 25343, 25344,
-    25345, 25346, 25347, 25348, 25349, 25350, 25351, 25352, 25353, 25354, 25355, 25356, 25357,
-    25358, 25359, 25360, 25361, 25362, 25363, 25364, 25365, 25366, 25367, 25368, 25369, 25370,
-    25371, 25372, 25373, 25374, 25375, 25376, 25377, 25378, 25379, 25380, 25381, 25382, 25383,
-    25384, 25385, 25386, 25387, 25388, 25389, 25390, 25391, 25392, 25393, 25394, 25395, 25396,
-    25397, 25398, 25399, 25400, 25401, 25402, 25403, 25404, 25405, 25406, 25407, 25408, 25409,
-    25410, 25411, 25412, 25413]
+  lighting_b_ids = [24767, 24768, 24769, 24770, 24771, 24772, 24773, 24774, 24775, 24776, 24777, 24778,
+    24779, 24780, 24781, 24782, 24783, 24784, 24785, 24786, 24787, 24788, 24789, 24790, 24791, 24792,
+    24793, 24794, 24795, 24796, 24797, 24798, 24799, 24800, 24801, 24802, 24803, 24804, 24805, 24806, 24807]
+  lighting_b = [node_manager.nodes[node_id] for node_id in lighting_b_ids]
+  lighting_c_ids = [24808, 24809, 24810, 24811, 24812, 24813, 24814, 24815, 24816, 24817, 24818, 24819,
+    24820, 24821, 24822, 24823, 24824, 24825, 24826, 24827, 24828, 24829, 24830, 24831, 24832, 24833,
+    24834, 24835, 24836, 24837, 24838, 24839, 24840, 24841, 24842, 24843, 24844, 24845, 24846, 24847,
+    24848, 24849, 24850, 24851, 24852, 24853, 24854, 24855, 24856, 24857, 24858, 24859, 24860, 24861,
+    24862, 24863, 24864, 24865, 24866, 24867, 24868, 24869, 24870, 24871, 24872, 24873, 24874, 24875,
+    24876, 24877, 24878, 24879, 24880, 24881, 24882, 24883, 24884, 24885, 24886, 24887]
   lighting_c = [node_manager.nodes[node_id] for node_id in lighting_c_ids]
-  lighting_e_ids = [25593, 25594, 25595, 25596, 25597, 25598]
+  lighting_e_ids = [25067, 25068, 25069, 25070, 25071, 25072]
   lighting_e = [node_manager.nodes[node_id] for node_id in lighting_e_ids]
   shape_manager.add_shape(
     shape_id="lighting_a",
     lines=[l.line for l in lighting_a if l.line is not None]
+  )
+  shape_manager.add_shape(
+    shape_id="lighting_b",
+    lines=[l.line for l in lighting_b if l.line is not None]
   )
   shape_manager.add_shape(
     shape_id="lighting_c",
@@ -418,7 +407,7 @@ def sqft_test():
   #_, layers, width, height = get_pdf(which=1, page_number=1)
   _, celems, width, height = get_window_schedule_pdf()
 
-  node_manager = nodemanager.NodeManager(layers=[celems], width=width, height=height)
+  node_manager = nodemanager.NodeManager(layers=[celems])
 
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
@@ -510,7 +499,7 @@ def conn_test():
   celems = layers[0]
 
 
-  node_manager = nodemanager.NodeManager(layers=[celems], width=width, height=height)
+  node_manager = nodemanager.NodeManager(layers=[celems])
 
   text_join_test_idxes = [118, 119, 120, 121, 122, 123]
   text_join_test = [ celems[idx] for idx in text_join_test_idxes ]
@@ -636,14 +625,9 @@ def align_horizontal(
   return horizontal_groups
 
 def see_test():
-  _, layers, width, height = get_pdf(which=1, page_number=1) # type: ignore
-  node_manager = nodemanager.NodeManager(layers=[layers[0]], width=width, height=height)  # type: ignore
-  leaf_grid = leafgrid.LeafGrid(
-    celems=layers[0],
-    width=width,
-    height=height,
-    step_size=10
-  )
+  _, layers, width, height = get_pdf(which=1, page_number=2) # type: ignore
+
+  node_manager = nodemanager.NodeManager(layers=[layers[0]])  # type: ignore
   shape_manager = symbol_indexer.ShapeManager(
     node_manager=node_manager,
   )
@@ -663,27 +647,26 @@ def see_test():
   # Then go back down and refine
   # Edit text joiner to look at more than just the processing node
   # and take action depending on the situation on where to look
-  circles, intersection_pts = linejoiner.identify_from_lines(
-    nodes=[node for node in layers[0] if node.line is not None],
-    leaf_grid=leaf_grid
-  )
+  circles = shape_manager.found_shapes[pdftypes.ShapeType.CIRCLE]
+  intersection_pts = shape_manager.intersection_pts
   print("Num circles:", len(circles), "Intersection points:", len(intersection_pts))
   draw_layer = 0
   draw_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[draw_layer]]
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=draw_nodes, align_top_left=False)
   for circle in circles:
-    bbox = pdfelemtransforms.bounding_bbox(elems=circle)
+    circle_children = [node_manager.nodes[node_id] for node_id in circle.child_ids]
+    bbox = pdfelemtransforms.bounding_bbox(elems=circle_children)
     drawer.draw_bbox(bbox=bbox, color="blue")
   for pt in intersection_pts:
-    radius = 2
+    radius = 1
     bbox = (
       pt[0] - radius,
       pt[1] - radius,
       pt[0] + radius,
       pt[1] + radius,
     )
-    drawer.draw_bbox(bbox=bbox, color="red")
+    #drawer.draw_bbox(bbox=bbox, color="red")
   drawer.show("")
 
 def parse_args():

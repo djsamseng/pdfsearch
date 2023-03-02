@@ -3,7 +3,7 @@ import collections
 import math
 import typing
 
-from . import path_utils, leafgrid, pdftypes
+from . import path_utils, leafgrid, pdftypes, nodemanager
 
 def check_circle_angles_from_ordered_lines(
   ordered_lines: typing.List[path_utils.LinePointsType],
@@ -94,9 +94,28 @@ def find_cyclical_within(
 # Create parent nodes for identifying shapes (ex: circle r1, r2) which we can compare
 #   - circle, hexagon, trapezoid, square, rectangle, curve (source, dest)
 # Table has columns and rows
+
+def line_intersection_rtree(
+  node_manager: nodemanager.NodeManager,
+  node: pdftypes.ClassificationNode,
+):
+  out: typing.DefaultDict[
+    path_utils.PointType,
+    typing.Set[pdftypes.ClassificationNode]
+  ] = collections.defaultdict(set)
+  line = node.line
+  if line is not None:
+    potential_lines = node_manager.intersection(layer_idx=0, bbox=node.bbox)
+    for pot in potential_lines:
+      if pot.line is not None:
+        line_intersection_pt = path_utils.line_intersection(line1=line, line2=pot.line)
+        if line_intersection_pt[0] >= 0 and line_intersection_pt not in out:
+          out[line_intersection_pt].add(pot)
+  return out
+
 def identify_from_lines(
   nodes: typing.List[pdftypes.ClassificationNode],
-  leaf_grid: leafgrid.LeafGrid,
+  node_manager: nodemanager.NodeManager,
 ) -> typing.Tuple[
   typing.List[typing.List[pdftypes.ClassificationNode]],
   typing.Set[path_utils.PointType],
@@ -110,7 +129,7 @@ def identify_from_lines(
   for node in nodes:
     line = node.line
     if line is not None:
-      intersection_pts = leaf_grid.line_intersection(line=line)
+      intersection_pts = line_intersection_rtree(node_manager=node_manager, node=node)
       for pt in intersection_pts:
         all_intersection_pts.add(pt)
       x0, y0, x1, y1 = line

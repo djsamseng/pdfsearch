@@ -4,7 +4,7 @@ import typing
 
 import rtree
 
-from . import pdftypes, path_utils, textjoiner, linejoiner, leafgrid, nodemanager
+from . import pdftypes, path_utils, textjoiner, linejoiner, leafgrid, nodemanager, pdfelemtransforms
 
 
 def line_symbol_to_coords(sym: pdftypes.LineSymbol):
@@ -146,6 +146,11 @@ class ShapeManager:
       str, # shape_id
       typing.List[pdftypes.ClassificationNode]
     ] = collections.defaultdict(list)
+    self.found_shapes: typing.Dict[
+      pdftypes.ShapeType,
+      typing.List[pdftypes.ClassificationNode]
+    ] = dict()
+    self.intersection_pts: typing.Set[path_utils.PointType] = set()
 
   # TODO: Extend to more general entities
   # For text offsets work for joining characters
@@ -187,7 +192,7 @@ class ShapeManager:
     for layer_id in old_layer_ids:
       used_in_layer = self.__activate_layer(layer_id=layer_id)
       nodes_used.extend(used_in_layer)
-    return nodes_used
+
     groups = textjoiner.cluster_text_by_connected_groups(
       node_manager=self.node_manager,
       source_layer_idx=0,
@@ -220,23 +225,36 @@ class ShapeManager:
   def __activate_leaf_layer(self, layer_id: int):
     layer_node_ids = self.node_manager.layers[layer_id]
     layer = [self.node_manager.nodes[node_id] for node_id in layer_node_ids]
+
+    circles, intersection_pts = linejoiner.identify_from_lines(
+      nodes=[node for node in layer if node.line is not None],
+      node_manager=self.node_manager,
+    )
+    circle_parents: typing.List[pdftypes.ClassificationNode] = []
+    for circle in circles:
+      parent = self.node_manager.add_node(
+        elem=None,
+        bbox=pdfelemtransforms.bounding_bbox(elems=circle),
+        line=None,
+        text=None,
+        left_right=circle[0].left_right,
+        child_ids=[c.node_id for c in circle],
+        layer_id=1,
+      )
+      parent.circle = pdftypes.Circle(rw=parent.width(), rh=parent.height())
+      circle_parents.append(parent)
+    self.intersection_pts = intersection_pts
+    self.found_shapes[pdftypes.ShapeType.CIRCLE] = circle_parents
+
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
     # Shape = [lines], [offsets]
         # Found shape = x0, y0, [lines], [offsets]
         # Activations[(x0,y0)][shape_id][line_id] = score
     activation_lookup: ActivationLookupType = SingletonIndexer()
     for node in layer:
-      if len(node.parent_ids) > 0:
-        continue
       if node.line is not None:
         self.__activate_line_leaf(node=node, activation_lookup=activation_lookup)
-      if node.text is not None:
-        # TODO: Join text
-        # Keep a pending joined layer
-        # Check for text around me in the pending joined layer
-        # If so join and replace in pending joined layer
-        # Else add solo char to pending joined layer
-        pass
+
     nodes_used = self.__join_layer(
       activation_lookup=activation_lookup,
       next_layer_id=layer_id + 1,
