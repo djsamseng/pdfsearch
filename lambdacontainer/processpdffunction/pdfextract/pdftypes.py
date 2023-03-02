@@ -46,6 +46,7 @@ class Direction(enum.Enum):
 
 class ShapeType(int, enum.Enum):
   CIRCLE = 1
+  HEXAGON = 2
 
 decimal_regex_cap = re.compile("^[\\d]*\\.[\\d]+$")
 int_regex_cap = re.compile("^\\d+$")
@@ -137,6 +138,17 @@ class Circle():
   ) -> None:
     self.rw = rw
     self.rh = rh
+
+class Hexagon():
+  def __init__(
+    self,
+    angles: typing.List[float],
+    lengths: typing.List[float],
+  ) -> None:
+    self.angles = angles
+    self.lengths = lengths
+
+ShapesType = typing.Union[Circle, path_utils.LinePointsType]
 
 NodeId = int
 class ClassificationNode():

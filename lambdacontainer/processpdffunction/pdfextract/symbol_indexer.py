@@ -226,25 +226,39 @@ class ShapeManager:
     layer_node_ids = self.node_manager.layers[layer_id]
     layer = [self.node_manager.nodes[node_id] for node_id in layer_node_ids]
 
-    circles, intersection_pts = linejoiner.identify_from_lines(
+    circles, hexagons, intersection_pts = linejoiner.identify_from_lines(
       nodes=[node for node in layer if node.line is not None],
       node_manager=self.node_manager,
     )
     circle_parents: typing.List[pdftypes.ClassificationNode] = []
-    for circle in circles:
+    for circle, nodes in circles:
       parent = self.node_manager.add_node(
         elem=None,
-        bbox=pdfelemtransforms.bounding_bbox(elems=circle),
+        bbox=pdfelemtransforms.bounding_bbox(elems=nodes),
         line=None,
         text=None,
-        left_right=circle[0].left_right,
-        child_ids=[c.node_id for c in circle],
+        left_right=nodes[0].left_right,
+        child_ids=[c.node_id for c in nodes],
         layer_id=1,
       )
       parent.circle = pdftypes.Circle(rw=parent.width(), rh=parent.height())
       circle_parents.append(parent)
+    hexagon_parents: typing.List[pdftypes.ClassificationNode] = []
+    for hexagon, nodes in hexagons:
+      parent = self.node_manager.add_node(
+        elem=None,
+        bbox=pdfelemtransforms.bounding_bbox(elems=nodes),
+        line=None,
+        text=None,
+        left_right=nodes[0].left_right,
+        child_ids=[c.node_id for c in nodes],
+        layer_id=1,
+      )
+      # TODO: parent.hexagon = pdftypes.Hexagon()
+      hexagon_parents.append(parent)
     self.intersection_pts = intersection_pts
     self.found_shapes[pdftypes.ShapeType.CIRCLE] = circle_parents
+    self.found_shapes[pdftypes.ShapeType.HEXAGON] = hexagon_parents
 
     nodes_used: typing.List[pdftypes.ClassificationNode] = []
     # Shape = [lines], [offsets]

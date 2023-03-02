@@ -312,6 +312,30 @@ def shapememory_test():
     height=height,
   )
 
+def find_shapes_from_ids(
+  node_manager: nodemanager.NodeManager,
+  node_ids: typing.List[int],
+):
+  nodes = [node_manager.nodes[node_id] for node_id in node_ids]
+  remaining_nodes = set(nodes)
+  circles, intersection_pts = linejoiner.identify_from_lines(
+    nodes=[node for node in nodes if node.line is not None],
+    node_manager=node_manager,
+  )
+  shapes: typing.List[pdftypes.ShapesType] = []
+  for circle_lines in circles:
+    bbox = pdfelemtransforms.bounding_bbox(elems=circle_lines)
+    width = bbox[2] - bbox[0]
+    height = bbox[3] - bbox[1]
+    circle = pdftypes.Circle(rw=width, rh=height)
+    for line in circle_lines:
+      remaining_nodes.remove(line)
+    shapes.append(circle)
+  for node in remaining_nodes:
+    if node.line is not None:
+      shapes.append(node.line)
+  return shapes
+
 def lighting_test():
   _, layers, width, height = get_pdf(which=1, page_number=2)
   node_manager = nodemanager.NodeManager(
@@ -325,10 +349,13 @@ def lighting_test():
     25419, 25420, 25421, 25422, 25423, 25424, 25425, 25426, 25427, 25428, 25429, 25430, 25431, 25432,
     25433, 25434, 25435, 25436, 25437, 25438, 25439, 25440, 25441, 25442, 25443, 25444, 25445, 25446]
   lighting_a = [node_manager.nodes[node_id] for node_id in lighting_a_ids]
+  lighting_a_shapes = find_shapes_from_ids(node_manager=node_manager, node_ids=lighting_a_ids)
+  print("A shapes:", len(lighting_a_shapes))
   lighting_b_ids = [24767, 24768, 24769, 24770, 24771, 24772, 24773, 24774, 24775, 24776, 24777, 24778,
     24779, 24780, 24781, 24782, 24783, 24784, 24785, 24786, 24787, 24788, 24789, 24790, 24791, 24792,
     24793, 24794, 24795, 24796, 24797, 24798, 24799, 24800, 24801, 24802, 24803, 24804, 24805, 24806, 24807]
   lighting_b = [node_manager.nodes[node_id] for node_id in lighting_b_ids]
+  lighting_b_shapes = find_shapes_from_ids(node_manager=node_manager, node_ids=lighting_b_ids)
   lighting_c_ids = [24808, 24809, 24810, 24811, 24812, 24813, 24814, 24815, 24816, 24817, 24818, 24819,
     24820, 24821, 24822, 24823, 24824, 24825, 24826, 24827, 24828, 24829, 24830, 24831, 24832, 24833,
     24834, 24835, 24836, 24837, 24838, 24839, 24840, 24841, 24842, 24843, 24844, 24845, 24846, 24847,
@@ -336,8 +363,11 @@ def lighting_test():
     24862, 24863, 24864, 24865, 24866, 24867, 24868, 24869, 24870, 24871, 24872, 24873, 24874, 24875,
     24876, 24877, 24878, 24879, 24880, 24881, 24882, 24883, 24884, 24885, 24886, 24887]
   lighting_c = [node_manager.nodes[node_id] for node_id in lighting_c_ids]
+  lighting_c_shapes = find_shapes_from_ids(node_manager=node_manager, node_ids=lighting_c_ids)
   lighting_e_ids = [25067, 25068, 25069, 25070, 25071, 25072]
   lighting_e = [node_manager.nodes[node_id] for node_id in lighting_e_ids]
+  lighting_e_shapes = find_shapes_from_ids(node_manager=node_manager, node_ids=lighting_e_ids)
+  print("E shapes:", len(lighting_e_shapes), len(lighting_e))
   shape_manager.add_shape(
     shape_id="lighting_a",
     lines=[l.line for l in lighting_a if l.line is not None]
@@ -625,7 +655,7 @@ def align_horizontal(
   return horizontal_groups
 
 def see_test():
-  _, layers, width, height = get_pdf(which=1, page_number=2) # type: ignore
+  _, layers, width, height = get_pdf(which=1, page_number=1) # type: ignore
 
   node_manager = nodemanager.NodeManager(layers=[layers[0]])  # type: ignore
   shape_manager = symbol_indexer.ShapeManager(
@@ -649,15 +679,19 @@ def see_test():
   # and take action depending on the situation on where to look
   circles = shape_manager.found_shapes[pdftypes.ShapeType.CIRCLE]
   intersection_pts = shape_manager.intersection_pts
-  print("Num circles:", len(circles), "Intersection points:", len(intersection_pts))
+  print(
+    "Num circles:", len(circles),
+    "hexagons:", len(shape_manager.found_shapes[pdftypes.ShapeType.HEXAGON]),
+    "Intersection points:", len(intersection_pts)
+  )
   draw_layer = 0
   draw_nodes = [node_manager.nodes[node_id] for node_id in node_manager.layers[draw_layer]]
   drawer = classifier_drawer.ClassifierDrawer(width=width, height=height, select_intersection=True)
   drawer.draw_elems(elems=draw_nodes, align_top_left=False)
   for circle in circles:
-    circle_children = [node_manager.nodes[node_id] for node_id in circle.child_ids]
-    bbox = pdfelemtransforms.bounding_bbox(elems=circle_children)
-    drawer.draw_bbox(bbox=bbox, color="blue")
+    drawer.draw_bbox(bbox=circle.bbox, color="blue")
+  for hexagon in shape_manager.found_shapes[pdftypes.ShapeType.HEXAGON]:
+    drawer.draw_bbox(bbox=hexagon.bbox, color="green")
   for pt in intersection_pts:
     radius = 1
     bbox = (
